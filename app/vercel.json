@@ -2,11 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run precheck && npm run build",
   "framework": "nextjs",
+  "ignoreCommand": "exit 1",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   },
   "github": {
-    "silent": false
+    "silent": true
   },
   "functions": {
     "src/app/api/deployment-check/route.ts": {

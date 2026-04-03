@@ -137,6 +137,7 @@ jobs:
           name: e2e-test-results
           path: app/test-results/
           retention-days: 7
+          if-no-files-found: ignore
 
   # ─── Job 4: Deploy via Vercel CLI ────────────────────────────
   # Runs only after lint, unit-tests and e2e-tests all pass.
