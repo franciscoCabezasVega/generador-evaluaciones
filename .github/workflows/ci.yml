@@ -183,7 +183,7 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
-          url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --force ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
           echo "deployment_url=$url" >> $GITHUB_OUTPUT
         working-directory: app
         env:
