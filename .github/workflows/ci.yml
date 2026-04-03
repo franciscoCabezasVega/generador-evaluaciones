@@ -3,8 +3,34 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+      - '.github/CODEOWNERS'
+      - 'docs/**'
+      - '*.png'
+      - '*.jpg'
+      - '*.jpeg'
+      - '*.gif'
+      - '*.svg'
+      - '*.ico'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+      - '.github/CODEOWNERS'
+      - 'docs/**'
+      - '*.png'
+      - '*.jpg'
+      - '*.jpeg'
+      - '*.gif'
+      - '*.svg'
+      - '*.ico'
 
 # Cancel in-progress runs for the same branch/PR to avoid redundant work
 concurrency:
@@ -183,9 +209,9 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
-          url=$(vercel deploy --force ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
           echo "deployment_url=$url" >> $GITHUB_OUTPUT
-        working-directory: app
+        working-directory: .
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
