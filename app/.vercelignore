@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+README.md
+.next
+out
+.env.local
+.env.*.local
+playwright-report
+test-results
+e2e/**/*.spec.ts

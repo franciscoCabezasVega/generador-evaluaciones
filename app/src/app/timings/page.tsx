@@ -1,0 +1,564 @@
+'use client';
+
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
+import { useCachedFetch, invalidateCache } from '@/hooks/useCachedFetch';
+import { useAuth } from '@/contexts/AuthContext';
+import Navbar from '@/components/Navbar';
+import CacheWarningBanner from '@/components/CacheWarningBanner';
+import TimingForm from '@/components/TimingForm';
+import TimingsList from '@/components/TimingsList';
+import Modal from '@/components/Modal';
+import { SkeletonTable } from '@/components/Skeleton';
+import DateRangePicker, { DateRange } from '@/components/DateRangePicker';
+import {
+  TimingMetricsDistributionChart,
+  TimingMetricsComparisonChart,
+  SquadTimingSummaryCard,
+  QAHoursBarChart,
+  QAEfficiencyChart,
+  QASummaryCards,
+  TshirtSizeComparison,
+} from '@/components/TimingMetrics';
+import {
+  Task,
+  TaskTiming,
+  CreateTaskTimingInput,
+  UpdateTaskTimingInput,
+  SquadTimingMetrics,
+  QATimingMetrics,
+} from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import {
+  Plus,
+  RefreshCw,
+  BarChart3,
+  List,
+  Users,
+} from 'lucide-react';
+
+export default function TimingsPage() {
+  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingTiming, setEditingTiming] = useState<TaskTiming | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const formRef = useRef<{ handleCancelWithConfirm: () => void }>(null);
+
+  // Filtros — rango de fechas en vez de mes/año
+  const [filters, setFilters] = useState({
+    dateRange: {
+      startDate: startOfMonth(new Date()),
+      endDate: endOfMonth(new Date()),
+    } as DateRange,
+    productType: '',
+  });
+
+  // Helper: format dates for API
+  const apiStartDate = format(filters.dateRange.startDate, 'yyyy-MM-dd');
+  const apiEndDate = format(filters.dateRange.endDate, 'yyyy-MM-dd');
+
+  const [viewMode, setViewMode] = useState<'list' | 'metrics' | 'qa-metrics'>('list');
+
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const { safeFetch } = useSafeAuthFetch();
+
+  // Redirigir a login si no hay sesión
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/auth/login');
+    }
+  }, [user, authLoading, router]);
+
+  const isEnabled = !authLoading && !!user;
+
+  // Filtros serializados para los hooks de caché
+  const timingFilters = { start_date: apiStartDate, end_date: apiEndDate, product_type: filters.productType };
+  const taskFilters = { product_type: filters.productType, dateRange: `${apiStartDate}_${apiEndDate}` };
+
+  // ===== Tasks (para selección y resolución de nombres) =====
+  const {
+    data: tasks,
+  } = useCachedFetch<Task[]>({
+    cacheKey: 'timings-tasks',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const urlFiltered = filters.productType
+        ? `/api/tasks?product_type=${filters.productType}`
+        : '/api/tasks';
+
+      if (filters.productType) {
+        const [filteredRes, allRes] = await Promise.all([
+          safeFetch(urlFiltered, { signal }),
+          safeFetch('/api/tasks', { signal }),
+        ]);
+        const filteredData: Task[] = filteredRes.ok ? await filteredRes.json() : [];
+        const allData: Task[] = allRes.ok ? await allRes.json() : [];
+        const mergedMap = new Map<string, Task>();
+        for (const t of allData) mergedMap.set(t.id, t);
+        for (const t of filteredData) mergedMap.set(t.id, t);
+        return Array.from(mergedMap.values());
+      }
+
+      const res = await safeFetch(urlFiltered, { signal });
+      return res.ok ? await res.json() : [];
+    }, [filters.productType, safeFetch]),
+    filters: taskFilters,
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // ===== Timings =====
+  const {
+    data: timings,
+    loading,
+    isRefreshing,
+    refresh: refreshTimings,
+    invalidate: invalidateTimings,
+    setData: setTimings,
+  } = useCachedFetch<TaskTiming[]>({
+    cacheKey: 'timings',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const params = new URLSearchParams();
+      params.append('start_date', apiStartDate);
+      params.append('end_date', apiEndDate);
+      if (filters.productType) params.append('product_type', filters.productType);
+      const response = await safeFetch(`/api/timings?${params.toString()}`, { signal });
+      if (!response.ok) throw new Error('Error al cargar tiempos');
+      return await response.json();
+    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    filters: timingFilters,
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // ===== Metrics =====
+  const {
+    data: metrics,
+    loading: metricsLoading,
+    refresh: refreshMetrics,
+  } = useCachedFetch<SquadTimingMetrics[]>({
+    cacheKey: 'timings-metrics',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const params = new URLSearchParams();
+      params.append('start_date', apiStartDate);
+      params.append('end_date', apiEndDate);
+      if (filters.productType) params.append('product_type', filters.productType);
+      const response = await safeFetch(`/api/timings/metrics?${params.toString()}`, { signal });
+      if (!response.ok) throw new Error('Error al cargar métricas');
+      return await response.json();
+    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    filters: timingFilters,
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // ===== QA Metrics =====
+  const {
+    data: qaMetrics,
+    loading: qaMetricsLoading,
+    refresh: refreshQAMetrics,
+  } = useCachedFetch<QATimingMetrics[]>({
+    cacheKey: 'timings-qa-metrics',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const params = new URLSearchParams();
+      params.append('start_date', apiStartDate);
+      params.append('end_date', apiEndDate);
+      if (filters.productType) params.append('product_type', filters.productType);
+      const response = await safeFetch(`/api/timings/metrics/qa?${params.toString()}`, { signal });
+      if (!response.ok) throw new Error('Error al cargar métricas QA');
+      return await response.json();
+    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    filters: timingFilters,
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // ===== All Timings (sin filtros, para TshirtSizeComparison) =====
+  const {
+    data: allTimings,
+    loading: allTimingsLoading,
+    refresh: refreshAllTimings,
+  } = useCachedFetch<TaskTiming[]>({
+    cacheKey: 'timings-all-comparison',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const response = await safeFetch('/api/timings', { signal });
+      if (!response.ok) throw new Error('Error al cargar todos los tiempos');
+      return await response.json();
+    }, [safeFetch]),
+    filters: {},
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // ===== All Tasks (sin filtros, para TshirtSizeComparison) =====
+  const {
+    data: allTasks,
+    loading: allTasksLoading,
+  } = useCachedFetch<Task[]>({
+    cacheKey: 'timings-all-tasks-comparison',
+    fetchFn: useCallback(async (signal: AbortSignal) => {
+      const response = await safeFetch('/api/tasks', { signal });
+      if (!response.ok) throw new Error('Error al cargar todas las tareas');
+      return await response.json();
+    }, [safeFetch]),
+    filters: {},
+    enabled: isEnabled,
+    initialData: [],
+  });
+
+  // Refresh que invalida todos los cachés de timings
+  const handleRefreshAll = useCallback(() => {
+    refreshTimings();
+    refreshMetrics();
+    refreshQAMetrics();
+    refreshAllTimings();
+  }, [refreshTimings, refreshMetrics, refreshQAMetrics, refreshAllTimings]);
+
+  // Handle crear/editar timing
+  const handleSubmit = async (data: CreateTaskTimingInput | UpdateTaskTimingInput) => {
+    try {
+      setSubmitting(true);
+
+      if (editingTiming) {
+        const response = await safeFetch(`/api/timings/${editingTiming.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Error al actualizar');
+        }
+
+        const updatedTiming = await response.json();
+        setTimings((prev) =>
+          prev.map((t) => (t.id === editingTiming.id ? updatedTiming : t))
+        );
+      } else {
+        const response = await safeFetch('/api/timings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Error al crear');
+        }
+
+        const newTiming = await response.json();
+        setTimings((prev) => [newTiming, ...prev]);
+      }
+
+      setShowForm(false);
+      setEditingTiming(null);
+      // Invalidar métricas en background
+      invalidateCache('timings-metrics');
+      invalidateCache('timings-qa-metrics');
+      invalidateCache('timings-all-comparison');
+      refreshMetrics();
+      refreshQAMetrics();
+      refreshAllTimings();
+    } catch (error: unknown) {
+      console.error('Error:', error);
+      alert(error instanceof Error ? error.message : 'Ocurrió un error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle eliminar timing
+  const handleDelete = async (id: string) => {
+    try {
+      // Optimistic update
+      setTimings((prev) => prev.filter((t) => t.id !== id));
+      setDeleteConfirm(null);
+
+      const response = await safeFetch(`/api/timings/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        invalidateTimings();
+        throw new Error('Error al eliminar');
+      }
+
+      // Invalidar métricas en background
+      invalidateCache('timings-metrics');
+      invalidateCache('timings-qa-metrics');
+      invalidateCache('timings-all-comparison');
+      refreshMetrics();
+      refreshQAMetrics();
+      refreshAllTimings();
+    } catch (error: unknown) {
+      console.error('Error:', error);
+      alert(error instanceof Error ? error.message : 'Ocurrió un error');
+    }
+  };
+
+  // Handle editar timing
+  const handleEdit = (timing: TaskTiming) => {
+    setEditingTiming(timing);
+    setShowForm(true);
+  };
+
+  // Handle cancelar form
+  const handleCancelForm = () => {
+    setShowForm(false);
+    setEditingTiming(null);
+  };
+
+  // Handle cancelar form con confirmación (para header close)
+  const handleCancelFormWithConfirm = () => {
+    formRef.current?.handleCancelWithConfirm();
+  };
+
+  // Mapear nombres y links de tareas
+  const taskNames = Object.fromEntries(tasks.map((t) => [t.id, t.name]));
+  const taskLinks = Object.fromEntries(tasks.filter((t) => t.task_link).map((t) => [t.id, t.task_link]));
+  const taskTshirtSizes = Object.fromEntries(tasks.filter((t) => t.tshirt_size).map((t) => [t.id, t.tshirt_size]));
+  const taskCategories = Object.fromEntries(tasks.filter((t) => t.category).map((t) => [t.id, t.category]));
+  const taskEffortDates = Object.fromEntries(tasks.filter((t) => t.effort_score_date).map((t) => [t.id, t.effort_score_date]));
+
+  if (authLoading || !user) {
+    return <SkeletonTable />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <CacheWarningBanner />
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Gestión de Tiempos</h1>
+          <p className="mt-2 text-gray-600">
+            Registra y visualiza los tiempos de QA por fases: Testing Efectivo, Espera Ambiente, Espera Fixes, Retest y Clarificaciones
+          </p>
+        </div>
+
+        {/* Controles */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600"
+            >
+              <Plus size={20} />
+              Nuevo Timing
+            </Button>
+          </div>
+
+          {/* Ver modo */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setViewMode('list')}
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              className="flex items-center gap-2"
+            >
+              <List size={20} />
+              Lista
+            </Button>
+            <Button
+              onClick={() => setViewMode('metrics')}
+              variant={viewMode === 'metrics' ? 'default' : 'outline'}
+              className="flex items-center gap-2"
+            >
+              <BarChart3 size={20} />
+              Métricas
+            </Button>
+            <Button
+              onClick={() => setViewMode('qa-metrics')}
+              variant={viewMode === 'qa-metrics' ? 'default' : 'outline'}
+              className="flex items-center gap-2"
+            >
+              <Users size={20} />
+              QA
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="mb-4 font-semibold text-gray-900">Filtros</h3>
+          
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="date-range-picker-trigger" className="block text-sm font-medium text-gray-700 mb-1">Rango de fechas</label>
+                <DateRangePicker
+                  value={filters.dateRange}
+                  onChange={(range) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      dateRange: range,
+                    }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label htmlFor="filters-product-type" className="block text-sm font-medium text-gray-700 mb-1">Producto</label>
+                <select
+                  id="filters-product-type"
+                  name="productType"
+                  value={filters.productType}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      productType: e.target.value,
+                    }))
+                  }
+                  className="mt-0 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Todos los productos</option>
+                  <option value="Core">Core</option>
+                  <option value="Platform">Platform</option>
+                  <option value="Commerce">Commerce</option>
+                </select>
+              </div>
+            </div>
+        </div>
+
+        {/* Botón de actualizar para métricas */}
+        {(viewMode === 'metrics' || viewMode === 'qa-metrics') && (
+          <div className="mb-8 flex justify-end">
+            <button
+              onClick={handleRefreshAll}
+              disabled={metricsLoading || qaMetricsLoading || isRefreshing}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Actualizar métricas"
+            >
+              <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+              Actualizar
+            </button>
+          </div>
+        )}
+
+        {/* Contenido principal */}
+        {viewMode === 'list' ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Tiempos Registrados
+              </h2>
+              <button
+                onClick={handleRefreshAll}
+                disabled={loading || isRefreshing}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Actualizar tiempos"
+              >
+                <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                Actualizar
+              </button>
+            </div>
+            <TimingsList
+              timings={timings}
+              loading={loading}
+              onEdit={handleEdit}
+              onDelete={(id) => setDeleteConfirm(id)}
+              taskNames={taskNames}
+              taskLinks={taskLinks}
+              taskTshirtSizes={taskTshirtSizes}
+              taskCategories={taskCategories}
+              taskEffortDates={taskEffortDates}
+            />
+          </div>
+        ) : viewMode === 'metrics' ? (
+          <div className="space-y-8">
+            {/* Gráfico de distribución */}
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <TimingMetricsDistributionChart metrics={metrics} loading={metricsLoading} />
+            </div>
+
+            {/* Gráfico comparativo */}
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <TimingMetricsComparisonChart metrics={metrics} loading={metricsLoading} />
+            </div>
+
+            {/* Tarjetas de resumen detalladas */}
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Análisis Detallado por Producto</h2>
+              {metrics.map((metric) => (
+                <div key={metric.product_type}>
+                  <SquadTimingSummaryCard metric={metric} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* QA Metrics view */
+          <div className="space-y-8">
+            {/* Bar chart de horas por QA */}
+            <QAHoursBarChart qaMetrics={qaMetrics} loading={qaMetricsLoading} />
+
+            {/* Tabla de eficiencia por QA */}
+            <QAEfficiencyChart qaMetrics={qaMetrics} loading={qaMetricsLoading} timings={timings} tasks={tasks} />
+
+            {/* Tarjetas resumen por QA - se oculta si no hay datos */}
+            {!qaMetricsLoading && qaMetrics.length > 0 && (
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Resumen Individual por QA</h2>
+                <QASummaryCards qaMetrics={qaMetrics} loading={qaMetricsLoading} />
+              </div>
+            )}
+
+            {/* Comparativa por Complejidad y Categoría */}
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <TshirtSizeComparison timings={allTimings} tasks={allTasks} loading={allTimingsLoading || allTasksLoading} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de formulario */}
+      <Modal
+        isOpen={showForm}
+        title={editingTiming ? `Actualizar Timing - ${tasks.find(t => t.id === editingTiming?.task_id)?.name || 'Tarea'}` : 'Crear Nuevo Timing'}
+        onClose={handleCancelForm}
+        onHeaderClose={handleCancelFormWithConfirm}
+      >
+        <TimingForm
+          ref={formRef}
+          onSubmit={handleSubmit}
+          onCancel={handleCancelForm}
+          initialData={editingTiming as Record<string, unknown> | null}
+          isLoading={submitting}
+          isEditing={!!editingTiming}
+          availableTasks={tasks}
+          selectedTaskIds={timings.filter((t) => t.id !== editingTiming?.id).map((t) => t.task_id)}
+          safeFetch={safeFetch}
+        />
+      </Modal>
+
+      {/* Modal de confirmación de eliminación */}
+      <Modal
+        isOpen={!!deleteConfirm}
+        title="Eliminar Timing"
+        onClose={() => setDeleteConfirm(null)}
+        size="md"
+      >
+        <div className="p-6">
+          <p className="mb-6 text-gray-600">
+            ¿Estás seguro de que deseas eliminar este timing? Esta acción no se puede deshacer.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => setDeleteConfirm(null)}
+              variant="outline"
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+              className="flex-1 bg-red-500 hover:bg-red-600"
+            >
+              Eliminar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

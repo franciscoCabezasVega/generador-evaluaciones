@@ -1,0 +1,285 @@
+import { useRouter } from 'next/navigation';
+import { useCallback, useRef, useEffect } from 'react';
+import { authenticatedFetch } from '@/lib/fetchAuth';
+import { isSessionExpiredError } from '@/lib/utils';
+import { authService } from '@/lib/services/authService';
+import { TimeoutError } from '@/lib/withTimeout';
+
+/**
+ * Delay cancelable: resuelve después de `ms`, pero se rechaza inmediatamente
+ * si el signal se aborta antes. Evita que un reintento se quede esperando
+ * innecesariamente cuando el componente ya se desmontó o se canceló la request.
+ */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    // Limpiar el listener cuando el timer completa
+    const originalResolve = resolve;
+    resolve = (() => {
+      signal?.removeEventListener('abort', onAbort);
+      originalResolve();
+    }) as () => void;
+  });
+}
+
+/**
+ * Hook para hacer fetches autenticados de forma segura
+ * 
+ * Estrategia de resiliencia simplificada:
+ * - Timeout de 10 segundos por request (configurable)
+ * - 1 reintento automático con 2s de backoff para errores de red/timeout
+ * - Sin auto-reload: si falla, muestra error y deja al usuario decidir
+ * - Manejo de 401/403 con refresh de token (1 intento)
+ * - Cancela requests pendientes al desmontar componente
+ * - Delays de reintento son cancelables al abortar/desmontar
+ * 
+ * Nota: El timeout por inactividad es manejado por useSessionTimeoutManager
+ * 
+ * Uso:
+ * const { safeFetch } = useSafeAuthFetch();
+ * const response = await safeFetch('/api/endpoint');
+ */
+export function useSafeAuthFetch() {
+  const router = useRouter();
+  const isMountedRef = useRef(true);
+  const abortControllersRef = useRef<Set<AbortController>>(new Set());
+
+  useEffect(() => {
+    const controllers = abortControllersRef.current;
+    return () => {
+      isMountedRef.current = false;
+      // Abortar todas las requests pendientes al desmontar
+      controllers.forEach(controller => controller.abort());
+      controllers.clear();
+    };
+  }, []);
+
+  const safeFetch = useCallback(
+    async (
+      url: string,
+      options?: RequestInit,
+      retryCount = 0,
+      timeoutMs = 10000
+    ): Promise<Response> => {
+      const MAX_RETRIES = 1; // 2 intentos totales (inicial + 1 reintento)
+
+      // Si el caller ya pasó un signal abortado, salir inmediatamente
+      const callerSignal = options?.signal as AbortSignal | undefined;
+      if (callerSignal?.aborted) {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
+
+      // Crear AbortController con timeout nativo
+      const abortController = new AbortController();
+      abortControllersRef.current.add(abortController);
+
+      // Si el caller pasó un signal externo (e.g. cleanup de useEffect),
+      // propagar su abort al controller interno para cancelar la request.
+      let onCallerAbort: (() => void) | undefined;
+      if (callerSignal) {
+        onCallerAbort = () => abortController.abort();
+        callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+      }
+
+      // Timeout propio que aborta la request
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, timeoutMs);
+
+      // Promise que se rechaza cuando el AbortController dispara.
+      // Necesaria porque authenticatedFetch puede quedarse bloqueada en
+      // supabase.auth.getSession() (navigator.locks) y el abort signal
+      // solo cancela el fetch nativo, no la obtención de sesión.
+      const abortPromise = new Promise<never>((_, reject) => {
+        const onAbort = () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (abortController.signal.aborted) {
+          onAbort();
+        } else {
+          abortController.signal.addEventListener('abort', onAbort, { once: true });
+        }
+      });
+
+      try {
+        const response = await Promise.race([
+          authenticatedFetch(url, {
+            ...options,
+            signal: abortController.signal,
+          }),
+          abortPromise,
+        ]);
+
+        clearTimeout(timeoutId);
+        if (onCallerAbort && callerSignal) {
+          callerSignal.removeEventListener('abort', onCallerAbort);
+        }
+        abortControllersRef.current.delete(abortController);
+
+        // Si la respuesta es 401 o 403, intentar refresh de token una vez
+        if ((response.status === 401 || response.status === 403) && retryCount === 0) {
+          console.warn(`Got ${response.status} status, attempting token refresh...`);
+          
+          const newSession = await authService.silentRefreshToken();
+          
+          if (newSession) {
+            // eslint-disable-next-line no-console
+            console.debug('Token refreshed, retrying request');
+            return safeFetch(url, options, 1, timeoutMs);
+          } else {
+            console.warn('Token refresh failed, session lost');
+            if (isMountedRef.current) {
+              await authService.clearSession('error');
+              router.push('/auth/login');
+            }
+            throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+          }
+        }
+
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (onCallerAbort && callerSignal) {
+          callerSignal.removeEventListener('abort', onCallerAbort);
+        }
+        abortControllersRef.current.delete(abortController);
+
+        // Si el componente se desmontó, ignorar silenciosamente
+        if (!isMountedRef.current) {
+          throw error instanceof Error ? error : new Error(String(error));
+        }
+
+        // AbortError puede ser por timeout interno, signal del caller, o desmontaje
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          // Si el caller canceló la request (e.g. cleanup de useEffect / navegación),
+          // propagar AbortError tal cual para que el caller lo filtre
+          if (callerSignal?.aborted) {
+            throw error;
+          }
+
+          // Fue nuestro timeout interno — reintentar si quedan intentos
+          if (isMountedRef.current && retryCount < MAX_RETRIES) {
+            console.warn(
+              `Request timeout (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en 2s...`
+            );
+            try {
+              await abortableDelay(2000, callerSignal);
+            } catch {
+              // Si el delay fue abortado (navegación/desmontaje), propagar AbortError
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
+            return safeFetch(url, options, retryCount + 1, timeoutMs);
+          }
+          // Timeout agotado sin reintentos disponibles
+          throw new TimeoutError(
+            `La solicitud tardó más de ${timeoutMs / 1000}s. Verifica tu conexión e intenta de nuevo.`
+          );
+        }
+
+        // Errores transitorios de lock de sesión — 1 reintento y luego refresh automático
+        // Con el caché de 40s + SessionChecker inteligente, esto debería ser muy raro
+        if (error instanceof Error && error.name === 'SessionLockError') {
+          const SESSION_LOCK_MAX_RETRIES = 1; // 2 intentos totales (inicial + 1 reintento)
+          if (retryCount < SESSION_LOCK_MAX_RETRIES) {
+            const delay = 2000; // 2 segundos
+            console.warn(
+              `Session lock busy (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`
+            );
+            try {
+              await abortableDelay(delay, callerSignal);
+            } catch {
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
+            return safeFetch(url, options, retryCount + 1, timeoutMs);
+          }
+          
+          // Todos los reintentos agotados — recargar automáticamente
+          console.error(
+            '🔄 SessionLockError persistente después de 2 intentos. Ejecutando window.location.reload()...'
+          );
+          
+          // Recargar página completa para liberar todos los locks
+          window.location.reload();
+          
+          // Este código nunca se ejecutará porque reload interrumpe la ejecución
+          throw new Error('Recargando página...');
+        }
+
+        // Sesión no disponible temporalmente — intentar refresh
+        if (error instanceof Error && error.message.includes('Session not available')) {
+          console.warn('Session not available, attempting silent refresh...');
+          const newSession = await authService.silentRefreshToken();
+          if (newSession && retryCount === 0) {
+            return safeFetch(url, options, 1, timeoutMs);
+          }
+          // Si el refresh falla, sí es sesión expirada
+          await authService.clearSession('error');
+          if (isMountedRef.current) {
+            router.push('/auth/login');
+          }
+          throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+        }
+
+        // Error de sesión expirada (errores reales de auth, no transitorios)
+        if (isSessionExpiredError(error)) {
+          console.warn('Session expired error detected');
+          const newSession = await authService.silentRefreshToken();
+          if (newSession && retryCount === 0) {
+            return safeFetch(url, options, 1, timeoutMs);
+          }
+          await authService.clearSession('error');
+          if (isMountedRef.current) {
+            router.push('/auth/login');
+          }
+          throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+        }
+
+        // Errores de red - reintentar una vez
+        if (retryCount < MAX_RETRIES && shouldRetryError(error)) {
+          console.warn(
+            `Error de red (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en 2s...`
+          );
+          try {
+            await abortableDelay(2000, callerSignal);
+          } catch {
+            // Si el delay fue abortado, propagar AbortError
+            throw new DOMException('The operation was aborted.', 'AbortError');
+          }
+          return safeFetch(url, options, retryCount + 1, timeoutMs);
+        }
+
+        throw error;
+      }
+    },
+    [router]
+  );
+
+  return { safeFetch };
+}
+
+/**
+ * Determinar si un error debe ser reintentado
+ */
+function shouldRetryError(error: unknown): boolean {
+  if (error instanceof Error) {
+    // No reintentar errores de validación o autorización
+    if (error.message.includes('401') || error.message.includes('403')) {
+      return false;
+    }
+    // Reintentar errores de red o conexión
+    if (
+      error.message.includes('fetch') ||
+      error.message.includes('network') ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('ERR_')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}

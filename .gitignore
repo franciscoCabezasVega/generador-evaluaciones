@@ -1,0 +1,36 @@
+# Configuración de agentes (privada)
+.github/agents/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# DB cleanup scripts
+app/scripts/
