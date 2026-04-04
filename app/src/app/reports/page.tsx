@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch } from '@/hooks/useCachedFetch';
@@ -12,9 +12,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Eye, Trash2, Download, RefreshCw } from 'lucide-react';
 import { downloadReportPDF } from '@/lib/services/pdfService';
 import Modal from '@/components/Modal';
-import ReportDetailModal from '@/components/ReportDetailModal';
+import dynamic from 'next/dynamic';
 import { Report } from '@/lib/types';
 import { useCatalogData } from '@/hooks/useCatalogData';
+
+const ReportDetailModal = dynamic(() => import('@/components/ReportDetailModal'), {
+  loading: () => null,
+});
 
 export default function ReportsPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -26,19 +30,16 @@ export default function ReportsPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showListFilters, setShowListFilters] = useState(true);
   
-  // Calcular mes anterior para filtros por defecto
-  const getPreviousMonth = useCallback(() => {
+  // Calcular mes anterior para filtros por defecto — se computa una sola vez
+  const prevMonth = useMemo(() => {
     const today = new Date();
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
-    
     if (currentMonth === 1) {
       return { month: 12, year: currentYear - 1 };
     }
     return { month: currentMonth - 1, year: currentYear };
   }, []);
-
-  const prevMonth = getPreviousMonth();
   
   const [filters, setFilters] = useState({
     month: prevMonth.month,

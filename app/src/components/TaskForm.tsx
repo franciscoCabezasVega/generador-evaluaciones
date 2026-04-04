@@ -70,9 +70,11 @@ function TaskFormComponent(
     };
   };
 
-  const initialFormData = processInitialData(initialData);
-  const [formData, setFormData] = useState<FormDataState>(initialFormData);
-  const initialDataRef = useRef<FormDataState>(initialFormData);
+  const [formData, setFormData] = useState<FormDataState>(() => processInitialData(initialData));
+  const initialDataRef = useRef<FormDataState | null>(null);
+  if (initialDataRef.current === null) {
+    initialDataRef.current = processInitialData(initialData);
+  }
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -148,11 +150,11 @@ function TaskFormComponent(
     }));
   }, []);
 
-  // Validar URL
+  // Validar URL — requiere http o https para prevenir esquemas peligrosos
   const isValidUrl = (url: string) => {
     try {
-      new URL(url);
-      return true;
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
     } catch {
       return false;
     }

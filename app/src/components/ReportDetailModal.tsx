@@ -163,12 +163,14 @@ export default function ReportDetailModal({ isOpen, reportId, onClose }: ReportD
                 {sortSquadsByNumber(Object.keys(report.report_data.tasksBySquad)).map((squad) => {
                   const tasks = report.report_data.tasksBySquad[squad];
                   const squadScore = report.report_data.squadsScores?.[squad] || 0;
-                  const performanceComments = typeof report.performance_comment === 'string'
-                    ? JSON.parse(report.performance_comment)
-                    : {};
-                  const communicationComments = typeof report.communication_comment === 'string'
-                    ? JSON.parse(report.communication_comment)
-                    : {};
+                  const performanceComments = (() => {
+                    if (typeof report.performance_comment !== 'string') return {};
+                    try { return JSON.parse(report.performance_comment); } catch { return {}; }
+                  })();
+                  const communicationComments = (() => {
+                    if (typeof report.communication_comment !== 'string') return {};
+                    try { return JSON.parse(report.communication_comment); } catch { return {}; }
+                  })();
 
                   return (
                     <div key={squad} className="mb-10">

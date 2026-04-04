@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CreateTaskInput;
 
     // Validaciones
-    if (!body.name || !body.task_link || !body.product_type || !body.squads || body.squads.length === 0) {
+    if (!body.name?.trim() || !body.task_link?.trim() || !body.product_type || !body.squads || body.squads.length === 0) {
       return NextResponse.json(
         { error: 'Missing required fields or empty squads array' },
         { status: 400 }
@@ -51,12 +51,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: complexityExists } = await supabase
-      .from('complexities')
-      .select('id')
-      .eq('name', body.tshirt_size)
-      .eq('is_active', true)
-      .maybeSingle();
+    // Validar complejidad y categoría en paralelo
+    const [{ data: complexityExists }, { data: categoryExists }] = await Promise.all([
+      supabase
+        .from('complexities')
+        .select('id')
+        .eq('name', body.tshirt_size)
+        .eq('is_active', true)
+        .maybeSingle(),
+      supabase
+        .from('categories')
+        .select('id')
+        .eq('name', body.category)
+        .eq('is_active', true)
+        .maybeSingle(),
+    ]);
 
     if (!complexityExists) {
       return NextResponse.json(
@@ -64,20 +73,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    if (!body.category) {
-      return NextResponse.json(
-        { error: 'La categoría es requerida' },
-        { status: 400 }
-      );
-    }
-
-    const { data: categoryExists } = await supabase
-      .from('categories')
-      .select('id')
-      .eq('name', body.category)
-      .eq('is_active', true)
-      .maybeSingle();
 
     if (!categoryExists) {
       return NextResponse.json(

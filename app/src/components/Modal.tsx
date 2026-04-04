@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, memo } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -13,7 +13,7 @@ interface ModalProps {
   headerActions?: ReactNode;
 }
 
-export default function Modal({ isOpen, title, onClose, onHeaderClose, children, size = 'lg', headerActions }: ModalProps) {
+function Modal({ isOpen, title, onClose, onHeaderClose, children, size = 'lg', headerActions }: ModalProps) {
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -65,3 +65,5 @@ export default function Modal({ isOpen, title, onClose, onHeaderClose, children,
     </>
   );
 }
+
+export default memo(Modal);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, memo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -8,21 +8,11 @@ import { LogOut, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import TourSelectionModal from '@/components/TourSelectionModal';
 
-export default function Navbar() {
-  const [mounted, setMounted] = useState(false);
+function Navbar() {
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const pathname = usePathname();
   const { user, profile, loading, isLoggingOut, signOut } = useAuth();
 
-  // Evitar hydration mismatch usando useEffect con estado
-  // Este es un patrón permitido en Next.js y Supabase para sincronizar con el servidor
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
-
-  // Si está cerrando sesión, el overlay de AuthContext cubre todo.
-  // Renderizamos el navbar normal estáticamente debajo.
   if (isLoggingOut || loading) return null;
 
   return (
@@ -85,7 +75,7 @@ export default function Navbar() {
             )}
           </div>
         </div>
-        {mounted && user && (
+        {user && (
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
               <span className="text-sm text-gray-600">{user.email}</span>
@@ -132,3 +122,5 @@ export default function Navbar() {
     </nav>
   );
 }
+
+export default memo(Navbar);
