@@ -570,7 +570,7 @@ export default function AuditTrailPage() {
                 onClick={() =>
                   setFilters({ ...filters, entityType: '', action: '', offset: 0 })
                 }
-                className="w-full px-3 py-1.5 border border-red-500/40 hover:border-red-500/70 hover:bg-red-950/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
+                className="w-full px-3 py-2 border border-red-500/40 hover:border-red-500/70 hover:bg-red-950/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
                 aria-label="Limpiar todos los filtros"
               >
                 Limpiar Filtros
