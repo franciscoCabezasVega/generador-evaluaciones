@@ -1,12 +1,12 @@
 export function SkeletonLine({ className = '' }: { className?: string }) {
   return (
-    <div className={`bg-gray-200 rounded h-4 animate-pulse ${className}`} />
+    <div className={`bg-gray-200 rounded h-4 animate-pulse opacity-60 ${className}`} />
   );
 }
 
 export function SkeletonTable() {
   return (
-    <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="skeleton-table">
+    <div className="bg-gray-100 rounded-lg shadow overflow-x-auto border border-gray-200" data-testid="skeleton-table">
       <table className="w-full">
         <thead className="bg-gray-50 border-b">
           <tr>
@@ -63,7 +63,7 @@ export function SkeletonReports() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" data-testid="skeleton-table">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="bg-white rounded-lg shadow p-6 animate-pulse aspect-square flex flex-col justify-between">
+        <div key={i} className="bg-gray-100 rounded-lg border border-gray-200 p-6 animate-pulse aspect-square flex flex-col justify-between opacity-60">
           <div className="flex-1">
             <SkeletonLine className="w-2/3 mb-3" />
             <SkeletonLine className="w-1/2 mb-2" />
@@ -84,9 +84,9 @@ export function SkeletonAuditTable({ isAdmin = false }: { isAdmin?: boolean }) {
   void isAdmin; // used for future column count customization
   
   return (
-    <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="skeleton-table">
+    <div className="bg-gray-100 rounded-lg border border-gray-200 overflow-x-auto" data-testid="skeleton-table">
       <table className="w-full">
-        <thead className="bg-gray-50 border-b">
+        <thead className="bg-gray-200 border-b border-gray-300">
           <tr>
             <th className="px-6 py-3 text-left">
               <SkeletonLine className="w-32" />

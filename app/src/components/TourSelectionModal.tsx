@@ -42,27 +42,27 @@ export default function TourSelectionModal({ isOpen, onClose }: TourSelectionMod
   };
 
   return (
-    <Modal isOpen={isOpen} title="🎯 Visita Guiada" onClose={onClose}>
+    <Modal isOpen={isOpen} title="Visita Guiada" onClose={onClose} size="xl">
       <p className="text-gray-600 mb-6">
         Elige una sección para comenzar una visita guiada interactiva. Aprenderás a usar todas las funcionalidades disponibles.
       </p>
 
       {/* Tour Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {(['tasks', 'reports', 'audit', 'feedback'] as const).map(tourType => {
           const metadata = TOURS_METADATA[tourType];
           return (
             <div
               key={tourType}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-300 transition-all flex flex-col"
+              className="bg-gray-200 border border-gray-300 rounded-xl p-4 hover:border-blue-400/60 hover:bg-gray-200 transition-all flex flex-col group"
             >
-              <div className="text-4xl mb-2">{metadata.icon}</div>
-              <h3 className="font-bold text-gray-900 mb-2">{metadata.title}</h3>
-              <p className="text-sm text-gray-600 mb-4 flex-1">{metadata.description}</p>
+              <div className="text-3xl mb-3">{metadata.icon}</div>
+              <h3 className="font-bold text-gray-900 mb-2 text-sm">{metadata.title}</h3>
+              <p className="text-xs text-gray-600 mb-4 flex-1 leading-relaxed">{metadata.description}</p>
               <Button
                 onClick={() => handleStartTour(tourType)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 size="sm"
+                className="w-full"
               >
                 Iniciar Tour
               </Button>

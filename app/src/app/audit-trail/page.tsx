@@ -122,24 +122,24 @@ export default function AuditTrailPage() {
   const getActionBadgeColor = (action: string) => {
     switch (action) {
       case 'CREATE':
-        return 'bg-green-100 text-green-800';
+        return 'badge-success';
       case 'UPDATE':
-        return 'bg-blue-100 text-blue-800';
+        return 'badge-warning';
       case 'DELETE':
-        return 'bg-red-100 text-red-800';
+        return 'badge-danger';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'badge-neutral';
     }
   };
 
   const getEntityBadgeColor = (entityType: string) => {
     switch (entityType) {
       case 'TASK':
-        return 'bg-purple-100 text-purple-800';
+        return 'badge-violet';
       case 'REPORT':
-        return 'bg-indigo-100 text-indigo-800';
+        return 'badge-info';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'badge-neutral';
     }
   };
 
@@ -251,9 +251,9 @@ export default function AuditTrailPage() {
     return (
       <div className="space-y-3">
         {changes.map((change) => (
-          <div key={change.squad} className="border rounded-lg overflow-hidden bg-gray-50">
+          <div key={change.squad} className="border border-gray-200 rounded-lg overflow-hidden">
             {/* Squad Header */}
-            <div className="px-4 py-2.5 font-semibold bg-gray-100 text-gray-800">
+            <div className="px-4 py-2.5 font-semibold bg-gray-200 text-gray-900 text-sm">
               {change.squad}
             </div>
 
@@ -265,15 +265,15 @@ export default function AuditTrailPage() {
                   <span className="text-sm font-medium text-gray-700">Bajas:</span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                    <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                       {change.low.old}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-3">
-                    <div className="text-gray-400 font-bold text-lg">→</div>
+                    <div className="text-gray-500 font-bold text-lg">→</div>
                     <div className="flex flex-col items-center flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                      <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                         {change.low.new}
                       </div>
                     </div>
@@ -287,15 +287,15 @@ export default function AuditTrailPage() {
                   <span className="text-sm font-medium text-gray-700">Medias:</span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                    <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                       {change.medium.old}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-3">
-                    <div className="text-gray-400 font-bold text-lg">→</div>
+                    <div className="text-gray-500 font-bold text-lg">→</div>
                     <div className="flex flex-col items-center flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                      <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                         {change.medium.new}
                       </div>
                     </div>
@@ -309,15 +309,15 @@ export default function AuditTrailPage() {
                   <span className="text-sm font-medium text-gray-700">Graves:</span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                    <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                       {change.high.old}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-3">
-                    <div className="text-gray-400 font-bold text-lg">→</div>
+                    <div className="text-gray-500 font-bold text-lg">→</div>
                     <div className="flex flex-col items-center flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                      <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
                         {change.high.new}
                       </div>
                     </div>
@@ -327,19 +327,19 @@ export default function AuditTrailPage() {
 
               {/* Nota */}
               {change.score.old !== change.score.new && (
-                <div className="px-4 py-3 grid grid-cols-3 gap-4 items-center bg-blue-50">
-                  <span className="text-sm font-bold text-blue-800">Nota:</span>
+                <div className="px-4 py-3 grid grid-cols-3 gap-4 items-center bg-blue-100">
+                  <span className="text-sm font-bold text-blue-700">Nota:</span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                    <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center num">
                       {change.score.old.toFixed(2)}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-3">
-                    <div className="text-gray-400 font-bold text-lg">→</div>
+                    <div className="text-gray-500 font-bold text-lg">→</div>
                     <div className="flex flex-col items-center flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
+                      <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded font-semibold text-sm w-full text-center num">
                         {change.score.new.toFixed(2)}
                       </div>
                     </div>
@@ -349,20 +349,20 @@ export default function AuditTrailPage() {
 
               {/* Notas Adicionales */}
               {change.additional_notes.old !== change.additional_notes.new && (
-                <div className="px-4 py-3 grid grid-cols-1 gap-4 items-start bg-purple-50">
-                  <span className="text-sm font-bold text-purple-800">Notas Adicionales:</span>
+                <div className="px-4 py-3 grid grid-cols-1 gap-4 items-start bg-blue-200/30">
+                  <span className="text-sm font-bold text-blue-700">Notas Adicionales:</span>
                   <div className="flex gap-3 w-full">
                     <div className="flex-1">
                       <div className="text-xs text-gray-600 mb-1">Anterior</div>
-                      <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
-                        {change.additional_notes.old || <span className="italic text-gray-500">Sin notas</span>}
+                      <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
+                        {change.additional_notes.old || <span className="italic text-gray-600">Sin notas</span>}
                       </div>
                     </div>
-                    <div className="text-gray-400 font-bold text-lg flex items-center">→</div>
+                    <div className="text-gray-500 font-bold text-lg flex items-center">→</div>
                     <div className="flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
-                      <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
-                        {change.additional_notes.new || <span className="italic text-gray-500">Sin notas</span>}
+                      <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
+                        {change.additional_notes.new || <span className="italic text-gray-600">Sin notas</span>}
                       </div>
                     </div>
                   </div>
@@ -468,10 +468,10 @@ export default function AuditTrailPage() {
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1">
               Trazabilidad de Auditoría
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm text-gray-600">
               Historial completo de acciones realizadas en tareas y reportes
             </p>
           </div>
@@ -486,7 +486,7 @@ export default function AuditTrailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -501,9 +501,9 @@ export default function AuditTrailPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow mb-2 p-6" data-tour="audit-filters">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
+        <div className="bg-gray-100 border border-gray-200 rounded-xl mb-2 p-5" data-tour="audit-filters">
+          <div className="mb-4">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">Filtros</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
@@ -570,7 +570,7 @@ export default function AuditTrailPage() {
                 onClick={() =>
                   setFilters({ ...filters, entityType: '', action: '', offset: 0 })
                 }
-                className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition"
+                className="w-full px-3 py-1.5 border border-red-500/40 hover:border-red-500/70 hover:bg-red-950/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
                 aria-label="Limpiar todos los filtros"
               >
                 Limpiar Filtros
@@ -593,7 +593,7 @@ export default function AuditTrailPage() {
         </div>
 
         {/* Audit Logs Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden" data-tour="audit-table">
+        <div className="bg-gray-100 border border-gray-200 rounded-xl overflow-hidden" data-tour="audit-table">
           {loading ? (
             // Mostrar skeleton mientras carga (primera vez o caché expirado)
             <SkeletonAuditTable isAdmin={isAdmin} />
@@ -639,7 +639,7 @@ export default function AuditTrailPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha y Hora
@@ -661,12 +661,12 @@ export default function AuditTrailPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-gray-100 divide-y divide-gray-200">
                   {auditLogs.map((log) => (
                     <tr 
                       key={log.id} 
                       onClick={() => setSelectedLog(log)}
-                      className="hover:bg-gray-50 transition cursor-pointer"
+                      className="hover:bg-gray-200 transition cursor-pointer"
                       data-tour="audit-expand"
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -771,11 +771,11 @@ export default function AuditTrailPage() {
         )}
 
         {/* Notes */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">
+        <div className="mt-8 bg-blue-100 border border-blue-200 rounded-xl p-5">
+          <h3 className="font-semibold text-blue-700 mb-2 text-sm">
             Información Registrada:
           </h3>
-          <ul className="text-sm text-blue-800 space-y-1">
+          <ul className="text-xs text-blue-600 space-y-1">
             <li>✓ Fecha y Hora: Momento exacto de la acción</li>
             <li>✓ Usuario: Email del usuario que realizó la acción</li>
             <li>✓ Cambios: Detalles de qué se modificó (para UPDATE)</li>
@@ -791,10 +791,10 @@ export default function AuditTrailPage() {
           
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div role="dialog" aria-modal="true" aria-label="Detalles de auditoría" data-testid="audit-detail-modal" className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div role="dialog" aria-modal="true" aria-label="Detalles de auditoría" data-testid="audit-detail-modal" className="bg-gray-100 border border-gray-200 rounded-2xl shadow-2xl shadow-black/50 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="flex justify-between items-center sticky top-0 bg-white border-b p-6">
-                <h3 className="text-lg font-semibold text-gray-900">
+              <div className="flex justify-between items-center sticky top-0 bg-gray-100 border-b border-gray-200 p-5">
+                <h3 className="text-base font-semibold text-gray-900">
                   Detalles de {translateAction(selectedLog.action)}
                 </h3>
                 <button
@@ -873,7 +873,7 @@ export default function AuditTrailPage() {
                             </h4>
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                               {/* Encabezados */}
-                              <div className="grid grid-cols-2 bg-gray-50 border-b border-gray-200">
+                              <div className="grid grid-cols-2 bg-gray-200 border-b border-gray-200">
                                 <div className="px-4 py-3 font-semibold text-sm text-gray-700">
                                   Valor Anterior
                                 </div>
@@ -891,14 +891,14 @@ export default function AuditTrailPage() {
                                   return (
                                     <div
                                       key={key}
-                                      className="grid grid-cols-2 bg-white"
+                                      className="grid grid-cols-2 bg-gray-100"
                                     >
                                       {/* Valor Anterior */}
                                       <div className="px-4 py-4 text-sm">
                                         <div className="text-xs font-medium text-gray-600 mb-1">
                                           {getFieldLabel(key)}
                                         </div>
-                                        <div className="text-red-700 bg-red-50 px-3 py-2 rounded font-mono text-xs">
+                                        <div className="text-red-400 bg-red-950/30 border border-red-800/30 px-3 py-2 rounded font-mono text-xs">
                                           {key === 'task_link' && typeof oldValue === 'string' ? (
                                             <a href={oldValue} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{oldValue}</a>
                                           ) : cleanJsonValue(oldValue, key)}
@@ -909,7 +909,7 @@ export default function AuditTrailPage() {
                                         <div className="text-xs font-medium text-gray-600 mb-1">
                                           {getFieldLabel(key)}
                                         </div>
-                                        <div className="text-green-700 bg-green-50 px-3 py-2 rounded font-mono text-xs">
+                                        <div className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-3 py-2 rounded font-mono text-xs">
                                           {key === 'task_link' && typeof newValue === 'string' ? (
                                             <a href={newValue} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{newValue}</a>
                                           ) : cleanJsonValue(newValue, key)}
@@ -950,7 +950,7 @@ export default function AuditTrailPage() {
                         <h4 className="text-sm font-semibold text-gray-900 mb-3">
                           Valores de la Tarea
                         </h4>
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm space-y-2">
+                        <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-lg p-4 text-sm space-y-2">
                           {getOrderedEntries(selectedLog.new_values)
                             .filter(([key, value]) => {
                               // Omitir campos innecesarios
@@ -989,7 +989,7 @@ export default function AuditTrailPage() {
                           <h4 className="text-sm font-semibold text-gray-900 mb-3">
                             Equipos
                           </h4>
-                          {renderSquadsSimple(selectedLog.new_values.squads, 'bg-green-50 border-green-200')}
+                          {renderSquadsSimple(selectedLog.new_values.squads, 'bg-emerald-950/30 border-emerald-800/40')}
                         </div>
                       )}
                     </div>
@@ -1006,7 +1006,7 @@ export default function AuditTrailPage() {
                         <h4 className="text-sm font-semibold text-gray-900 mb-3">
                           Valores de la Tarea
                         </h4>
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm space-y-2">
+                        <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-4 text-sm space-y-2">
                           {getOrderedEntries(selectedLog.old_values)
                             .filter(([key, value]) => {
                               // Omitir campos innecesarios
@@ -1045,7 +1045,7 @@ export default function AuditTrailPage() {
                           <h4 className="text-sm font-semibold text-gray-900 mb-3">
                             Equipos
                           </h4>
-                          {renderSquadsSimple(selectedLog.old_values.squads, 'bg-red-50 border-red-200')}
+                          {renderSquadsSimple(selectedLog.old_values.squads, 'bg-red-950/30 border-red-800/40')}
                         </div>
                       )}
                     </div>

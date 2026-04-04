@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import { preconnect, prefetchDNS } from "react-dom";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -8,16 +8,16 @@ import { SessionChecker } from "@/components/SessionChecker";
 import { SessionManager } from "@/components/SessionManager";
 import ClientProviders from "@/components/ClientProviders";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
-  display: "swap", // Usar swap para mejor performance
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
-  display: "swap", // Usar swap para mejor performance
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <AuthErrorBoundary>
           <AuthProvider>

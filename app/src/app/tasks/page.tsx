@@ -219,7 +219,7 @@ export default function TasksPage() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <CacheWarningBanner />
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Tareas</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Tareas</h1>
           {canManageTasks && !showForm && (
             <Button onClick={() => setShowForm(true)} data-tour="task-create-btn">
               + Nueva Tarea
@@ -228,23 +228,23 @@ export default function TasksPage() {
         </div>
 
         {authLoading ? (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-blue-800">
+          <div className="bg-blue-100 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-600">
               Cargando permisos...
             </p>
           </div>
         ) : !canManageTasks && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-amber-950/40 border border-amber-500/25 rounded-lg p-4 mb-6">
+            <p className="text-sm text-amber-400">
               Tienes acceso de solo lectura a las tareas.
             </p>
           </div>
         )}
 
         {/* Buscador */}
-        <div className="bg-white rounded-lg shadow p-6 mb-2" data-tour="task-search">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">Buscar Tarea</h2>
+        <div className="bg-gray-100 border border-gray-200 rounded-xl p-5 mb-2" data-tour="task-search">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">Buscar Tarea</h2>
           </div>
           <div className="flex gap-4">
             <div className="flex-1">
@@ -260,10 +260,10 @@ export default function TasksPage() {
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded font-medium transition-colors"
+              className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-medium transition-colors"
               data-tour="task-filter-button"
             >
-              {showFilters ? '▲ Ocultar Filtros' : '▼ Mostrar Filtros'}
+              {showFilters ? '▲ Ocultar filtros' : '▼ Mostrar filtros'}
             </button>
           </div>
         </div>
@@ -284,8 +284,8 @@ export default function TasksPage() {
 
         {/* Filtros - Expandibles */}
         {showFilters && (
-        <div className="bg-white rounded-lg shadow p-6 mb-6" data-tour="task-filters">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Filtros de Búsqueda</h2>
+        <div className="bg-gray-100 border border-gray-200 rounded-xl p-5 mb-6" data-tour="task-filters">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600 mb-4">Filtros</h2>
           <div className="grid grid-cols-5 gap-4">
             <div>
               <label htmlFor="filter-year" className="block text-sm font-medium mb-1">Año</label>
@@ -379,9 +379,9 @@ export default function TasksPage() {
               squad: '',
               status: '',
             })}
-            className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded font-medium transition-colors"
+            className="mt-4 px-3 py-1.5 border border-red-500/40 hover:border-red-500/70 hover:bg-red-950/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
           >
-            Limpiar Filtros
+            Limpiar filtros
           </button>
         </div>
         )}
@@ -390,7 +390,7 @@ export default function TasksPage() {
         {loading ? (
           <SkeletonTable />
         ) : tasks.filter((task) => task.name.toLowerCase().includes(searchTerm)).length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-6 text-center fade-in-smooth" data-testid="tasks-empty-state">
+          <div className="bg-gray-100 border border-gray-200 rounded-xl p-6 text-center fade-in-smooth" data-testid="tasks-empty-state">
             <p className="text-gray-600 py-8">
               {hasError
                 ? 'Ocurrió un error al consultar los registros. Intenta actualizar la página.'
@@ -409,9 +409,9 @@ export default function TasksPage() {
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-x-auto fade-in-smooth" data-testid="tasks-table-container">
+          <div className="bg-gray-100 border border-gray-200 rounded-xl overflow-x-auto fade-in-smooth" data-testid="tasks-table-container">
             <table className="w-full" data-tour="task-table" data-testid="tasks-table">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-200 border-b border-gray-300">
                 <tr>
                   <th className="w-12"></th>
                   <th className="px-4 py-3 text-left text-sm font-semibold w-12">N°</th>
@@ -441,7 +441,7 @@ export default function TasksPage() {
                       <React.Fragment key={task.id}>
                         <tr 
                           onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-                          className="border-b hover:bg-gray-50 cursor-pointer"
+                          className="border-b border-gray-200 hover:bg-gray-200 cursor-pointer transition-colors"
                           data-tour="task-table-row"
                         >
                           <td className="px-2 py-3 text-center">
@@ -479,20 +479,20 @@ export default function TasksPage() {
                             <span className="text-gray-800">{task.product_type}</span>
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <span className="inline-flex items-center rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                            <span className="inline-flex items-center rounded-full badge-violet px-2 py-0.5 text-xs font-semibold">
                               {task.tshirt_size || '—'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-medium text-purple-700 whitespace-nowrap">
+                            <span className="inline-flex items-center rounded-full badge-purple px-2 py-0.5 text-xs font-medium whitespace-nowrap">
                               {task.category || '—'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              task.status === 'Completada' ? 'bg-green-100 text-green-800' :
-                              task.status === 'Deprecada' ? 'bg-gray-100 text-gray-800' :
-                              'bg-yellow-100 text-yellow-800'
+                            <span className={`px-2 py-1 rounded-md text-xs font-semibold ${
+                              task.status === 'Completada' ? 'badge-success' :
+                              task.status === 'Deprecada' ? 'badge-neutral' :
+                              'badge-warning'
                             }`}>
                               {task.status}
                             </span>
@@ -547,28 +547,29 @@ export default function TasksPage() {
                         </tr>
                         {/* Fila expandida con detalles */}
                         {isExpanded && squads.length > 0 && (
-                          <tr className="border-b bg-gray-50" data-tour="task-row-details">
+                          <tr className="border-b border-gray-200 bg-gray-200" data-tour="task-row-details">
                             <td colSpan={canManageTasks ? 11 : 10} className="px-6 py-4">
                               <div className="space-y-4">
                                 {/* Info adicional de la tarea */}
                                 <div className="flex flex-wrap gap-3 text-xs text-gray-600">
                                   {task.effort_score_date && (
-                                    <span className="inline-flex items-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1">
-                                      <span className="font-semibold text-green-700">Fecha Esfuerzo:</span> {task.effort_score_date}
+                                    <span className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/25 rounded px-2 py-1">
+                                      <span className="font-semibold text-emerald-400">Fecha Esfuerzo:</span>
+                                      <span className="text-emerald-300 num">{task.effort_score_date}</span>
                                     </span>
                                   )}
                                   {task.assigned_qa && task.assigned_qa.length > 0 && (
-                                    <span className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                                    <span className="inline-flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded px-2 py-1">
                                       <Users className="w-3.5 h-3.5 text-blue-600" />
-                                      <span className="font-semibold text-blue-700">QA Asignados:</span> 
-                                      <span className="text-blue-800">{task.assigned_qa.join(', ')}</span>
+                                      <span className="font-semibold text-blue-700">QA Asignados:</span>
+                                      <span className="text-blue-700">{task.assigned_qa.join(', ')}</span>
                                     </span>
                                   )}
                                 </div>
                                 {/* Tabla de squads */}
-                                <div className="bg-white border rounded-lg overflow-hidden">
+                                <div className="bg-gray-100 border border-gray-300 rounded-lg overflow-hidden">
                                   <table className="w-full text-sm">
-                                    <thead className="bg-gray-100 border-b">
+                                    <thead className="bg-gray-300 border-b border-gray-400">
                                       <tr>
                                         <th className="px-3 py-2 text-left font-semibold text-gray-700">Equipo</th>
                                         <th className="px-3 py-2 text-left font-semibold text-gray-700">Bajas</th>
@@ -593,10 +594,10 @@ export default function TasksPage() {
                                             </td>
                                           </tr>
                                           {squad.additional_notes && (
-                                            <tr className="border-b bg-blue-50 hover:bg-blue-50">
+                                            <tr className="border-b border-gray-200 bg-blue-100">
                                               <td colSpan={5} className="px-3 py-2">
-                                                <p className="text-xs font-semibold text-blue-900 mb-1">Notas:</p>
-                                                <p className="text-sm text-blue-800">{squad.additional_notes}</p>
+                                                <p className="text-xs font-semibold text-blue-700 mb-1">Notas:</p>
+                                                <p className="text-sm text-blue-700">{squad.additional_notes}</p>
                                               </td>
                                             </tr>
                                           )}
