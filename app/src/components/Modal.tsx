@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, memo, useEffect, useState } from 'react';
+import { ReactNode, memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -15,12 +15,6 @@ interface ModalProps {
 }
 
 function Modal({ isOpen, title, onClose, onHeaderClose, children, size = 'lg', headerActions }: ModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -28,7 +22,7 @@ function Modal({ isOpen, title, onClose, onHeaderClose, children, size = 'lg', h
     }
   }, [isOpen]);
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const sizeClasses = {
     sm: 'max-w-sm',
