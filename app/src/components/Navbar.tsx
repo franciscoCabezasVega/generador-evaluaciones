@@ -71,6 +71,18 @@ export default function Navbar() {
             >
               Auditoría
             </Link>
+            {profile?.role === 'admin' && (
+              <Link
+                href="/settings"
+                className={`transition-colors font-medium ${
+                  pathname === '/settings'
+                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                    : 'text-gray-600 hover:text-black'
+                }`}
+              >
+                Configuración
+              </Link>
+            )}
           </div>
         </div>
         {mounted && user && (

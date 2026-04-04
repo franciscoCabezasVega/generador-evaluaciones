@@ -8,6 +8,7 @@ import {
   forwardRef,
 } from 'react';
 import { CreateTaskTimingInput, UpdateTaskTimingInput, Task, CreateTimingQAEntryInput } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 import { Button } from '@/components/ui/button';
 import Modal from '@/components/Modal';
 import { AlertCircle, ChevronDown, ChevronUp, Users, ExternalLink } from 'lucide-react';
@@ -101,6 +102,8 @@ function TimingFormComponent(
   const initialFormData = processInitialData(initialData);
   const [formData, setFormData] = useState<FormDataState>(initialFormData);
   const initialDataRef = useRef<FormDataState>(initialFormData);
+
+  const { products } = useCatalogData();
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [unsavedConfirm, setUnsavedConfirm] = useState(false);
@@ -440,9 +443,9 @@ function TimingFormComponent(
             required
           >
             <option value="">Selecciona un producto</option>
-            <option value="Core">Core</option>
-            <option value="Platform">Platform</option>
-            <option value="Commerce">Commerce</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
           </select>
         </div>
       )}

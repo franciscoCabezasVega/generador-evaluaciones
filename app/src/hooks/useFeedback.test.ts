@@ -34,7 +34,9 @@ describe('useFeedback Hook', () => {
     it('should reject description less than 10 characters', async () => {
       const { result } = renderHook(() => useFeedback());
 
-      result.current.submitFeedback('suggestion', 'short');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', 'short');
+      });
 
       await waitFor(() => {
         expect(result.current.error).toBe(
@@ -51,11 +53,13 @@ describe('useFeedback Hook', () => {
         value: `https://example.com/${i}`,
       }));
 
-      result.current.submitFeedback(
-        'suggestion',
-        'This is a valid description',
-        evidence
-      );
+      await act(async () => {
+        result.current.submitFeedback(
+          'suggestion',
+          'This is a valid description',
+          evidence
+        );
+      });
 
       await waitFor(() => {
         expect(result.current.error).toBe('Se permite un máximo de 3 elementos de evidencia');
@@ -72,11 +76,13 @@ describe('useFeedback Hook', () => {
         },
       ];
 
-      result.current.submitFeedback(
-        'suggestion',
-        'This is a valid description',
-        evidence
-      );
+      await act(async () => {
+        result.current.submitFeedback(
+          'suggestion',
+          'This is a valid description',
+          evidence
+        );
+      });
 
       await waitFor(() => {
         expect(result.current.error).toContain('El enlace debe ser de jam.dev');
@@ -86,7 +92,9 @@ describe('useFeedback Hook', () => {
     it('should reject empty description', async () => {
       const { result } = renderHook(() => useFeedback());
 
-      result.current.submitFeedback('suggestion', '');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', '');
+      });
 
       await waitFor(() => {
         expect(result.current.error).toContain('10 caracteres');
@@ -102,7 +110,9 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Success' }),
       });
 
-      result.current.submitFeedback('suggestion', 'Valid description here');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', 'Valid description here');
+      });
 
       await waitFor(() => {
         expect(onSuccess).toHaveBeenCalled();
@@ -127,11 +137,13 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Success' }),
       });
 
-      result.current.submitFeedback(
-        'suggestion',
-        'Valid description here',
-        evidence
-      );
+      await act(async () => {
+        result.current.submitFeedback(
+          'suggestion',
+          'Valid description here',
+          evidence
+        );
+      });
 
       await waitFor(() => {
         expect(onSuccess).toHaveBeenCalled();
@@ -155,11 +167,13 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Success' }),
       });
 
-      result.current.submitFeedback(
-        'incident',
-        'Valid description here',
-        evidence
-      );
+      await act(async () => {
+        result.current.submitFeedback(
+          'incident',
+          'Valid description here',
+          evidence
+        );
+      });
 
       await waitFor(() => {
         expect(onSuccess).toHaveBeenCalled();
@@ -183,11 +197,13 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Success' }),
       });
 
-      result.current.submitFeedback(
-        'suggestion',
-        'Valid description here',
-        evidence
-      );
+      await act(async () => {
+        result.current.submitFeedback(
+          'suggestion',
+          'Valid description here',
+          evidence
+        );
+      });
 
       await waitFor(() => {
         expect(onSuccess).toHaveBeenCalled();
@@ -205,7 +221,9 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Server error' }),
       });
 
-      result.current.submitFeedback('suggestion', 'Valid description here');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', 'Valid description here');
+      });
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith('Server error');
@@ -222,7 +240,9 @@ describe('useFeedback Hook', () => {
         json: async () => ({ message: 'Success' }),
       });
 
-      result.current.submitFeedback('suggestion', 'Valid description here');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', 'Valid description here');
+      });
 
       await waitFor(() => {
         expect(authenticatedFetch).toHaveBeenCalledWith(
@@ -244,13 +264,17 @@ describe('useFeedback Hook', () => {
     it('should clear error', async () => {
       const { result } = renderHook(() => useFeedback());
 
-      result.current.submitFeedback('suggestion', 'short');
+      await act(async () => {
+        result.current.submitFeedback('suggestion', 'short');
+      });
 
       await waitFor(() => {
         expect(result.current.error).not.toBeNull();
       });
 
-      result.current.clearError();
+      await act(async () => {
+        result.current.clearError();
+      });
 
       await waitFor(() => {
         expect(result.current.error).toBeNull();

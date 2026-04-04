@@ -10,6 +10,7 @@ import CacheWarningBanner from '@/components/CacheWarningBanner';
 import Modal from '@/components/Modal';
 import { SkeletonTable } from '@/components/Skeleton';
 import { Task, CreateTaskInput } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 import { Button } from '@/components/ui/button';
 import { Trash2, Edit2, ChevronDown, ChevronRight, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -199,13 +200,12 @@ export default function TasksPage() {
   const canManageTasks = profile && ['admin', 'gestor'].includes(profile.role);
 
   // Squads dinámicos según el tipo de producto seleccionado
-  const squadsByType: Record<string, string[]> = {
-    'Core': ['Squad 1 - Delta', 'Squad 2 - Epsilon', 'Squad 3 - Zeta'],
-    'Platform': ['Squad 1 - Alpha', 'Squad 2 - Beta', 'Squad 3 - Gamma'],
-    'Commerce': ['Identity & Auth', 'Payments', 'Search & Commerce - Nova'],
-  };
+  const { products, squads: allSquads } = useCatalogData();
 
-  const availableSquads = filters.productType ? squadsByType[filters.productType] : [];
+  const productObj = products.find((p) => p.name === filters.productType);
+  const availableSquads = productObj
+    ? allSquads.filter((s) => s.product_id === productObj.id).map((s) => s.name)
+    : [];
 
   // Manejador para validar cambios sin guardar al cerrar desde el icono X
   const handleFormHeaderClose = () => {
@@ -330,9 +330,9 @@ export default function TasksPage() {
                 className="w-full border rounded px-3 py-2 text-sm"
               >
                 <option value="">Seleccionar producto</option>
-                <option value="Core">Core</option>
-                <option value="Platform">Platform</option>
-                <option value="Commerce">Commerce</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
               </select>
             </div>
 

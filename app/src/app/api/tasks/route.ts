@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CreateTaskInput, TSHIRT_SIZES, TASK_CATEGORIES, TshirtSize, TaskCategory } from '@/lib/types';
+import { CreateTaskInput } from '@/lib/types';
 import { calculateTaskScore, validateReturns } from '@/lib/scoreCalculator';
 import { getAuthContext } from '@/lib/auth';
 
@@ -44,14 +44,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!body.tshirt_size || !TSHIRT_SIZES.includes(body.tshirt_size as TshirtSize)) {
+    if (!body.tshirt_size) {
       return NextResponse.json(
-        { error: 'Complejidad inválida. Valores permitidos: Mínima, Menor, Estándar, Mayor, Máxima' },
+        { error: 'La complejidad es requerida' },
         { status: 400 }
       );
     }
 
-    if (!body.category || !TASK_CATEGORIES.includes(body.category as TaskCategory)) {
+    const { data: complexityExists } = await supabase
+      .from('complexities')
+      .select('id')
+      .eq('name', body.tshirt_size)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!complexityExists) {
+      return NextResponse.json(
+        { error: 'Complejidad inválida' },
+        { status: 400 }
+      );
+    }
+
+    if (!body.category) {
+      return NextResponse.json(
+        { error: 'La categoría es requerida' },
+        { status: 400 }
+      );
+    }
+
+    const { data: categoryExists } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('name', body.category)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!categoryExists) {
       return NextResponse.json(
         { error: 'Categoría inválida' },
         { status: 400 }

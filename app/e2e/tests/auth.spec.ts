@@ -1,4 +1,5 @@
 import { test, expect, TEST_USER } from '../fixtures';
+import { TasksPage, NavbarComponent } from '../pages';
 
 /**
  * E2E: Authentication – Login & Logout
@@ -59,13 +60,21 @@ test.describe('Authentication', () => {
   });
 
   test('should logout cleanly without flashing unauthenticated content', async ({
-    authenticatedPage: tasksPage,
-    navbar,
+    loginPage,
     page,
   }) => {
+    await test.step('Login to obtain an authenticated session', async () => {
+      await loginPage.goto();
+      await loginPage.loginAndWaitForRedirect(TEST_USER.email, TEST_USER.password);
+    });
+
+    const tasksPage = new TasksPage(page);
+    const navbar = new NavbarComponent(page);
+
     await test.step('Verify we are authenticated', async () => {
       await navbar.expectAuthenticated();
-      await tasksPage.expectLoaded();
+      await tasksPage.goto();
+      await tasksPage.waitForTableLoaded();
     });
 
     await test.step('Click logout and verify clean transition to login', async () => {
@@ -79,7 +88,6 @@ test.describe('Authentication', () => {
     });
 
     await test.step('Verify login page is displayed correctly', async () => {
-      const loginPage = new (await import('../pages')).LoginPage(page);
       await loginPage.expectVisible();
     });
 

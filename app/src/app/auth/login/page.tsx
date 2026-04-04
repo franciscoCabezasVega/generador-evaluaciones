@@ -9,6 +9,13 @@ import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 
 type SessionExpiredReason = 'timeout' | 'inactive' | 'error' | 'unknown';
 
+const TEST_ACCOUNTS = [
+  { email: 'admin@evaluaciones.test',     password: 'Admin@2026Test!',     role: 'Admin' },
+  { email: 'gestor@evaluaciones.test',    password: 'Gestor@2026Test!',    role: 'Gestor' },
+  { email: 'reportero@evaluaciones.test', password: 'Reportero@2026Test!', role: 'Reportero' },
+  { email: 'invitado@evaluaciones.test',  password: 'Invitado@2026Test!',  role: 'Invitado' },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,7 +30,6 @@ export default function LoginPage() {
   useEffect(() => {
     const expired = searchParams.get('sessionExpired') === 'true';
     const reason = (searchParams.get('reason') as SessionExpiredReason) || 'unknown';
-    
     if (expired) {
       setShowExpiredBanner(true);
       setExpiredReason(reason);
@@ -32,6 +38,11 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
+  const fillCredentials = (userEmail: string, userPassword: string) => {
+    setEmail(userEmail);
+    setPassword(userPassword);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -39,42 +50,28 @@ export default function LoginPage() {
     setShowExpiredBanner(false);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) throw error;
+      if (!data.session) throw new Error('No se pudo establecer la sesión');
 
-      if (!data.session) {
-        throw new Error('No se pudo establecer la sesión');
-      }
-
-      // Invalidar caché de sesión para que use la nueva sesión
       invalidateSessionCache();
 
-      // Esperar y verificar con reintentos más generosos
       let retries = 0;
       const maxRetries = 5;
-      
+
       const waitForSessionReady = async (): Promise<void> => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user?.id) {
-            // Forzar recarga completa para que AuthContext se reinicialice
-            // con la sesión nueva. router.push('/') causa una condición de
-            // carrera donde AuthContext aún no refleja el usuario y la Home
-            // page redirige de vuelta al login.
             window.location.href = '/';
             return;
           }
         } catch {
           // Silently catch and retry
         }
-
         if (retries < maxRetries) {
           retries++;
-          console.warn(`⏳ Retrying... (${retries}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, 600));
           await waitForSessionReady();
         } else {
@@ -91,30 +88,24 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white p-8 rounded-lg shadow w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8">
+      <div className="w-full max-w-md space-y-4">
+
+        {/* Formulario de login */}
+        <div className="bg-white p-8 rounded-lg shadow">
           <h1 className="text-2xl font-bold mb-6">Iniciar Sesión</h1>
 
-          {/* Banner de sesión expirada (cuadro amarillo persistente) */}
           {showExpiredBanner && (
             <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6 flex items-start gap-3" role="alert" data-testid="session-expired-banner">
               <AlertTriangle className="w-5 h-5 text-yellow-700 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-semibold text-yellow-900">
-                  {expiredReason === 'inactive'
-                    ? 'Sesión cerrada por inactividad'
-                    : 'Tu sesión ha expirado'}
+                  {expiredReason === 'inactive' ? 'Sesión cerrada por inactividad' : 'Tu sesión ha expirado'}
                 </p>
-                <p className="text-sm text-yellow-800 mt-1">
-                  Por favor, inicia sesión nuevamente para continuar.
-                </p>
+                <p className="text-sm text-yellow-800 mt-1">Por favor, inicia sesión nuevamente para continuar.</p>
               </div>
               <button
-                onClick={() => {
-                  setShowExpiredBanner(false);
-                  router.replace('/auth/login');
-                }}
+                onClick={() => { setShowExpiredBanner(false); router.replace('/auth/login'); }}
                 className="text-yellow-700 hover:text-yellow-900 transition-colors"
                 aria-label="Cerrar aviso"
               >
@@ -143,7 +134,6 @@ export default function LoginPage() {
                 required
               />
             </div>
-
             <div>
               <label htmlFor="login-password" className="block text-sm font-medium mb-2">Contraseña</label>
               <input
@@ -156,21 +146,37 @@ export default function LoginPage() {
                 required
               />
             </div>
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full"
-            >
+            <Button type="submit" disabled={loading} className="w-full">
               {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
           </form>
-
-          <p className="text-center text-sm text-gray-500 mt-6">
-            Si no tienes acceso, contacta a tu administrador
-          </p>
         </div>
+
+        {/* Cuentas de prueba */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">🧪 Cuentas de prueba — Click para ingresar</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {TEST_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                type="button"
+                onClick={() => fillCredentials(acc.email, acc.password)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{acc.email}</p>
+                  <p className="text-xs text-gray-500">{acc.role}</p>
+                </div>
+                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">{acc.password}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
-    </>
+    </div>
   );
 }
+

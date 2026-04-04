@@ -16,3 +16,6 @@ export {
   STATUSES,
 } from './test-data';
 export type { RandomTaskData, ProductType } from './test-data';
+
+export { createTaskViaAPI, deleteTaskViaAPI } from './api-helpers';
+export type { CreatedTask } from './api-helpers';
