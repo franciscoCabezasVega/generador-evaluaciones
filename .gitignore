@@ -31,6 +31,3 @@ out/
 
 # Playwright MCP artifacts
 .playwright-mcp/
-
-# DB cleanup scripts
-app/scripts/
