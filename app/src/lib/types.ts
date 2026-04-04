@@ -1,35 +1,56 @@
-export type ProductType = 'Core' | 'Platform' | 'Commerce';
+export type ProductType = string;
 export type TaskStatus = 'Completada' | 'Deprecada' | 'Pendiente';
-export type TshirtSize = 'Mínima' | 'Menor' | 'Estándar' | 'Mayor' | 'Máxima';
-export type TaskCategory = 'Integración' | 'Bug fix' | 'Migración' | 'Infraestructura' | 'Nueva funcionalidad' | 'Refactorización' | 'Seguridad';
+export type TshirtSize = string;
+export type TaskCategory = string;
 export type UserRole = 'admin' | 'gestor' | 'reportero' | 'invitado';
 
-export const TSHIRT_SIZES: TshirtSize[] = ['Mínima', 'Menor', 'Estándar', 'Mayor', 'Máxima'];
+// ─── Interfaces de catálogos dinámicos ───────────────────────────────────────
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-export const TASK_CATEGORIES: TaskCategory[] = [
-  'Integración',
-  'Bug fix',
-  'Migración',
-  'Infraestructura',
-  'Nueva funcionalidad',
-  'Refactorización',
-  'Seguridad',
-];
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-// Referencia de horas esperadas por complejidad
-export const TSHIRT_SIZE_HOURS: Record<TshirtSize, { min: number; max: number; label: string }> = {
-  'Mínima': { min: 0, max: 8, label: 'Hasta 1 día (≤8h)' },
-  'Menor': { min: 8, max: 16, label: '1 a 2 días (8-16h)' },
-  'Estándar': { min: 16, max: 24, label: '2 a 3 días (16-24h)' },
-  'Mayor': { min: 32, max: 48, label: '4 a 6 días (32-48h)' },
-  'Máxima': { min: 80, max: 80, label: '~2 semanas (≥80h)' },
-};
+export interface CatalogComplexity {
+  id: string;
+  name: string;
+  min_hours: number;
+  max_hours: number;
+  label: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-export const SQUADS_BY_TYPE: Record<ProductType, string[]> = {
-  Platform: ['Squad 1 - Alpha', 'Squad 2 - Beta', 'Squad 3 - Gamma'],
-  Core: ['Squad 1 - Delta', 'Squad 2 - Epsilon', 'Squad 3 - Zeta'],
-  Commerce: ['Identity & Auth', 'Payments', 'Search & Commerce - Nova'],
-};
+export interface CatalogSquad {
+  id: string;
+  name: string;
+  product_id: string;
+  product?: { id: string; name: string };
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogQAMember {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   admin: 'Administrador - Acceso completo',
@@ -225,19 +246,6 @@ export interface FeedbackFormData {
   description: string;
   evidence_url?: string;
 }
-
-// Lista de QA members
-export const QA_MEMBERS = [
-  'Alex Torres',
-  'Carlos Mendez',
-  'Diana Lopez',
-  'Elena Ruiz',
-  'Felipe Vargas',
-  'Gabriela Soto',
-  'Hugo Paredes',
-] as const;
-
-export type QAMemberName = (typeof QA_MEMBERS)[number] | 'No asignado';
 
 // Task QA - Relación many-to-many entre tareas y QAs asignados (similar a task_squad)
 export interface TaskQA {

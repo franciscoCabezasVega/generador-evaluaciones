@@ -1,19 +1,22 @@
-import { SQUADS_BY_TYPE, ProductType } from '@/lib/types';
+import { ProductType } from '@/lib/types';
 
 /**
- * Determina el producto (Core, Platform, Commerce) basándose en el nombre del squad/equipo
- * Esta es la forma más confiable de obtener el producto desde la información del reporte
+ * Determina el producto basándose en el nombre del squad/equipo
+ * Recibe el mapeo dinámico obtenido desde la base de datos
  * @param squadName - Nombre del squad/equipo del reporte
- * @returns El producto: 'Core', 'Platform' o 'Commerce'
+ * @param squadsByProduct - Mapeo { productName: string[] } obtenido desde Supabase
+ * @returns El producto correspondiente o 'Platform' como fallback
  */
-export const getProductTypeFromSquad = (squadName: string): ProductType => {
-  // Buscar en SQUADS_BY_TYPE para encontrar cuál productType contiene este squad
-  for (const [productType, squads] of Object.entries(SQUADS_BY_TYPE)) {
+export const getProductTypeFromSquad = (
+  squadName: string,
+  squadsByProduct: Record<string, string[]>
+): ProductType => {
+  for (const [productType, squads] of Object.entries(squadsByProduct)) {
     if (squads.includes(squadName)) {
       return productType as ProductType;
     }
   }
 
-  // Fallback por si el squad no está en el mapeo (no debería ocurrir en producción)
+  // Fallback por si el squad no está en el mapeo
   return 'Platform';
 };

@@ -14,6 +14,7 @@ import { downloadReportPDF } from '@/lib/services/pdfService';
 import Modal from '@/components/Modal';
 import ReportDetailModal from '@/components/ReportDetailModal';
 import { Report } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 
 export default function ReportsPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -54,6 +55,7 @@ export default function ReportsPage() {
   const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
+  const { products, squads: allSquads } = useCatalogData();
 
   // Redirigir a login si no hay sesión
   useEffect(() => {
@@ -182,13 +184,10 @@ export default function ReportsPage() {
       console.warn('All tasks fetched:', allTasks);
       console.warn('Filtering for productType:', filters.productType, 'status:', 'Completada');
 
-      const squadsByType: Record<string, string[]> = {
-        'Core': ['Squad 1 - Delta', 'Squad 2 - Epsilon', 'Squad 3 - Zeta'],
-        'Platform': ['Squad 1 - Alpha', 'Squad 2 - Beta', 'Squad 3 - Gamma'],
-        'Commerce': ['Identity & Auth', 'Payments', 'Search & Commerce - Nova'],
-      };
-
-      const squadsForProduct = squadsByType[filters.productType] || [];
+      const productObj = products.find((p) => p.name === filters.productType);
+      const squadsForProduct = productObj
+        ? allSquads.filter((s) => s.product_id === productObj.id).map((s) => s.name)
+        : [];
       let currentStep = 1;
       const totalSteps = squadsForProduct.length * 2 + 2;
 
@@ -432,9 +431,9 @@ export default function ReportsPage() {
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value="">Seleccionar producto</option>
-                  <option value="Core">Core</option>
-                  <option value="Platform">Platform</option>
-                  <option value="Commerce">Commerce</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -519,9 +518,9 @@ export default function ReportsPage() {
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value="">Todos</option>
-                  <option value="Core">Core</option>
-                  <option value="Platform">Platform</option>
-                  <option value="Commerce">Commerce</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

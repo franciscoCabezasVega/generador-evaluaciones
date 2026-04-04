@@ -16,7 +16,7 @@
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
     "precheck": "npm run lint",
-    "precheck:ci": "npm run lint && npm run test -- --testPathIgnorePatterns=useFeedback.test.ts",
+    "precheck:ci": "npm run lint && npm run test -- --ci --forceExit",
     "verify": "npm run lint && npm run test && npm run test:e2e && npm run build"
   },
   "dependencies": {

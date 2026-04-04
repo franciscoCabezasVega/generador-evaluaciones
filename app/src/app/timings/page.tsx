@@ -30,6 +30,7 @@ import {
   SquadTimingMetrics,
   QATimingMetrics,
 } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
@@ -41,6 +42,7 @@ import {
 
 export default function TimingsPage() {
   const [submitting, setSubmitting] = useState(false);
+  const { products } = useCatalogData();
   const [showForm, setShowForm] = useState(false);
   const [editingTiming, setEditingTiming] = useState<TaskTiming | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -412,9 +414,9 @@ export default function TimingsPage() {
                   className="mt-0 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 >
                   <option value="">Todos los productos</option>
-                  <option value="Core">Core</option>
-                  <option value="Platform">Platform</option>
-                  <option value="Commerce">Commerce</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

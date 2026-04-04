@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SquadTimingMetrics, QATimingMetrics, TaskTiming, Task, TshirtSize, TSHIRT_SIZE_HOURS, TSHIRT_SIZES } from '@/lib/types';
+import { SquadTimingMetrics, QATimingMetrics, TaskTiming, Task, TshirtSize } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 
 interface TimingMetricsProps {
   metrics: SquadTimingMetrics[];
@@ -1115,6 +1116,16 @@ function getDeviationBadge(level: 'under' | 'normal' | 'over' | 'critical') {
 export function TshirtSizeComparison({ timings, tasks, loading = false }: TshirtSizeComparisonProps) {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [barTooltip, setBarTooltip] = useState<Tooltip>({ visible: false, x: 0, y: 0, content: '' });
+  const { complexities } = useCatalogData();
+
+  // Derivar equivalente dinámico de TSHIRT_SIZE_HOURS y TSHIRT_SIZES desde el catálogo
+  const sizeHoursMap = Object.fromEntries(
+    complexities.map(c => [c.name, { min: c.min_hours, max: c.max_hours, label: c.label }])
+  );
+  const sizeOrder = complexities
+    .slice()
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(c => c.name);
 
   const handleBarTooltipShow = (e: React.MouseEvent<HTMLDivElement>, content: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1155,7 +1166,7 @@ export function TshirtSizeComparison({ timings, tasks, loading = false }: Tshirt
     if (!task || !task.tshirt_size || !task.category) continue;
 
     const key = `${task.tshirt_size}|${task.category}`;
-    const expected = TSHIRT_SIZE_HOURS[task.tshirt_size as TshirtSize];
+    const expected = sizeHoursMap[task.tshirt_size];
     if (!expected) continue;
 
     if (!groupMap.has(key)) {
@@ -1198,8 +1209,8 @@ export function TshirtSizeComparison({ timings, tasks, loading = false }: Tshirt
       return g;
     })
     .sort((a, b) => {
-      const sizeOrder = TSHIRT_SIZES.indexOf(a.tshirtSize) - TSHIRT_SIZES.indexOf(b.tshirtSize);
-      if (sizeOrder !== 0) return sizeOrder;
+      const sizeIndexDiff = sizeOrder.indexOf(a.tshirtSize) - sizeOrder.indexOf(b.tshirtSize);
+      if (sizeIndexDiff !== 0) return sizeIndexDiff;
       return a.category.localeCompare(b.category);
     });
 

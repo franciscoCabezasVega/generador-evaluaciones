@@ -7,6 +7,7 @@ import { LoginPage, TasksPage, NavbarComponent, AuditPage, ReportsPage } from '.
  * @see https://playwright.dev/docs/test-parameterize#env-files
  *
  * NEVER commit real production credentials.
+ * Used exclusively by auth.spec.ts which tests the login flow itself.
  */
 export const TEST_USER = {
   email: process.env.E2E_USER_EMAIL!,
@@ -17,13 +18,17 @@ export const TEST_USER = {
  * Custom Playwright fixtures following the Dependency Inversion Principle:
  * tests depend on abstractions (page objects) not concrete selectors.
  *
- * - `loginPage`: LoginPage POM
- * - `tasksPage`: TasksPage POM
+ * - `loginPage`: LoginPage POM (no auth pre-loaded — for auth.spec.ts)
+ * - `tasksPage`: TasksPage POM (no auth pre-loaded)
  * - `navbar`: NavbarComponent POM
  * - `auditPage`: AuditPage POM
  * - `reportsPage`: ReportsPage POM
- * - `authenticatedPage`: auto-logs in and lands on /tasks
- * - `authenticatedReportsPage`: auto-logs in and lands on /reports
+ * - `authenticatedPage`: navigates to /tasks using the pre-loaded storageState
+ * - `authenticatedReportsPage`: navigates to /reports using the pre-loaded storageState
+ *
+ * storageState is injected by the `setup` project in playwright.config.ts.
+ * Every browser context in the `chromium` project already has the session
+ * persisted — no manual login needed here.
  */
 type AppFixtures = {
   loginPage: LoginPage;
@@ -57,36 +62,25 @@ export const test = base.extend<AppFixtures>({
   },
 
   /**
-   * Logs in automatically and navigates to /tasks.
-   * Re-used by multiple test suites to avoid duplicating auth logic.
+   * Navigates to /tasks and waits for full load.
+   * Auth is provided by the storageState loaded via playwright.config.ts setup project.
+   * No UI login needed — session is already in the browser context.
    */
   authenticatedPage: async ({ page }, use) => {
-    const login = new LoginPage(page);
-    await login.goto();
-    await login.loginAndWaitForRedirect(TEST_USER.email, TEST_USER.password);
-
-    // Navigate to tasks and wait for full load
     const tasks = new TasksPage(page);
     await tasks.goto();
     await tasks.expectLoaded();
-
     await use(tasks);
   },
 
   /**
-   * Logs in automatically and navigates to /reports.
-   * Used by report-specific test suites.
+   * Navigates to /reports and waits for full load.
+   * Auth is provided by the storageState loaded via playwright.config.ts setup project.
    */
   authenticatedReportsPage: async ({ page }, use) => {
-    const login = new LoginPage(page);
-    await login.goto();
-    await login.loginAndWaitForRedirect(TEST_USER.email, TEST_USER.password);
-
-    // Navigate to reports and wait for full load
     const reports = new ReportsPage(page);
     await reports.goto();
     await reports.expectLoaded();
-
     await use(reports);
   },
 });

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateReturns, calculateTaskScore } from '@/lib/scoreCalculator';
 import { getAuthContext } from '@/lib/auth';
-import { TSHIRT_SIZES, TASK_CATEGORIES, TshirtSize, TaskCategory } from '@/lib/types';
 
 export async function GET(
   request: NextRequest,
@@ -97,18 +96,36 @@ export async function PATCH(
     }
 
     // Validar nuevos campos si se proporcionan
-    if (taskUpdateData.tshirt_size && !TSHIRT_SIZES.includes(taskUpdateData.tshirt_size as TshirtSize)) {
-      return NextResponse.json(
-        { error: 'Complejidad inválida. Valores permitidos: Mínima, Menor, Estándar, Mayor, Máxima' },
-        { status: 400 }
-      );
+    if (taskUpdateData.tshirt_size) {
+      const { data: complexityExists } = await supabase
+        .from('complexities')
+        .select('id')
+        .eq('name', taskUpdateData.tshirt_size)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!complexityExists) {
+        return NextResponse.json(
+          { error: 'Complejidad inválida' },
+          { status: 400 }
+        );
+      }
     }
 
-    if (taskUpdateData.category && !TASK_CATEGORIES.includes(taskUpdateData.category as TaskCategory)) {
-      return NextResponse.json(
-        { error: 'Categoría inválida' },
-        { status: 400 }
-      );
+    if (taskUpdateData.category) {
+      const { data: categoryExists } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', taskUpdateData.category)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!categoryExists) {
+        return NextResponse.json(
+          { error: 'Categoría inválida' },
+          { status: 400 }
+        );
+      }
     }
 
     // Obtener squads ANTES de actualizar para capturar cambios

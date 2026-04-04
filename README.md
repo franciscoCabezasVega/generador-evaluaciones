@@ -232,9 +232,22 @@ npm test                # Ejecución única
 npm run test:watch      # Modo watch
 ```
 
-**Archivos de test unitarios:**
-- `src/lib/scoreCalculator.test.ts` — Lógica de cálculo de notas
-- `src/hooks/useFeedback.test.ts` — Hook de feedback
+**Cobertura de tests unitarios (~35-45%):**
+
+| Archivo | Módulo cubierto |
+|---------|----------------|
+| `src/lib/scoreCalculator.test.ts` | Lógica de cálculo de notas |
+| `src/lib/withTimeout.test.ts` | Clase TimeoutError, Promise.race con cancelación |
+| `src/lib/withRetry.test.ts` | RetryError, backoff, callback `onRetry` |
+| `src/lib/reportUtils.test.ts` | `getProductTypeFromSquad` |
+| `src/lib/squadChangeUtils.test.ts` | `normalizeNumber`, `detectSquadChanges` |
+| `src/contexts/authStorage.test.ts` | TTL en localStorage, expiración, malformados |
+| `src/hooks/useFeedback.test.ts` | Hook de feedback |
+| `src/hooks/useFilterParams.test.ts` | `getFiltersFromUrl`, `buildUrlParams` |
+| `src/hooks/useDebounce.test.ts` | `useDebounce`, `useDebouncedCallback` |
+| `src/hooks/useSessionTimeout.test.ts` | Inactividad, reset de timer, token inválido |
+| `src/hooks/useCachedFetch.test.ts` | `buildFilterKey` (estabilidad, null, numéricos) |
+| `src/hooks/useFetchWithRetry.test.ts` | Clasificación de errores (timeout/network/otro) |
 
 ### Tests E2E (Playwright)
 
@@ -246,15 +259,19 @@ npm run test:e2e:ui        # UI interactiva de Playwright
 
 **Arquitectura E2E:**
 
-Los tests siguen el patrón **Page Object Model (POM)** con fixtures de Playwright para inyección de dependencias y login automático.
+Los tests siguen el patrón **Page Object Model (POM)** con fixtures de Playwright, **storageState** para sesión compartida y helpers de API para datos independientes.
 
 ```
 e2e/
+├── setup/
+│   ├── auth.setup.ts             # Login único → guarda sesión en .auth/user.json
+│   └── global-teardown.ts        # Limpia tareas con prefijo "E2E " post-run
 ├── fixtures/
-│   ├── app-fixtures.ts           # Fixtures con auto-login y POMs
+│   ├── app-fixtures.ts           # Fixtures con storageState (sin login manual)
 │   └── index.ts
 ├── helpers/
 │   ├── test-data.ts              # Generadores de datos random (Faker)
+│   ├── api-helpers.ts            # createTaskViaAPI / deleteTaskViaAPI
 │   └── index.ts
 ├── pages/
 │   ├── LoginPage.ts              # POM: página de login
@@ -263,10 +280,11 @@ e2e/
 │   ├── NavbarComponent.ts        # POM: navegación
 │   └── index.ts
 └── tests/
-    ├── auth.spec.ts              # Login, logout, rutas protegidas
-    ├── task-crud.spec.ts         # CRUD + verificación en auditoría
-    ├── tab-navigation.spec.ts    # Navegación entre pestañas
-    └── browser-tab-stability.spec.ts  # Estabilidad al cambiar tabs
+    ├── auth.spec.ts                      # Login, logout, rutas protegidas
+    ├── task-crud.spec.ts                 # CREATE / UPDATE / DELETE independientes
+    ├── duplicate-link-validation.spec.ts # Validación de link duplicado
+    ├── tab-navigation.spec.ts            # Navegación entre pestañas
+    └── browser-tab-stability.spec.ts     # Estabilidad al cambiar tabs
 ```
 
 **Suites de test E2E:**
@@ -274,16 +292,19 @@ e2e/
 | Suite | Tests | Descripción |
 |-------|-------|-------------|
 | `auth.spec.ts` | 4 | Login exitoso, credenciales inválidas, logout, redirección de ruta protegida |
-| `task-crud.spec.ts` | 1 (flujo completo) | Crear → verificar en auditoría → Editar → verificar en auditoría → Eliminar → verificar en auditoría |
+| `task-crud.spec.ts` | 3 | CREATE, UPDATE y DELETE **independientes** — cada uno arranges y limpia sus propios datos |
+| `duplicate-link-validation.spec.ts` | 1 | Crea tarea fuente vía API, intenta duplicar link vía UI, verifica error |
 | `tab-navigation.spec.ts` | 1 | Navegación secuencial por todas las pestañas de la app |
 | `browser-tab-stability.spec.ts` | 1 | Estabilidad de sesión al cambiar de pestaña del navegador |
 
-**Características de los tests E2E:**
-- **Datos aleatorios**: Usa `@faker-js/faker` para generar nombres, productos, squads y devoluciones distintos en cada ejecución (evita la paradoja del pesticida)
-- **Credenciales seguras**: Leídas desde `.env.local` vía `dotenv`
-- **Auto-login**: El fixture `authenticatedPage` hace login automático antes de cada test
-- **Auditoría integrada**: El flujo CRUD verifica que cada acción (crear, editar, eliminar) quede registrada en el trail de auditoría
-- **CI-ready**: `forbidOnly` activado en CI, reintentos automáticos, screenshots y videos en fallos
+**Principios de independencia de los tests E2E:**
+- **storageState**: El proyecto `setup` hace login una sola vez y persiste la sesión. Los demás tests reutilizan `.auth/user.json` sin re-autenticar.
+- **Datos propios vía API**: `createTaskViaAPI` crea datos de prueba directamente contra `/api/tasks` (sin pasar por UI) para el arrange. `deleteTaskViaAPI` los elimina en `afterEach`.
+- **Prefijo trazable**: Las tareas creadas por tests usan prefijo `E2E ` para facilitar identificación y limpieza.
+- **Global teardown**: `global-teardown.ts` elimina cualquier tarea residual con prefijo `E2E ` al finalizar la suite completa.
+- **`fullyParallel: true`**: Todos los tests corren en paralelo (3 workers local, 2 en CI) sin dependencias entre sí.
+- **Datos aleatorios**: Usa `@faker-js/faker` — evita la paradoja del pesticida.
+- **CI-ready**: `forbidOnly` activado en CI, reintentos automáticos, screenshots y videos en fallos.
 
 ---
 
@@ -318,9 +339,9 @@ Push a main / PR → ┌─ Unit Tests (Jest) ─┐
 |--------|-----------|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key de Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key de Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (E2E teardown + seed) |
 | `OPENAI_API_KEY` | API key de OpenAI para comentarios IA |
-| `E2E_USER_EMAIL` | Email del usuario de test E2E |
+| `E2E_USER_EMAIL` | Email del usuario de test E2E (y seed) |
 | `E2E_USER_PASSWORD` | Password del usuario de test E2E |
 | `VERCEL_TOKEN` | Token de la cuenta Vercel |
 | `VERCEL_ORG_ID` | ID de la organización/team en Vercel |
@@ -345,7 +366,8 @@ Cada ejecución del pipeline genera artefactos descargables:
 ```
 .github/
 └── workflows/
-    └── ci.yml                         # Pipeline CI/CD
+    ├── ci.yml                         # Pipeline CI/CD
+    └── seed-data.yml                  # Cron semanal: seed de datos aleatorios
 
 app/
 ├── e2e/                               # Tests End-to-End (Playwright)
@@ -434,12 +456,47 @@ app/
 │           ├── feedbackService.ts
 │           └── userProfileService.ts
 │
+├── scripts/
+│   └── seed-random-data.ts            # Script de seed semanal
 ├── playwright.config.ts               # Configuración Playwright
 ├── jest.config.js                     # Configuración Jest
 ├── next.config.ts
 ├── tsconfig.json
 ├── package.json
 └── .env.local                         # Variables de entorno (no versionado)
+```
+
+---
+
+## Tareas Programadas (Scheduled Jobs)
+
+### Seed de Datos Aleatorios — `seed-data.yml`
+
+Previene que el proyecto Supabase sea pausado por inactividad generando registros aleatorios de forma periódica.
+
+| Parámetro | Valor |
+|-----------|-------|
+| Workflow | `.github/workflows/seed-data.yml` |
+| Frecuencia | **Cada sábado a las 10:00 AM COT** (15:00 UTC) |
+| Cron expression | `0 15 * * 6` |
+| Trigger manual | `workflow_dispatch` en GitHub Actions |
+| Records generados | 1–10 tareas aleatorias + 0–2 reportes |
+
+**Cómo funciona:**
+1. Obtiene el UUID del usuario vía `auth.admin.getUserByEmail(E2E_USER_EMAIL)`
+2. Descarga el catálogo activo (productos, squads, complejidades, categorías) desde la BD
+3. Genera entre 1 y 10 tareas con datos coherentes y datos de `task_squad`
+4. Opcionalmente genera 0–2 reportes para el mes anterior
+5. Imprime un resumen de lo creado
+
+**Secrets requeridos** (ya configurados para CI):
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `E2E_USER_EMAIL`
+
+**Ejecución manual:**
+```
+GitHub → Actions → "Seed Random Data" → Run workflow
 ```
 
 ---

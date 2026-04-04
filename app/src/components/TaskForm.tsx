@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from 'react';
-import { CreateTaskInput, SQUADS_BY_TYPE, ProductType, SquadData, QA_MEMBERS, TshirtSize, TaskCategory, TSHIRT_SIZES, TASK_CATEGORIES, TSHIRT_SIZE_HOURS } from '@/lib/types';
+import { CreateTaskInput, SquadData, ProductType, TshirtSize, TaskCategory } from '@/lib/types';
+import { useCatalogData } from '@/hooks/useCatalogData';
 import { calculateTaskScore } from '@/lib/scoreCalculator';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Plus, Minus, X, ChevronDown, Check, Users, Calendar, Ruler, Tag } from 'lucide-react';
@@ -83,9 +84,17 @@ function TaskFormComponent(
   const [showQASelector, setShowQASelector] = useState(false);
   const qaDropdownRef = useRef<HTMLDivElement>(null);
 
-  const availableSquads = SQUADS_BY_TYPE[formData.product_type as ProductType];
+  const { products, categories, complexities, squads: allSquads, qaMembers } = useCatalogData();
+
+  // Squads activos del producto seleccionado, filtrando los ya agregados
+  const productObj = products.find((p) => p.name === formData.product_type);
+  const availableSquads = productObj
+    ? allSquads.filter((s) => s.product_id === productObj.id)
+    : [];
   const selectedSquadNames = formData.squads.map(s => s.squad);
-  const availableSquadsToAdd = availableSquads.filter(s => !selectedSquadNames.includes(s));
+  const availableSquadsToAdd = availableSquads
+    .filter(s => !selectedSquadNames.includes(s.name))
+    .map(s => s.name);
 
   // Exponer handleCancelWithConfirm a través de ref
   useImperativeHandle(ref, () => ({
@@ -419,9 +428,9 @@ function TaskFormComponent(
               onChange={handleInputChange}
               className="w-full border rounded-lg px-4 py-2"
             >
-              <option value="Platform">Platform</option>
-              <option value="Core">Core</option>
-              <option value="Commerce">Commerce</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
             </select>
           </div>
 
@@ -437,8 +446,8 @@ function TaskFormComponent(
               onChange={handleInputChange}
               className={`w-full border rounded-lg px-4 py-2 ${errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
             >
-              {TASK_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
             </select>
             {errors.category && <p className="text-red-600 text-sm mt-1">{errors.category}</p>}
@@ -456,8 +465,8 @@ function TaskFormComponent(
               onChange={handleInputChange}
               className={`w-full border rounded-lg px-4 py-2 ${errors.tshirt_size ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
             >
-              {TSHIRT_SIZES.map((size) => (
-                <option key={size} value={size}>{size} — {TSHIRT_SIZE_HOURS[size].label}</option>
+              {complexities.map((c) => (
+                <option key={c.id} value={c.name}>{c.name} — {c.label}</option>
               ))}
             </select>
             {errors.tshirt_size && <p className="text-red-600 text-sm mt-1">{errors.tshirt_size}</p>}
@@ -724,9 +733,9 @@ function TaskFormComponent(
               aria-label="Agregar otro squad"
             >
               <option value="">+ Agregar otro squad</option>
-              {availableSquadsToAdd.map((squad) => (
-                <option key={squad} value={squad}>
-                  {squad}
+              {availableSquadsToAdd.map((squadName) => (
+                <option key={squadName} value={squadName}>
+                  {squadName}
                 </option>
               ))}
             </select>
@@ -792,19 +801,19 @@ function TaskFormComponent(
               className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-64 overflow-y-auto"
               role="listbox"
             >
-              {QA_MEMBERS.map((qa) => {
-                const isSelected = formData.assigned_qa.includes(qa);
+              {qaMembers.map((qa) => {
+                const isSelected = formData.assigned_qa.includes(qa.name);
                 return (
                   <button
-                    key={qa}
+                    key={qa.id}
                     type="button"
-                    onClick={() => toggleQA(qa)}
+                    onClick={() => toggleQA(qa.name)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
                   >
                     <div className={`w-5 h-5 rounded flex items-center justify-center border-2 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
                       {isSelected && <Check size={14} className="text-white" />}
                     </div>
-                    <span className={isSelected ? 'font-medium text-blue-700' : 'text-gray-700'}>{qa}</span>
+                    <span className={isSelected ? 'font-medium text-blue-700' : 'text-gray-700'}>{qa.name}</span>
                   </button>
                 );
               })}
