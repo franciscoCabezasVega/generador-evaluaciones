@@ -17,20 +17,10 @@ const globalCache = new Map<string, CacheEntry<unknown>>();
 // Tiempo de vida del caché: 5 minutos
 const DEFAULT_STALE_TIME = 5 * 60 * 1000;
 
-// Stagger counter: spreads concurrent fetches after tab return to reduce
-// navigator.lock contention on supabase.auth.getSession()
-let staggerCounter = 0;
-let staggerResetTimer: ReturnType<typeof setTimeout> | null = null;
-
-function getStaggerDelay(): number {
-  // Delay más agresivo: 0ms, 800ms, 1600ms, 2400ms...
-  // Esto da tiempo al caché de fetchAuth (40s) y al lock de navigator.locks de liberarse
-  const delay = staggerCounter * 800;
-  staggerCounter++;
-  // Reset counter después de que el burst se asiente (5s en lugar de 2s)
-  if (staggerResetTimer) clearTimeout(staggerResetTimer);
-  staggerResetTimer = setTimeout(() => { staggerCounter = 0; }, 5000);
-  return delay;
+// Pequeño jitter aleatorio (0-100ms) para evitar thundering herd
+// sin imponer delays artificiales de segundos.
+function getJitterDelay(): number {
+  return Math.random() * 100;
 }
 
 /**
@@ -183,24 +173,17 @@ export function useCachedFetch<T>({
     // Si ya tenemos data (del caché viejo), hacer fetch en background
     const hasStaleData = cachedEntry != null || data != null;
 
-    // Stagger fetches to avoid all hooks calling getSession simultaneously
-    const delay = getStaggerDelay();
-    if (delay > 0) {
-      const delayTimer = setTimeout(() => {
-        if (!controller.signal.aborted) {
-          doFetch(hasStaleData && data !== initialData, controller.signal);
-        }
-      }, delay);
-      return () => {
-        clearTimeout(delayTimer);
-        controller.abort();
-        abortRef.current = null;
-      };
-    }
-
-    doFetch(hasStaleData && data !== initialData, controller.signal);
+    // Pequeño jitter para reducir contención en getSession() cuando
+    // múltiples hooks montan simultáneamente.
+    const delay = getJitterDelay();
+    const delayTimer = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        doFetch(hasStaleData && data !== initialData, controller.signal);
+      }
+    }, delay);
 
     return () => {
+      clearTimeout(delayTimer);
       controller.abort();
       abortRef.current = null;
     };

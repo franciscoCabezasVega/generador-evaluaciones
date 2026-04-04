@@ -95,32 +95,35 @@ export async function PATCH(
       taskUpdateData.assigned_qa = assigned_qa;
     }
 
-    // Validar nuevos campos si se proporcionan
-    if (taskUpdateData.tshirt_size) {
-      const { data: complexityExists } = await supabase
-        .from('complexities')
-        .select('id')
-        .eq('name', taskUpdateData.tshirt_size)
-        .eq('is_active', true)
-        .maybeSingle();
+    // Validar complejidad y categoría en paralelo (solo si se proporcionan)
+    if (taskUpdateData.tshirt_size || taskUpdateData.category) {
+      const [complexityResult, categoryResult] = await Promise.all([
+        taskUpdateData.tshirt_size
+          ? supabase
+              .from('complexities')
+              .select('id')
+              .eq('name', taskUpdateData.tshirt_size)
+              .eq('is_active', true)
+              .maybeSingle()
+          : Promise.resolve({ data: true }),
+        taskUpdateData.category
+          ? supabase
+              .from('categories')
+              .select('id')
+              .eq('name', taskUpdateData.category)
+              .eq('is_active', true)
+              .maybeSingle()
+          : Promise.resolve({ data: true }),
+      ]);
 
-      if (!complexityExists) {
+      if (taskUpdateData.tshirt_size && !complexityResult.data) {
         return NextResponse.json(
           { error: 'Complejidad inválida' },
           { status: 400 }
         );
       }
-    }
 
-    if (taskUpdateData.category) {
-      const { data: categoryExists } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', taskUpdateData.category)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!categoryExists) {
+      if (taskUpdateData.category && !categoryResult.data) {
         return NextResponse.json(
           { error: 'Categoría inválida' },
           { status: 400 }

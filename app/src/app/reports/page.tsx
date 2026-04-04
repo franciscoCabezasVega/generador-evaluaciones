@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch } from '@/hooks/useCachedFetch';
@@ -12,9 +12,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Eye, Trash2, Download, RefreshCw } from 'lucide-react';
 import { downloadReportPDF } from '@/lib/services/pdfService';
 import Modal from '@/components/Modal';
-import ReportDetailModal from '@/components/ReportDetailModal';
+import dynamic from 'next/dynamic';
 import { Report } from '@/lib/types';
 import { useCatalogData } from '@/hooks/useCatalogData';
+
+const ReportDetailModal = dynamic(() => import('@/components/ReportDetailModal'), {
+  loading: () => null,
+});
 
 export default function ReportsPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -26,19 +30,16 @@ export default function ReportsPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showListFilters, setShowListFilters] = useState(true);
   
-  // Calcular mes anterior para filtros por defecto
-  const getPreviousMonth = useCallback(() => {
+  // Calcular mes anterior para filtros por defecto — se computa una sola vez
+  const prevMonth = useMemo(() => {
     const today = new Date();
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
-    
     if (currentMonth === 1) {
       return { month: 12, year: currentYear - 1 };
     }
     return { month: currentMonth - 1, year: currentYear };
   }, []);
-
-  const prevMonth = getPreviousMonth();
   
   const [filters, setFilters] = useState({
     month: prevMonth.month,
@@ -381,12 +382,12 @@ export default function ReportsPage() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <CacheWarningBanner />
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">Reportes</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Reportes</h1>
         </div>
 
         {canGenerateReports && (
-          <div className="bg-white rounded-lg shadow p-6 mb-8" data-tour="report-filters">
-            <h2 className="text-xl font-semibold mb-4">Generar Reporte</h2>
+          <div className="bg-gray-100 border border-gray-200 rounded-xl p-6 mb-8" data-tour="report-filters">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600 mb-4">Generar Reporte</h2>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
                 <label htmlFor="reports-year" className="block text-sm font-medium mb-1">Año</label>
@@ -451,25 +452,25 @@ export default function ReportsPage() {
             
             {generatingReport && (
               <div className="mt-4">
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
                   <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                     style={{ width: `${generationProgress}%` }}
                   />
                 </div>
-                <p className="text-sm text-gray-600 mt-2">Generando reporte... {generationProgress}%</p>
+                <p className="text-xs text-gray-600 mt-2 num">Generando reporte... {generationProgress}%</p>
               </div>
             )}
           </div>
         )}
 
         {/* Filtros de reportes generados */}
-        <div className="bg-white rounded-lg shadow p-6 mb-2">
+        <div className="bg-gray-100 border border-gray-200 rounded-xl p-5 mb-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-800">Reportes Generados</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">Reportes Generados</h2>
             <button
               onClick={() => setShowListFilters(!showListFilters)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded font-medium transition-colors"
+              className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-medium transition-colors"
             >
               {showListFilters ? '▲ Ocultar Filtros' : '▼ Mostrar Filtros'}
             </button>
@@ -541,8 +542,8 @@ export default function ReportsPage() {
         </div>
 
         {!authLoading && !canGenerateReports && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-amber-950/40 border border-amber-500/25 rounded-lg p-4 mb-6">
+            <p className="text-sm text-amber-400">
               Tienes acceso de solo lectura a los reportes.
             </p>
           </div>
@@ -565,18 +566,18 @@ export default function ReportsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 fade-in-smooth" data-tour="report-list">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 fade-in-smooth" data-tour="report-list">
             {reports.map((report) => (
-              <div key={report.id} className="bg-white rounded-lg shadow p-6 aspect-square flex flex-col justify-between">
+              <div key={report.id} className="bg-gray-100 border border-gray-200 rounded-xl p-5 flex flex-col justify-between card-glow transition-all">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1.5">
                     Producto: {report.squad}
                   </h3>
-                  <p className="text-gray-600 text-sm mb-1" data-tour="report-versioning">
-                    {report.month}/{report.year} - Versión {report.version}
+                  <p className="text-gray-600 text-xs mb-1 num" data-tour="report-versioning">
+                    {report.month}/{report.year} — v{report.version}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    Generado: {new Date(report.created_at).toLocaleDateString('es-ES')}
+                  <p className="text-xs text-gray-600">
+                    {new Date(report.created_at).toLocaleDateString('es-ES')}
                   </p>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -586,7 +587,7 @@ export default function ReportsPage() {
                         setSelectedReportId(report.id);
                         setIsDetailModalOpen(true);
                       }}
-                      className="text-blue-600 hover:text-blue-800 transition-colors p-2"
+                      className="text-blue-600 hover:text-blue-500 hover:bg-blue-50 rounded-lg p-2 transition-colors"
                       title="Ver reporte"
                     >
                       <Eye className="w-5 h-5" />
@@ -599,7 +600,7 @@ export default function ReportsPage() {
                     <button
                       onClick={() => handleDownloadPDF(report)}
                       disabled={downloadingReportId === report.id}
-                      className="text-green-600 hover:text-green-800 transition-colors p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/30 rounded-lg p-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Descargar reporte en PDF"
                     >
                       <Download className="w-5 h-5" />
@@ -611,7 +612,7 @@ export default function ReportsPage() {
                   <div className="group relative" data-tour="report-delete">
                     <button
                       onClick={() => setDeleteConfirm(report.id)}
-                      className="text-red-600 hover:text-red-800 transition-colors p-2"
+                      className="text-red-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg p-2 transition-colors"
                       title="Eliminar reporte"
                     >
                       <Trash2 className="w-5 h-5" />

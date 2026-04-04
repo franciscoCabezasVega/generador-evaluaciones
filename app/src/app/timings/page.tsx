@@ -327,14 +327,14 @@ export default function TimingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <CacheWarningBanner />
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Gestión de Tiempos</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Gestión de Tiempos</h1>
           <p className="mt-2 text-gray-600">
             Registra y visualiza los tiempos de QA por fases: Testing Efectivo, Espera Ambiente, Espera Fixes, Retest y Clarificaciones
           </p>
@@ -382,7 +382,7 @@ export default function TimingsPage() {
         </div>
 
         {/* Filtros */}
-        <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mb-8 rounded-xl border border-gray-200 bg-gray-100 p-4">
           <h3 className="mb-4 font-semibold text-gray-900">Filtros</h3>
           
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -439,7 +439,7 @@ export default function TimingsPage() {
 
         {/* Contenido principal */}
         {viewMode === 'list' ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">
                 Tiempos Registrados
@@ -469,12 +469,12 @@ export default function TimingsPage() {
         ) : viewMode === 'metrics' ? (
           <div className="space-y-8">
             {/* Gráfico de distribución */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
               <TimingMetricsDistributionChart metrics={metrics} loading={metricsLoading} />
             </div>
 
             {/* Gráfico comparativo */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
               <TimingMetricsComparisonChart metrics={metrics} loading={metricsLoading} />
             </div>
 
@@ -499,14 +499,14 @@ export default function TimingsPage() {
 
             {/* Tarjetas resumen por QA - se oculta si no hay datos */}
             {!qaMetricsLoading && qaMetrics.length > 0 && (
-              <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Resumen Individual por QA</h2>
                 <QASummaryCards qaMetrics={qaMetrics} loading={qaMetricsLoading} />
               </div>
             )}
 
             {/* Comparativa por Complejidad y Categoría */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6">
+            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
               <TshirtSizeComparison timings={allTimings} tasks={allTasks} loading={allTimingsLoading || allTasksLoading} />
             </div>
           </div>

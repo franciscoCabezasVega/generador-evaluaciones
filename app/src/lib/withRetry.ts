@@ -20,6 +20,25 @@ export class RetryError extends Error {
 }
 
 /**
+ * Delay cancelable: resuelve después de `ms`, pero se rechaza inmediatamente
+ * si el signal se aborta antes. Evita que un reintento se quede esperando
+ * innecesariamente cuando el componente ya se desmontó o se canceló la request.
+ */
+export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    if (signal) {
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+}
+
+/**
  * Ejecutar una función con reintentos automáticos
  * Usa backoff exponencial entre reintentos
  * 

@@ -4,29 +4,7 @@ import { authenticatedFetch } from '@/lib/fetchAuth';
 import { isSessionExpiredError } from '@/lib/utils';
 import { authService } from '@/lib/services/authService';
 import { TimeoutError } from '@/lib/withTimeout';
-
-/**
- * Delay cancelable: resuelve después de `ms`, pero se rechaza inmediatamente
- * si el signal se aborta antes. Evita que un reintento se quede esperando
- * innecesariamente cuando el componente ya se desmontó o se canceló la request.
- */
-function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new DOMException('The operation was aborted.', 'AbortError'));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-    // Limpiar el listener cuando el timer completa
-    const originalResolve = resolve;
-    resolve = (() => {
-      signal?.removeEventListener('abort', onAbort);
-      originalResolve();
-    }) as () => void;
-  });
-}
+import { abortableDelay } from '@/lib/withRetry';
 
 /**
  * Hook para hacer fetches autenticados de forma segura
