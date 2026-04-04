@@ -15,9 +15,6 @@ defaults:
   run:
     working-directory: app
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   seed:
     name: Generate random seed data
@@ -25,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: 'npm'
@@ -38,7 +35,7 @@ jobs:
         run: npm ci
 
       - name: Run seed script
-        run: npx --yes tsx scripts/seed-random-data.ts
+        run: npx --yes tsx ./scripts/seed-random-data.ts
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
