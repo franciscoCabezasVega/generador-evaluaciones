@@ -17,6 +17,7 @@ defaults:
 
 jobs:
   seed:
+    if: false # Temporalmente desactivado
     name: Generate random seed data
     runs-on: ubuntu-latest
 

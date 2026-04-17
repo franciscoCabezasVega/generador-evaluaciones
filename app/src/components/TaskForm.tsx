@@ -88,6 +88,22 @@ function TaskFormComponent(
 
   const { products, categories, complexities, squads: allSquads, qaMembers } = useCatalogData();
 
+  // Sincronizar product_type con el primer producto disponible si el valor inicial no existe en la BD
+  useEffect(() => {
+    if (products.length > 0 && !initialData) {
+      const currentProductExists = products.some(p => p.name === formData.product_type);
+      if (!currentProductExists) {
+        setFormData(prev => ({
+          ...prev,
+          product_type: products[0].name as ProductType,
+          squads: [],
+        }));
+      }
+    }
+  // Solo ejecutar cuando los productos se carguen por primera vez
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
   // Squads activos del producto seleccionado, filtrando los ya agregados
   const productObj = products.find((p) => p.name === formData.product_type);
   const availableSquads = productObj
