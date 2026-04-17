@@ -1,3 +1,6 @@
+[![Seed Random Data](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/seed-data.yml/badge.svg?branch=main)](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/seed-data.yml)
+[![CI](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/ci.yml/badge.svg)](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/ci.yml)
+
 # Generador de Evaluaciones
 
 Sistema integral de gestión y evaluación de tareas mensuales por squad, con cálculo automático de notas, generación de reportes versionados, soporte de IA para comentarios cualitativos, auditoría completa y pipeline CI/CD con tests automatizados.
