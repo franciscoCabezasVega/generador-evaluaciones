@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch } from '@/hooks/useCachedFetch';
@@ -35,16 +35,17 @@ export default function TasksPage() {
   const formRef = useRef<{ handleCancelWithConfirm: () => void }>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-    productType: '',
-    squad: '',
-    status: '',
-  });
-  const [isClient] = useState(() => typeof window !== 'undefined');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isClient] = useState(() => typeof window !== 'undefined');
+
+  const filters = useMemo(() => ({
+    month: searchParams.get('month') ? parseInt(searchParams.get('month')!) : new Date().getMonth() + 1,
+    year: searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear(),
+    productType: searchParams.get('productType') || '',
+    squad: searchParams.get('squad') || '',
+    status: searchParams.get('status') || '',
+  }), [searchParams]);
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
   const { enqueue } = useMutationQueue();
@@ -55,28 +56,6 @@ export default function TasksPage() {
       router.push('/auth/login');
     }
   }, [user, authLoading, router]);
-
-  // Leer filtros desde URL params al cargar el cliente
-  useEffect(() => {
-    const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : new Date().getMonth() + 1;
-    const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
-    const productType = searchParams.get('productType') || '';
-    const squad = searchParams.get('squad') || '';
-    const status = searchParams.get('status') || '';
-
-    setFilters(prev => {
-      if (
-        prev.month === month &&
-        prev.year === year &&
-        prev.productType === productType &&
-        prev.squad === squad &&
-        prev.status === status
-      ) {
-        return prev;
-      }
-      return { month, year, productType, squad, status };
-    });
-  }, [searchParams]);
 
   // ===== Data fetching con caché en memoria =====
   const {
@@ -136,18 +115,15 @@ export default function TasksPage() {
   // Función para actualizar filtros y URL
   const updateFilters = (newFilters: Partial<typeof filters>) => {
     const updatedFilters = { ...filters, ...newFilters };
-    setFilters(updatedFilters);
 
-    if (isClient) {
-      const params = new URLSearchParams();
-      if (updatedFilters.month) params.set('month', updatedFilters.month.toString());
-      if (updatedFilters.year) params.set('year', updatedFilters.year.toString());
-      if (updatedFilters.productType) params.set('productType', updatedFilters.productType);
-      if (updatedFilters.squad) params.set('squad', updatedFilters.squad);
-      if (updatedFilters.status) params.set('status', updatedFilters.status);
-      
-      router.push(`/tasks?${params.toString()}`, { scroll: false });
-    }
+    const params = new URLSearchParams();
+    if (updatedFilters.month) params.set('month', updatedFilters.month.toString());
+    if (updatedFilters.year) params.set('year', updatedFilters.year.toString());
+    if (updatedFilters.productType) params.set('productType', updatedFilters.productType);
+    if (updatedFilters.squad) params.set('squad', updatedFilters.squad);
+    if (updatedFilters.status) params.set('status', updatedFilters.status);
+
+    router.push(`/tasks?${params.toString()}`, { scroll: false });
   };
 
   const handleSubmit = async (data: CreateTaskInput) => {
