@@ -6,6 +6,7 @@ import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch, invalidateCache } from '@/hooks/useCachedFetch';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMutationQueue } from '@/contexts/MutationQueueContext';
 import Navbar from '@/components/Navbar';
 import CacheWarningBanner from '@/components/CacheWarningBanner';
 import TimingForm from '@/components/TimingForm';
@@ -66,6 +67,7 @@ export default function TimingsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
+  const { enqueue } = useMutationQueue();
 
   // Redirigir a login si no hay sesión
   useEffect(() => {
@@ -274,28 +276,24 @@ export default function TimingsPage() {
 
   // Handle eliminar timing
   const handleDelete = async (id: string) => {
-    try {
-      // Optimistic update
-      setTimings((prev) => prev.filter((t) => t.id !== id));
-      setDeleteConfirm(null);
+    // Optimistic update: quitar de la lista inmediatamente
+    setTimings((prev) => prev.filter((t) => t.id !== id));
+    setDeleteConfirm(null);
 
-      const response = await safeFetch(`/api/timings/${id}`, { method: 'DELETE' });
-      if (!response.ok) {
+    enqueue({
+      url: `/api/timings/${id}`,
+      method: 'DELETE',
+      cacheKeys: ['timings', 'timings-metrics', 'timings-qa-metrics', 'timings-all-comparison'],
+      onSuccess: () => {
+        refreshMetrics();
+        refreshQAMetrics();
+        refreshAllTimings();
+      },
+      onRollback: () => {
+        // Restaurar la lista si el DELETE falla permanentemente
         invalidateTimings();
-        throw new Error('Error al eliminar');
-      }
-
-      // Invalidar métricas en background
-      invalidateCache('timings-metrics');
-      invalidateCache('timings-qa-metrics');
-      invalidateCache('timings-all-comparison');
-      refreshMetrics();
-      refreshQAMetrics();
-      refreshAllTimings();
-    } catch (error: unknown) {
-      console.error('Error:', error);
-      alert(error instanceof Error ? error.message : 'Ocurrió un error');
-    }
+      },
+    });
   };
 
   // Handle editar timing

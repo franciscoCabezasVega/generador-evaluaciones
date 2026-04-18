@@ -11,6 +11,30 @@
   "functions": {
     "src/app/api/deployment-check/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/tasks/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/tasks/[id]/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/timings/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/timings/[id]/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/reports/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/reports/[id]/route.ts": {
+      "maxDuration": 45
+    },
+    "src/app/api/generate-ai-comment/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/generate-ai-comments-batch/route.ts": {
+      "maxDuration": 120
     }
   }
 }

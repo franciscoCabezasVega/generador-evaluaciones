@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button';
 import { LogOut, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import TourSelectionModal from '@/components/TourSelectionModal';
+import dynamic from 'next/dynamic';
+
+const QueueStatusIndicator = dynamic(
+  () => import('@/components/QueueStatusIndicator'),
+  { ssr: false }
+);
 
 const NAV_LINKS = [
   { href: '/tasks', label: 'Tareas' },
@@ -83,6 +89,8 @@ function Navbar() {
         {/* User section */}
         {user && (
           <div className="flex items-center gap-3">
+            {/* Indicador de sincronización en segundo plano */}
+            <QueueStatusIndicator />
             {/* User info */}
             <div className="flex flex-col items-end hidden sm:flex">
               <span className="text-xs text-gray-600 leading-tight">{user.email}</span>

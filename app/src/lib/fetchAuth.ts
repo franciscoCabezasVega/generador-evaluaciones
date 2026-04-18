@@ -8,14 +8,32 @@ let sessionCache: {
   timestamp: number;
 } | null = null;
 
-// TTL del caché: 40 segundos (muy agresivo para evitar locks al cambiar tabs)
-const SESSION_CACHE_TTL = 40000;
+// TTL del caché: 2 minutos (reduce llamadas a getSession y contención de navigator.locks
+// en escenarios con múltiples pestañas abiertas simultáneamente)
+const SESSION_CACHE_TTL = 120000;
 
 // Tracker de última actividad para coordinar validaciones
 let lastActivityTimestamp = Date.now();
 
 // Deduplicate concurrent getSession calls — share a single in-flight promise
 let inflightGetSession: ReturnType<typeof supabase.auth.getSession> | null = null;
+
+// Canal BroadcastChannel para sincronizar invalidación de caché de sesión
+// entre pestañas. Evita que cada pestaña haga su propia llamada a getSession()
+// desencadenando contención en navigator.locks.
+const sessionChannel =
+  typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('session_cache_sync')
+    : null;
+
+if (sessionChannel) {
+  sessionChannel.onmessage = (event: MessageEvent) => {
+    if (event.data?.type === 'session_invalidated') {
+      sessionCache = null;
+      inflightGetSession = null;
+    }
+  };
+}
 
 function deduplicatedGetSession() {
   // Verificar si tenemos un caché válido
@@ -52,9 +70,13 @@ function deduplicatedGetSession() {
 
 /**
  * Invalidar el caché de sesión (llamar después de login/logout/refresh exitoso)
+ * Notifica a otras pestañas vía BroadcastChannel para que también invaliden su caché,
+ * reduciendo la contención de navigator.locks al volver a la pestaña activa.
  */
 export function invalidateSessionCache() {
   sessionCache = null;
+  inflightGetSession = null;
+  sessionChannel?.postMessage({ type: 'session_invalidated' });
 }
 
 /**
