@@ -63,7 +63,6 @@ export function MutationQueueProvider({ children }: { children: React.ReactNode 
         if (item.cacheKeys) {
           item.cacheKeys.forEach((key) => invalidateCache(key));
         }
-        console.debug('[MutationQueue] Guardado exitoso:', item.method, item.url);
       },
 
       onPermanentFailure: (item: MutationItem) => {

@@ -16,10 +16,11 @@ import { useMutationQueue } from '@/contexts/MutationQueueContext';
  */
 export default function QueueStatusIndicator() {
   const { queueStatus, retryFailed } = useMutationQueue();
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   useEffect(() => {
-    setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);

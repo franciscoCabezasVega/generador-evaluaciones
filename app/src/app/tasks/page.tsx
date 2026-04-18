@@ -28,7 +28,7 @@ type TaskWithSquads = Task & {
 };
 
 export default function TasksPage() {
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithSquads | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export default function TasksPage() {
     squad: '',
     status: '',
   });
-  const [isClient, setIsClient] = useState(false);
+  const [isClient] = useState(() => typeof window !== 'undefined');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
@@ -58,7 +58,6 @@ export default function TasksPage() {
 
   // Leer filtros desde URL params al cargar el cliente
   useEffect(() => {
-    setIsClient(true);
     const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : new Date().getMonth() + 1;
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
     const productType = searchParams.get('productType') || '';
