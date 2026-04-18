@@ -14,6 +14,7 @@ import { useCatalogData } from '@/hooks/useCatalogData';
 import { Button } from '@/components/ui/button';
 import { Trash2, Edit2, ChevronDown, ChevronRight, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMutationQueue } from '@/contexts/MutationQueueContext';
 
 type TaskWithSquads = Task & {
   squads?: Array<{
@@ -46,6 +47,7 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
+  const { enqueue } = useMutationQueue();
 
   // Redirigir a login si no hay sesión
   useEffect(() => {
@@ -150,51 +152,119 @@ export default function TasksPage() {
   };
 
   const handleSubmit = async (data: CreateTaskInput) => {
-    try {
-      setSubmitting(true);
-      const url = editingTask ? `/api/tasks/${editingTask.id}` : '/api/tasks';
-      const method = editingTask ? 'PATCH' : 'POST';
+    if (editingTask) {
+      // ── EDICIÓN: actualización optimista inmediata ──────────────────────────
+      const originalTask = editingTask;
+      const optimisticTask: TaskWithSquads = {
+        ...editingTask,
+        name: data.name,
+        task_link: data.task_link,
+        product_type: data.product_type,
+        status: data.status,
+        month: data.month,
+        year: data.year,
+        assigned_qa: data.assigned_qa,
+        effort_score_date: data.effort_score_date,
+        tshirt_size: data.tshirt_size,
+        category: data.category,
+        squads: data.squads.map((sq) => ({
+          squad: sq.squad,
+          low_returns: sq.low_returns,
+          medium_returns: sq.medium_returns,
+          high_returns: sq.high_returns,
+          calculated_score:
+            editingTask.squads?.find((s) => s.squad === sq.squad)?.calculated_score ?? 0,
+          additional_notes: sq.additional_notes,
+        })),
+      };
 
-      const response = await safeFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al guardar');
-      }
-
-      // Tarea guardada con éxito — cerrar modal e invalidar caché
+      // Reflejar cambios en la UI de inmediato (sin esperar la API)
+      setTasks((prev) =>
+        prev.map((t) => (t.id === editingTask.id ? optimisticTask : t))
+      );
       setShowForm(false);
       setEditingTask(null);
-      setSubmitting(false);
 
-      // Invalida el caché y recarga en background sin bloquear la UI
-      invalidateTasks();
-    } catch (error) {
-      // Asegurar que submitting se resetee en caso de error
-      setSubmitting(false);
-      throw error; // Re-lanzar para que TaskForm muestre el error
+      enqueue({
+        url: `/api/tasks/${editingTask.id}`,
+        method: 'PATCH',
+        body: data,
+        cacheKeys: ['tasks'],
+        onSuccess: () => {
+          // Refrescar con datos reales (por ej. calculated_score actualizado)
+          invalidateTasks();
+        },
+        onRollback: () => {
+          // Restaurar el estado original si la mutación falla permanentemente
+          setTasks((prev) =>
+            prev.map((t) => (t.id === originalTask.id ? originalTask : t))
+          );
+        },
+      });
+    } else {
+      // ── CREACIÓN: actualización optimista inmediata ─────────────────────────
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const optimisticTask: TaskWithSquads = {
+        id: tempId,
+        user_id: user!.id,
+        name: data.name,
+        task_link: data.task_link,
+        product_type: data.product_type,
+        status: data.status,
+        month: data.month,
+        year: data.year,
+        assigned_qa: data.assigned_qa,
+        effort_score_date: data.effort_score_date,
+        tshirt_size: data.tshirt_size,
+        category: data.category,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        squads: data.squads.map((sq) => ({
+          squad: sq.squad,
+          low_returns: sq.low_returns,
+          medium_returns: sq.medium_returns,
+          high_returns: sq.high_returns,
+          calculated_score: 0,
+          additional_notes: sq.additional_notes,
+        })),
+      };
+
+      // Añadir la tarea al inicio de la lista inmediatamente
+      setTasks((prev) => [optimisticTask, ...prev]);
+      setShowForm(false);
+
+      enqueue({
+        url: '/api/tasks',
+        method: 'POST',
+        body: data,
+        cacheKeys: ['tasks'],
+        onSuccess: () => {
+          // Reemplazar el ítem optimista con los datos reales del servidor
+          invalidateTasks();
+        },
+        onRollback: () => {
+          // Quitar el ítem optimista si la mutación falla permanentemente
+          setTasks((prev) => prev.filter((t) => t.id !== tempId));
+        },
+      });
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Estás seguro?')) return;
 
-    try {
-      // Optimistic update: quitar de la lista inmediatamente
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-      const response = await safeFetch(`/api/tasks/${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        // Rollback: re-fetch si falló
+    // Optimistic update: quitar de la lista inmediatamente
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+
+    enqueue({
+      url: `/api/tasks/${id}`,
+      method: 'DELETE',
+      cacheKeys: ['tasks'],
+      onRollback: () => {
+        // Restaurar la lista si el DELETE falla permanentemente
         invalidateTasks();
-        throw new Error('Error al eliminar');
-      }
-    } catch (error) {
-      console.error(error);
-    }
+      },
+    });
   };
 
   const canManageTasks = profile && ['admin', 'gestor'].includes(profile.role);

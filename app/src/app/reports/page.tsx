@@ -9,6 +9,7 @@ import CacheWarningBanner from '@/components/CacheWarningBanner';
 import { Button } from '@/components/ui/button';
 import { SkeletonReports } from '@/components/Skeleton';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMutationQueue } from '@/contexts/MutationQueueContext';
 import { Eye, Trash2, Download, RefreshCw } from 'lucide-react';
 import { downloadReportPDF } from '@/lib/services/pdfService';
 import Modal from '@/components/Modal';
@@ -56,6 +57,7 @@ export default function ReportsPage() {
   const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
+  const { enqueue } = useMutationQueue();
   const { products, squads: allSquads } = useCatalogData();
 
   // Redirigir a login si no hay sesión
@@ -327,24 +329,19 @@ export default function ReportsPage() {
   };
 
   const deleteReport = async (reportId: string) => {
-    try {
-      // Optimistic update
-      setReports((prev) => prev.filter((r) => r.id !== reportId));
-      setDeleteConfirm(null);
+    // Optimistic update: quitar de la lista inmediatamente
+    setReports((prev) => prev.filter((r) => r.id !== reportId));
+    setDeleteConfirm(null);
 
-      const response = await safeFetch(`/api/reports/${reportId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        // Rollback on error
+    enqueue({
+      url: `/api/reports/${reportId}`,
+      method: 'DELETE',
+      cacheKeys: ['reports'],
+      onRollback: () => {
+        // Restaurar la lista si el DELETE falla permanentemente
         invalidateReports();
-        throw new Error('Error al eliminar reporte');
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      alert(`Error: ${errorMessage}`);
-    }
+      },
+    });
   };
 
   const handleDownloadPDF = async (report: Report) => {

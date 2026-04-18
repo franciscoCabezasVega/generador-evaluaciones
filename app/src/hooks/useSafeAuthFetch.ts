@@ -43,9 +43,17 @@ export function useSafeAuthFetch() {
       url: string,
       options?: RequestInit,
       retryCount = 0,
-      timeoutMs = 10000
+      timeoutMs?: number
     ): Promise<Response> => {
-      const MAX_RETRIES = 1; // 2 intentos totales (inicial + 1 reintento)
+      // Configuración dinámica según método HTTP:
+      // - Operaciones de escritura requieren más tiempo y más reintentos
+      // - Lecturas son más rápidas y menos propensas a timeout
+      const method = ((options?.method as string) || 'GET').toUpperCase();
+      const isWriteOperation = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method);
+      const MAX_RETRIES = isWriteOperation ? 3 : 2;
+      const effectiveTimeout = timeoutMs ?? (isWriteOperation ? 30000 : 15000);
+      // Backoff exponencial: 2s → 4s → 8s → 16s (máx)
+      const retryDelay = Math.min(2000 * Math.pow(2, retryCount), 16000);
 
       // Si el caller ya pasó un signal abortado, salir inmediatamente
       const callerSignal = options?.signal as AbortSignal | undefined;
@@ -68,7 +76,7 @@ export function useSafeAuthFetch() {
       // Timeout propio que aborta la request
       const timeoutId = setTimeout(() => {
         abortController.abort();
-      }, timeoutMs);
+      }, effectiveTimeout);
 
       // Promise que se rechaza cuando el AbortController dispara.
       // Necesaria porque authenticatedFetch puede quedarse bloqueada en
@@ -108,7 +116,7 @@ export function useSafeAuthFetch() {
           if (newSession) {
             // eslint-disable-next-line no-console
             console.debug('Token refreshed, retrying request');
-            return safeFetch(url, options, 1, timeoutMs);
+            return safeFetch(url, options, 1, effectiveTimeout);
           } else {
             console.warn('Token refresh failed, session lost');
             if (isMountedRef.current) {
@@ -143,19 +151,19 @@ export function useSafeAuthFetch() {
           // Fue nuestro timeout interno — reintentar si quedan intentos
           if (isMountedRef.current && retryCount < MAX_RETRIES) {
             console.warn(
-              `Request timeout (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en 2s...`
+              `Request timeout (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en ${retryDelay / 1000}s...`
             );
             try {
-              await abortableDelay(2000, callerSignal);
+              await abortableDelay(retryDelay, callerSignal);
             } catch {
               // Si el delay fue abortado (navegación/desmontaje), propagar AbortError
               throw new DOMException('The operation was aborted.', 'AbortError');
             }
-            return safeFetch(url, options, retryCount + 1, timeoutMs);
+            return safeFetch(url, options, retryCount + 1, effectiveTimeout);
           }
           // Timeout agotado sin reintentos disponibles
           throw new TimeoutError(
-            `La solicitud tardó más de ${timeoutMs / 1000}s. Verifica tu conexión e intenta de nuevo.`
+            `La solicitud tardó más de ${effectiveTimeout / 1000}s. Verifica tu conexión e intenta de nuevo.`
           );
         }
 
@@ -173,7 +181,7 @@ export function useSafeAuthFetch() {
             } catch {
               throw new DOMException('The operation was aborted.', 'AbortError');
             }
-            return safeFetch(url, options, retryCount + 1, timeoutMs);
+            return safeFetch(url, options, retryCount + 1, effectiveTimeout);
           }
           
           // Todos los reintentos agotados — recargar automáticamente
@@ -193,7 +201,7 @@ export function useSafeAuthFetch() {
           console.warn('Session not available, attempting silent refresh...');
           const newSession = await authService.silentRefreshToken();
           if (newSession && retryCount === 0) {
-            return safeFetch(url, options, 1, timeoutMs);
+            return safeFetch(url, options, 1, effectiveTimeout);
           }
           // Si el refresh falla, sí es sesión expirada
           await authService.clearSession('error');
@@ -208,7 +216,7 @@ export function useSafeAuthFetch() {
           console.warn('Session expired error detected');
           const newSession = await authService.silentRefreshToken();
           if (newSession && retryCount === 0) {
-            return safeFetch(url, options, 1, timeoutMs);
+            return safeFetch(url, options, 1, effectiveTimeout);
           }
           await authService.clearSession('error');
           if (isMountedRef.current) {
@@ -220,15 +228,15 @@ export function useSafeAuthFetch() {
         // Errores de red - reintentar una vez
         if (retryCount < MAX_RETRIES && shouldRetryError(error)) {
           console.warn(
-            `Error de red (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en 2s...`
+            `Error de red (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en ${retryDelay / 1000}s...`
           );
           try {
-            await abortableDelay(2000, callerSignal);
+            await abortableDelay(retryDelay, callerSignal);
           } catch {
             // Si el delay fue abortado, propagar AbortError
             throw new DOMException('The operation was aborted.', 'AbortError');
           }
-          return safeFetch(url, options, retryCount + 1, timeoutMs);
+          return safeFetch(url, options, retryCount + 1, effectiveTimeout);
         }
 
         throw error;
