@@ -254,6 +254,28 @@ export class MutationQueue {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => `HTTP ${response.status}`);
+
+        // 409 en POST = recurso ya existe en el servidor (éxito idempotente).
+        // Ocurre cuando el cliente no recibió la respuesta del primer intento
+        // (p.ej. SessionLockError) y reintentó. El recurso SÍ fue creado.
+        // Tratarlo como completed para que la UI invalide el caché y no haga rollback.
+        if (response.status === 409 && item.method === 'POST') {
+          console.warn(
+            '[MutationQueue] 409 en POST — recurso ya existe (éxito idempotente):',
+            item.url
+          );
+          item.status = 'completed';
+          item.completedAt = Date.now();
+          item.error = undefined;
+          this.persist();
+          // Invalidar cachés para que la UI refresque y muestre el recurso existente
+          this.onSuccessGlobal?.(item, {});
+          this.inMemoryCallbacks.delete(item.id);
+          this.notifyStatusChange();
+          this.cleanup();
+          return;
+        }
+
         const err = new Error(errorText || `HTTP ${response.status}`);
 
         // Errores del cliente son deterministas — no reintentar
@@ -279,6 +301,19 @@ export class MutationQueue {
     } catch (error) {
       clearTimeout(timeoutId);
       item.error = error instanceof Error ? error.message : String(error);
+
+      // SessionLockError: navigator.lock transitorio — no quemar un intento del budget
+      // (es contención de lock, no un fallo real de red o del servidor)
+      const isLockError = error instanceof Error && error.name === 'SessionLockError';
+      if (isLockError) {
+        item.attempts -= 1;
+        item.status = 'failed';
+        this.persist();
+        this.notifyStatusChange();
+        // Reintento rápido en 2s para dar tiempo a que el lock se libere
+        this.scheduleRetryMs(2000);
+        return;
+      }
 
       if (item.attempts >= item.maxAttempts) {
         item.status = 'permanent_failure';
@@ -308,6 +343,21 @@ export class MutationQueue {
     this.persist();
     void this.processQueue();
   };
+
+  /** Programa un reintento con un delay fijo en ms (para SessionLockError). */
+  private scheduleRetryMs(delayMs: number): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.queue.forEach((item) => {
+        if (item.status === 'failed' && item.attempts < item.maxAttempts) {
+          item.status = 'pending';
+        }
+      });
+      this.persist();
+      void this.processQueue();
+    }, delayMs);
+  }
 
   private scheduleRetry(completedAttempts: number): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
