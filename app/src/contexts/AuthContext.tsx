@@ -308,12 +308,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Agregar listener de storage
     window.addEventListener('storage', handleStorageChange);
 
-    // Validar integridad cada 60 segundos cuando hay usuario (menos agresivo)
+    // Validar integridad cada 5 minutos cuando hay usuario (onAuthStateChange ya cubre cambios reales)
     const integrityInterval = setInterval(() => {
       if (isMounted) {
         validateSessionIntegrity();
       }
-    }, 60000);
+    }, 5 * 60 * 1000);
 
     return () => {
       isMounted = false;
@@ -347,11 +347,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoggingOutRef.current = true;
     setIsLoggingOut(true);
 
+    // Fallback de seguridad: si clearSession se bloquea (navigator.lock ocupado u otro
+    // error silencioso), forzamos el redirect a los 6 s para que el overlay no quede infinito.
+    const fallbackTimer = setTimeout(() => {
+      console.warn('[Auth] signOut fallback: forzando redirect tras timeout');
+      window.location.href = '/auth/login';
+    }, 6000);
+
     try {
       await authService.clearSession('user-logout');
     } catch (error) {
       console.error('Error durante logout:', error);
       window.location.href = '/auth/login';
+    } finally {
+      clearTimeout(fallbackTimer);
     }
   }, []);
 

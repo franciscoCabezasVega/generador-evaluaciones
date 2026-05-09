@@ -5,28 +5,39 @@ import { invalidateSessionCache } from '../fetchAuth';
  * Limpiar datos de sesión sin hacer redirect
  * Se usa internamente por otros métodos
  */
+/** Limpia localStorage de claves de sesión de Supabase. Siempre seguro de llamar. */
+function clearSessionStorage() {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.includes('sb-') || key?.includes('auth')) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+}
+
 async function cleanSessionData() {
   try {
     // Invalidar caché de sesión antes de limpiar
     invalidateSessionCache();
-    
-    // Await signOut para asegurar que el estado interno de Supabase se limpie
-    // antes de eliminar localStorage y redirigir
-    await supabase.auth.signOut({ scope: 'local' }).catch(err => {
-      console.warn('Error during signOut:', err);
+
+    // supabase.auth.signOut usa navigator.lock internamente.
+    // Si el lock está ocupado (auto-refresh en curso), puede bloquearse indefinidamente.
+    // Limitamos la espera a 3 s; si se excede, limpiamos localStorage directamente.
+    const signOutWithTimeout = Promise.race([
+      supabase.auth.signOut({ scope: 'local' }),
+      new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+    ]);
+
+    await signOutWithTimeout.catch(err => {
+      console.warn('Error during signOut (ignored):', err);
     });
-    
-    // Limpiar localStorage después de que signOut haya completado
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.includes('sb-') || key?.includes('auth')) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
   } catch (error) {
     console.error('Error cleaning session data:', error);
+  } finally {
+    // Siempre limpiar localStorage, incluso si signOut tardó o falló
+    clearSessionStorage();
   }
 }
 
