@@ -164,6 +164,8 @@ export interface AuthUser {
 export interface UserProfile {
   id: string;
   email: string;
+  name: string | null;
+  lastname: string | null;
   role: UserRole;
   role_id: number;
   created_at: string;

@@ -35,7 +35,7 @@ export function calculateTaskScore(input: ScoreCalculationInput): number {
   score -= lowReturnGroups * LOW_RETURN_PENALTY;
 
   // No permitir puntuación menor a 0
-  return Math.max(0, Math.round(score * 100) / 100);
+  return Math.max(0, Math.round(score * 10) / 10);
 }
 
 /**
@@ -44,7 +44,14 @@ export function calculateTaskScore(input: ScoreCalculationInput): number {
 export function calculateTeamScore(taskScores: number[]): number {
   if (taskScores.length === 0) return 0;
   const sum = taskScores.reduce((acc, score) => acc + score, 0);
-  return Math.round((sum / taskScores.length) * 100) / 100;
+  return Math.round((sum / taskScores.length) * 10) / 10;
+}
+
+/**
+ * Formatea una nota para mostrar: sin decimales si es 10, con 1 decimal en cualquier otro caso.
+ */
+export function formatScore(score: number): string {
+  return score === 10 ? '10' : score.toFixed(1);
 }
 
 /**

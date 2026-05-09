@@ -228,9 +228,9 @@ export const timingService = {
         query = query.eq('task_id', filters.task_id);
       }
 
-      const { data, error } = await query.order('created_at', {
-        ascending: false,
-      });
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) throw error;
 
@@ -342,28 +342,37 @@ export const timingService = {
 
       const parentId = data.id;
 
-      // Resolve task_qa_id for each QA entry (create if not exists)
-      const qaInsertsWithIds = await Promise.all(
-        input.qa_entries.map(async (entry) => {
-          const taskQAId = await getOrCreateTaskQAId(client, input.task_id, entry.qa_name);
-          return {
-            timing_id: parentId,
-            task_qa_id: taskQAId,
-            effective_testing_hours: Math.max(0, entry.effective_testing_hours),
-            waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
-            waiting_development_fixes_hours: Math.max(0, entry.waiting_development_fixes_hours),
-            retest_hours: Math.max(0, entry.retest_hours),
-            clarification_hours: Math.max(0, entry.clarification_hours),
-          };
-        })
-      );
+      // Bulk upsert task_qa rows (2N+1 → 3 queries fijas)
+      const { data: taskQAs, error: tqaErr } = await client
+        .from('task_qa')
+        .upsert(
+          input.qa_entries.map((e) => ({ task_id: input.task_id, qa_name: e.qa_name })),
+          { onConflict: 'task_id,qa_name' }
+        )
+        .select('id, qa_name');
+
+      if (tqaErr) {
+        await client.from('task_timings').delete().eq('id', parentId);
+        throw new Error(`Error upserting task_qa: ${tqaErr.message}`);
+      }
+
+      const idByName = new Map((taskQAs as { id: string; qa_name: string }[]).map((t) => [t.qa_name, t.id]));
+
+      const qaInserts = input.qa_entries.map((entry) => ({
+        timing_id: parentId,
+        task_qa_id: idByName.get(entry.qa_name)!,
+        effective_testing_hours: Math.max(0, entry.effective_testing_hours),
+        waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
+        waiting_development_fixes_hours: Math.max(0, entry.waiting_development_fixes_hours),
+        retest_hours: Math.max(0, entry.retest_hours),
+        clarification_hours: Math.max(0, entry.clarification_hours),
+      }));
 
       const { error: qaError } = await client
         .from('timing_qa_entries')
-        .insert(qaInsertsWithIds);
+        .insert(qaInserts);
 
       if (qaError) {
-        // Rollback: delete the parent if QA entries fail
         await client.from('task_timings').delete().eq('id', parentId);
         throw new Error(`Error creating QA entries: ${qaError.message}`);
       }
@@ -409,25 +418,34 @@ export const timingService = {
       // Replace all QA entries: delete old, insert new
       await client.from('timing_qa_entries').delete().eq('timing_id', id);
 
-      // Resolve task_qa_id for each QA entry (create if not exists)
-      const qaInsertsWithIds = await Promise.all(
-        input.qa_entries.map(async (entry) => {
-          const taskQAId = await getOrCreateTaskQAId(client, timingData.task_id, entry.qa_name);
-          return {
-            timing_id: id,
-            task_qa_id: taskQAId,
-            effective_testing_hours: Math.max(0, entry.effective_testing_hours),
-            waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
-            waiting_development_fixes_hours: Math.max(0, entry.waiting_development_fixes_hours),
-            retest_hours: Math.max(0, entry.retest_hours),
-            clarification_hours: Math.max(0, entry.clarification_hours),
-          };
-        })
+      // Bulk upsert task_qa rows (2N+1 → 3 queries fijas)
+      const { data: taskQAsUpdate, error: tqaUpdateErr } = await client
+        .from('task_qa')
+        .upsert(
+          input.qa_entries.map((e) => ({ task_id: timingData.task_id, qa_name: e.qa_name })),
+          { onConflict: 'task_id,qa_name' }
+        )
+        .select('id, qa_name');
+
+      if (tqaUpdateErr) throw new Error(`Error upserting task_qa: ${tqaUpdateErr.message}`);
+
+      const idByNameUpdate = new Map(
+        (taskQAsUpdate as { id: string; qa_name: string }[]).map((t) => [t.qa_name, t.id])
       );
+
+      const qaInsertsUpdate = input.qa_entries.map((entry) => ({
+        timing_id: id,
+        task_qa_id: idByNameUpdate.get(entry.qa_name)!,
+        effective_testing_hours: Math.max(0, entry.effective_testing_hours),
+        waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
+        waiting_development_fixes_hours: Math.max(0, entry.waiting_development_fixes_hours),
+        retest_hours: Math.max(0, entry.retest_hours),
+        clarification_hours: Math.max(0, entry.clarification_hours),
+      }));
 
       const { error: qaError } = await client
         .from('timing_qa_entries')
-        .insert(qaInsertsWithIds);
+        .insert(qaInsertsUpdate);
 
       if (qaError) throw new Error(`Error updating QA entries: ${qaError.message}`);
 

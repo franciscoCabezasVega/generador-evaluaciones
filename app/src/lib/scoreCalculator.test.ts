@@ -26,7 +26,7 @@ describe('Score Calculator', () => {
         mediumReturns: 3,
         highReturns: 0,
       });
-      expect(score).toBe(10 - 0.75 * 3); // 7.75
+      expect(score).toBe(7.8); // 10 - 2.25 = 7.75 → redondeado a 1 decimal = 7.8
     });
 
     it('should deduct 0.50 for every 5 low returns', () => {
@@ -58,13 +58,13 @@ describe('Score Calculator', () => {
 
     it('should handle combined returns', () => {
       // 2 low, 3 medium, 1 high
-      // 10 - 0 - (0.75 * 3) - (1.50 * 1) = 10 - 2.25 - 1.50 = 6.25
+      // 10 - 0 - (0.75 * 3) - (1.50 * 1) = 10 - 2.25 - 1.50 = 6.25 → redondeado a 1 decimal = 6.3
       const score = calculateTaskScore({
         lowReturns: 2,
         mediumReturns: 3,
         highReturns: 1,
       });
-      expect(score).toBe(6.25);
+      expect(score).toBe(6.3);
     });
 
     it('should not go below 0', () => {
@@ -76,13 +76,13 @@ describe('Score Calculator', () => {
       expect(score).toBe(0);
     });
 
-    it('should round to 2 decimals', () => {
+    it('should round to 1 decimal', () => {
       const score = calculateTaskScore({
         lowReturns: 1,
         mediumReturns: 1,
         highReturns: 1,
       });
-      expect(score % 0.01).toBeLessThan(0.01);
+      expect(score % 0.1).toBeLessThan(0.1);
     });
   });
 
@@ -104,12 +104,12 @@ describe('Score Calculator', () => {
 
     it('should handle decimal scores', () => {
       const score = calculateTeamScore([7.5, 8.25, 9.5]);
-      expect(score).toBe(8.42);
+      expect(score).toBe(8.4); // 25.25 / 3 = 8.4166... → redondeado a 1 decimal = 8.4
     });
 
-    it('should round to 2 decimals', () => {
+    it('should round to 1 decimal', () => {
       const score = calculateTeamScore([7.33, 8.33, 9.33]);
-      expect(score % 0.01).toBeLessThan(0.01);
+      expect(score % 0.1).toBeLessThan(0.1);
     });
   });
 

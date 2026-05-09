@@ -37,6 +37,8 @@ export const userProfileService = {
       const profile: UserProfile = {
         id: data.id,
         email: data.email,
+        name: data.name ?? null,
+        lastname: data.lastname ?? null,
         role: roleName as UserRole,
         role_id: data.role_id,
         created_at: data.created_at,

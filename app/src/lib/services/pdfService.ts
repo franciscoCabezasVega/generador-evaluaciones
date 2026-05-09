@@ -322,7 +322,7 @@ export const generateReportPDF = (
       doc.setTextColor(0, 0, 0);
       doc.text(
         `Nota Final: ${squadScore.toLocaleString('es-ES', {
-          minimumFractionDigits: 1,
+          minimumFractionDigits: 0,
           maximumFractionDigits: 1,
         })}/10`,
         marginLeft,
@@ -346,7 +346,7 @@ export const generateReportPDF = (
         task.medium_returns?.toString() || '0',
         task.high_returns?.toString() || '0',
         task.calculated_score?.toLocaleString('es-ES', {
-          minimumFractionDigits: 1,
+          minimumFractionDigits: 0,
           maximumFractionDigits: 1,
         }) || '0',
       ]);
@@ -370,7 +370,7 @@ export const generateReportPDF = (
       doc.setTextColor(25, 118, 210); // Azul
       doc.text(
         `Nota Final: ${squadScore.toLocaleString('es-ES', {
-          minimumFractionDigits: 1,
+          minimumFractionDigits: 0,
           maximumFractionDigits: 1,
         })}/10`,
         marginLeft,
