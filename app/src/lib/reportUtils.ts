@@ -1,4 +1,4 @@
-import { ProductType } from '@/lib/types';
+import { ProductType } from "@/lib/types";
 
 /**
  * Determina el producto basándose en el nombre del squad/equipo
@@ -9,7 +9,7 @@ import { ProductType } from '@/lib/types';
  */
 export const getProductTypeFromSquad = (
   squadName: string,
-  squadsByProduct: Record<string, string[]>
+  squadsByProduct: Record<string, string[]>,
 ): ProductType => {
   for (const [productType, squads] of Object.entries(squadsByProduct)) {
     if (squads.includes(squadName)) {
@@ -18,5 +18,5 @@ export const getProductTypeFromSquad = (
   }
 
   // Fallback por si el squad no está en el mapeo
-  return 'Platform';
+  return "Platform";
 };

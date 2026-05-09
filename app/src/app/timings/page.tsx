@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { startOfMonth, endOfMonth, format } from 'date-fns';
-import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
-import { useCachedFetch, invalidateCache } from '@/hooks/useCachedFetch';
-import { useAuth } from '@/contexts/AuthContext';
-import { useMutationQueue } from '@/contexts/MutationQueueContext';
-import Navbar from '@/components/Navbar';
-import CacheWarningBanner from '@/components/CacheWarningBanner';
-import TimingForm from '@/components/TimingForm';
-import TimingsList from '@/components/TimingsList';
-import Modal from '@/components/Modal';
-import { SkeletonTable } from '@/components/Skeleton';
-import DateRangePicker, { DateRange } from '@/components/DateRangePicker';
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { startOfMonth, endOfMonth, format } from "date-fns";
+import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import { useCachedFetch, invalidateCache } from "@/hooks/useCachedFetch";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutationQueue } from "@/contexts/MutationQueueContext";
+import Navbar from "@/components/Navbar";
+import CacheWarningBanner from "@/components/CacheWarningBanner";
+import TimingForm from "@/components/TimingForm";
+import TimingsList from "@/components/TimingsList";
+import Modal from "@/components/Modal";
+import { SkeletonTable } from "@/components/Skeleton";
+import DateRangePicker, { DateRange } from "@/components/DateRangePicker";
 import {
   TimingMetricsDistributionChart,
   TimingMetricsComparisonChart,
@@ -22,7 +22,7 @@ import {
   QAEfficiencyChart,
   QASummaryCards,
   TshirtSizeComparison,
-} from '@/components/TimingMetrics';
+} from "@/components/TimingMetrics";
 import {
   Task,
   TaskTiming,
@@ -30,16 +30,10 @@ import {
   UpdateTaskTimingInput,
   SquadTimingMetrics,
   QATimingMetrics,
-} from '@/lib/types';
-import { useCatalogData } from '@/hooks/useCatalogData';
-import { Button } from '@/components/ui/button';
-import {
-  Plus,
-  RefreshCw,
-  BarChart3,
-  List,
-  Users,
-} from 'lucide-react';
+} from "@/lib/types";
+import { useCatalogData } from "@/hooks/useCatalogData";
+import { Button } from "@/components/ui/button";
+import { Plus, RefreshCw, BarChart3, List, Users } from "lucide-react";
 
 export default function TimingsPage() {
   const [submitting, setSubmitting] = useState(false);
@@ -55,14 +49,16 @@ export default function TimingsPage() {
       startDate: startOfMonth(new Date()),
       endDate: endOfMonth(new Date()),
     } as DateRange,
-    productType: '',
+    productType: "",
   });
 
   // Helper: format dates for API
-  const apiStartDate = format(filters.dateRange.startDate, 'yyyy-MM-dd');
-  const apiEndDate = format(filters.dateRange.endDate, 'yyyy-MM-dd');
+  const apiStartDate = format(filters.dateRange.startDate, "yyyy-MM-dd");
+  const apiEndDate = format(filters.dateRange.endDate, "yyyy-MM-dd");
 
-  const [viewMode, setViewMode] = useState<'list' | 'metrics' | 'qa-metrics'>('list');
+  const [viewMode, setViewMode] = useState<"list" | "metrics" | "qa-metrics">(
+    "list",
+  );
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -72,42 +68,52 @@ export default function TimingsPage() {
   // Redirigir a login si no hay sesión
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/auth/login');
+      router.push("/auth/login");
     }
   }, [user, authLoading, router]);
 
   const isEnabled = !authLoading && !!user;
 
   // Filtros serializados para los hooks de caché
-  const timingFilters = { start_date: apiStartDate, end_date: apiEndDate, product_type: filters.productType };
-  const taskFilters = { product_type: filters.productType, dateRange: `${apiStartDate}_${apiEndDate}` };
+  const timingFilters = {
+    start_date: apiStartDate,
+    end_date: apiEndDate,
+    product_type: filters.productType,
+  };
+  const taskFilters = {
+    product_type: filters.productType,
+    dateRange: `${apiStartDate}_${apiEndDate}`,
+  };
 
   // ===== Tasks (para selección y resolución de nombres) =====
-  const {
-    data: tasks,
-  } = useCachedFetch<Task[]>({
-    cacheKey: 'timings-tasks',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const urlFiltered = filters.productType
-        ? `/api/tasks?product_type=${filters.productType}`
-        : '/api/tasks';
+  const { data: tasks } = useCachedFetch<Task[]>({
+    cacheKey: "timings-tasks",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const urlFiltered = filters.productType
+          ? `/api/tasks?product_type=${filters.productType}`
+          : "/api/tasks";
 
-      if (filters.productType) {
-        const [filteredRes, allRes] = await Promise.all([
-          safeFetch(urlFiltered, { signal }),
-          safeFetch('/api/tasks', { signal }),
-        ]);
-        const filteredData: Task[] = filteredRes.ok ? await filteredRes.json() : [];
-        const allData: Task[] = allRes.ok ? await allRes.json() : [];
-        const mergedMap = new Map<string, Task>();
-        for (const t of allData) mergedMap.set(t.id, t);
-        for (const t of filteredData) mergedMap.set(t.id, t);
-        return Array.from(mergedMap.values());
-      }
+        if (filters.productType) {
+          const [filteredRes, allRes] = await Promise.all([
+            safeFetch(urlFiltered, { signal }),
+            safeFetch("/api/tasks", { signal }),
+          ]);
+          const filteredData: Task[] = filteredRes.ok
+            ? await filteredRes.json()
+            : [];
+          const allData: Task[] = allRes.ok ? await allRes.json() : [];
+          const mergedMap = new Map<string, Task>();
+          for (const t of allData) mergedMap.set(t.id, t);
+          for (const t of filteredData) mergedMap.set(t.id, t);
+          return Array.from(mergedMap.values());
+        }
 
-      const res = await safeFetch(urlFiltered, { signal });
-      return res.ok ? await res.json() : [];
-    }, [filters.productType, safeFetch]),
+        const res = await safeFetch(urlFiltered, { signal });
+        return res.ok ? await res.json() : [];
+      },
+      [filters.productType, safeFetch],
+    ),
     filters: taskFilters,
     enabled: isEnabled,
     initialData: [],
@@ -122,16 +128,22 @@ export default function TimingsPage() {
     invalidate: invalidateTimings,
     setData: setTimings,
   } = useCachedFetch<TaskTiming[]>({
-    cacheKey: 'timings',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const params = new URLSearchParams();
-      params.append('start_date', apiStartDate);
-      params.append('end_date', apiEndDate);
-      if (filters.productType) params.append('product_type', filters.productType);
-      const response = await safeFetch(`/api/timings?${params.toString()}`, { signal });
-      if (!response.ok) throw new Error('Error al cargar tiempos');
-      return await response.json();
-    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    cacheKey: "timings",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const params = new URLSearchParams();
+        params.append("start_date", apiStartDate);
+        params.append("end_date", apiEndDate);
+        if (filters.productType)
+          params.append("product_type", filters.productType);
+        const response = await safeFetch(`/api/timings?${params.toString()}`, {
+          signal,
+        });
+        if (!response.ok) throw new Error("Error al cargar tiempos");
+        return await response.json();
+      },
+      [apiStartDate, apiEndDate, filters.productType, safeFetch],
+    ),
     filters: timingFilters,
     enabled: isEnabled,
     initialData: [],
@@ -143,16 +155,23 @@ export default function TimingsPage() {
     loading: metricsLoading,
     refresh: refreshMetrics,
   } = useCachedFetch<SquadTimingMetrics[]>({
-    cacheKey: 'timings-metrics',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const params = new URLSearchParams();
-      params.append('start_date', apiStartDate);
-      params.append('end_date', apiEndDate);
-      if (filters.productType) params.append('product_type', filters.productType);
-      const response = await safeFetch(`/api/timings/metrics?${params.toString()}`, { signal });
-      if (!response.ok) throw new Error('Error al cargar métricas');
-      return await response.json();
-    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    cacheKey: "timings-metrics",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const params = new URLSearchParams();
+        params.append("start_date", apiStartDate);
+        params.append("end_date", apiEndDate);
+        if (filters.productType)
+          params.append("product_type", filters.productType);
+        const response = await safeFetch(
+          `/api/timings/metrics?${params.toString()}`,
+          { signal },
+        );
+        if (!response.ok) throw new Error("Error al cargar métricas");
+        return await response.json();
+      },
+      [apiStartDate, apiEndDate, filters.productType, safeFetch],
+    ),
     filters: timingFilters,
     enabled: isEnabled,
     initialData: [],
@@ -164,16 +183,23 @@ export default function TimingsPage() {
     loading: qaMetricsLoading,
     refresh: refreshQAMetrics,
   } = useCachedFetch<QATimingMetrics[]>({
-    cacheKey: 'timings-qa-metrics',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const params = new URLSearchParams();
-      params.append('start_date', apiStartDate);
-      params.append('end_date', apiEndDate);
-      if (filters.productType) params.append('product_type', filters.productType);
-      const response = await safeFetch(`/api/timings/metrics/qa?${params.toString()}`, { signal });
-      if (!response.ok) throw new Error('Error al cargar métricas QA');
-      return await response.json();
-    }, [apiStartDate, apiEndDate, filters.productType, safeFetch]),
+    cacheKey: "timings-qa-metrics",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const params = new URLSearchParams();
+        params.append("start_date", apiStartDate);
+        params.append("end_date", apiEndDate);
+        if (filters.productType)
+          params.append("product_type", filters.productType);
+        const response = await safeFetch(
+          `/api/timings/metrics/qa?${params.toString()}`,
+          { signal },
+        );
+        if (!response.ok) throw new Error("Error al cargar métricas QA");
+        return await response.json();
+      },
+      [apiStartDate, apiEndDate, filters.productType, safeFetch],
+    ),
     filters: timingFilters,
     enabled: isEnabled,
     initialData: [],
@@ -185,28 +211,31 @@ export default function TimingsPage() {
     loading: allTimingsLoading,
     refresh: refreshAllTimings,
   } = useCachedFetch<TaskTiming[]>({
-    cacheKey: 'timings-all-comparison',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const response = await safeFetch('/api/timings', { signal });
-      if (!response.ok) throw new Error('Error al cargar todos los tiempos');
-      return await response.json();
-    }, [safeFetch]),
+    cacheKey: "timings-all-comparison",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const response = await safeFetch("/api/timings", { signal });
+        if (!response.ok) throw new Error("Error al cargar todos los tiempos");
+        return await response.json();
+      },
+      [safeFetch],
+    ),
     filters: {},
     enabled: isEnabled,
     initialData: [],
   });
 
   // ===== All Tasks (sin filtros, para TshirtSizeComparison) =====
-  const {
-    data: allTasks,
-    loading: allTasksLoading,
-  } = useCachedFetch<Task[]>({
-    cacheKey: 'timings-all-tasks-comparison',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const response = await safeFetch('/api/tasks', { signal });
-      if (!response.ok) throw new Error('Error al cargar todas las tareas');
-      return await response.json();
-    }, [safeFetch]),
+  const { data: allTasks, loading: allTasksLoading } = useCachedFetch<Task[]>({
+    cacheKey: "timings-all-tasks-comparison",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const response = await safeFetch("/api/tasks", { signal });
+        if (!response.ok) throw new Error("Error al cargar todas las tareas");
+        return await response.json();
+      },
+      [safeFetch],
+    ),
     filters: {},
     enabled: isEnabled,
     initialData: [],
@@ -221,36 +250,38 @@ export default function TimingsPage() {
   }, [refreshTimings, refreshMetrics, refreshQAMetrics, refreshAllTimings]);
 
   // Handle crear/editar timing
-  const handleSubmit = async (data: CreateTaskTimingInput | UpdateTaskTimingInput) => {
+  const handleSubmit = async (
+    data: CreateTaskTimingInput | UpdateTaskTimingInput,
+  ) => {
     try {
       setSubmitting(true);
 
       if (editingTiming) {
         const response = await safeFetch(`/api/timings/${editingTiming.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Error al actualizar');
+          throw new Error(error.error || "Error al actualizar");
         }
 
         const updatedTiming = await response.json();
         setTimings((prev) =>
-          prev.map((t) => (t.id === editingTiming.id ? updatedTiming : t))
+          prev.map((t) => (t.id === editingTiming.id ? updatedTiming : t)),
         );
       } else {
-        const response = await safeFetch('/api/timings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await safeFetch("/api/timings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Error al crear');
+          throw new Error(error.error || "Error al crear");
         }
 
         const newTiming = await response.json();
@@ -260,15 +291,15 @@ export default function TimingsPage() {
       setShowForm(false);
       setEditingTiming(null);
       // Invalidar métricas en background
-      invalidateCache('timings-metrics');
-      invalidateCache('timings-qa-metrics');
-      invalidateCache('timings-all-comparison');
+      invalidateCache("timings-metrics");
+      invalidateCache("timings-qa-metrics");
+      invalidateCache("timings-all-comparison");
       refreshMetrics();
       refreshQAMetrics();
       refreshAllTimings();
     } catch (error: unknown) {
-      console.error('Error:', error);
-      alert(error instanceof Error ? error.message : 'Ocurrió un error');
+      console.error("Error:", error);
+      alert(error instanceof Error ? error.message : "Ocurrió un error");
     } finally {
       setSubmitting(false);
     }
@@ -282,8 +313,13 @@ export default function TimingsPage() {
 
     enqueue({
       url: `/api/timings/${id}`,
-      method: 'DELETE',
-      cacheKeys: ['timings', 'timings-metrics', 'timings-qa-metrics', 'timings-all-comparison'],
+      method: "DELETE",
+      cacheKeys: [
+        "timings",
+        "timings-metrics",
+        "timings-qa-metrics",
+        "timings-all-comparison",
+      ],
       onSuccess: () => {
         refreshMetrics();
         refreshQAMetrics();
@@ -315,10 +351,20 @@ export default function TimingsPage() {
 
   // Mapear nombres y links de tareas
   const taskNames = Object.fromEntries(tasks.map((t) => [t.id, t.name]));
-  const taskLinks = Object.fromEntries(tasks.filter((t) => t.task_link).map((t) => [t.id, t.task_link]));
-  const taskTshirtSizes = Object.fromEntries(tasks.filter((t) => t.tshirt_size).map((t) => [t.id, t.tshirt_size]));
-  const taskCategories = Object.fromEntries(tasks.filter((t) => t.category).map((t) => [t.id, t.category]));
-  const taskEffortDates = Object.fromEntries(tasks.filter((t) => t.effort_score_date).map((t) => [t.id, t.effort_score_date]));
+  const taskLinks = Object.fromEntries(
+    tasks.filter((t) => t.task_link).map((t) => [t.id, t.task_link]),
+  );
+  const taskTshirtSizes = Object.fromEntries(
+    tasks.filter((t) => t.tshirt_size).map((t) => [t.id, t.tshirt_size]),
+  );
+  const taskCategories = Object.fromEntries(
+    tasks.filter((t) => t.category).map((t) => [t.id, t.category]),
+  );
+  const taskEffortDates = Object.fromEntries(
+    tasks
+      .filter((t) => t.effort_score_date)
+      .map((t) => [t.id, t.effort_score_date]),
+  );
 
   if (authLoading || !user) {
     return <SkeletonTable />;
@@ -332,9 +378,12 @@ export default function TimingsPage() {
         <CacheWarningBanner />
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Gestión de Tiempos</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Gestión de Tiempos
+          </h1>
           <p className="mt-2 text-gray-600">
-            Registra y visualiza los tiempos de QA por fases: Testing Efectivo, Espera Ambiente, Espera Fixes, Retest y Clarificaciones
+            Registra y visualiza los tiempos de QA por fases: Testing Efectivo,
+            Espera Ambiente, Espera Fixes, Retest y Clarificaciones
           </p>
         </div>
 
@@ -353,24 +402,24 @@ export default function TimingsPage() {
           {/* Ver modo */}
           <div className="flex gap-2">
             <Button
-              onClick={() => setViewMode('list')}
-              variant={viewMode === 'list' ? 'default' : 'outline'}
+              onClick={() => setViewMode("list")}
+              variant={viewMode === "list" ? "default" : "outline"}
               className="flex items-center gap-2"
             >
               <List size={20} />
               Lista
             </Button>
             <Button
-              onClick={() => setViewMode('metrics')}
-              variant={viewMode === 'metrics' ? 'default' : 'outline'}
+              onClick={() => setViewMode("metrics")}
+              variant={viewMode === "metrics" ? "default" : "outline"}
               className="flex items-center gap-2"
             >
               <BarChart3 size={20} />
               Métricas
             </Button>
             <Button
-              onClick={() => setViewMode('qa-metrics')}
-              variant={viewMode === 'qa-metrics' ? 'default' : 'outline'}
+              onClick={() => setViewMode("qa-metrics")}
+              variant={viewMode === "qa-metrics" ? "default" : "outline"}
               className="flex items-center gap-2"
             >
               <Users size={20} />
@@ -382,46 +431,58 @@ export default function TimingsPage() {
         {/* Filtros */}
         <div className="mb-8 rounded-xl border border-gray-200 bg-gray-100 p-4">
           <h3 className="mb-4 font-semibold text-gray-900">Filtros</h3>
-          
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="date-range-picker-trigger" className="block text-sm font-medium text-gray-700 mb-1">Rango de fechas</label>
-                <DateRangePicker
-                  value={filters.dateRange}
-                  onChange={(range) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      dateRange: range,
-                    }))
-                  }
-                />
-              </div>
 
-              <div>
-                <label htmlFor="filters-product-type" className="block text-sm font-medium text-gray-700 mb-1">Producto</label>
-                <select
-                  id="filters-product-type"
-                  name="productType"
-                  value={filters.productType}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      productType: e.target.value,
-                    }))
-                  }
-                  className="mt-0 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="">Todos los productos</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="date-range-picker-trigger"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Rango de fechas
+              </label>
+              <DateRangePicker
+                value={filters.dateRange}
+                onChange={(range) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    dateRange: range,
+                  }))
+                }
+              />
             </div>
+
+            <div>
+              <label
+                htmlFor="filters-product-type"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Producto
+              </label>
+              <select
+                id="filters-product-type"
+                name="productType"
+                value={filters.productType}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    productType: e.target.value,
+                  }))
+                }
+                className="mt-0 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Todos los productos</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Botón de actualizar para métricas */}
-        {(viewMode === 'metrics' || viewMode === 'qa-metrics') && (
+        {(viewMode === "metrics" || viewMode === "qa-metrics") && (
           <div className="mb-8 flex justify-end">
             <button
               onClick={handleRefreshAll}
@@ -429,14 +490,17 @@ export default function TimingsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Actualizar métricas"
             >
-              <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+              <RefreshCw
+                size={18}
+                className={isRefreshing ? "animate-spin" : ""}
+              />
               Actualizar
             </button>
           </div>
         )}
 
         {/* Contenido principal */}
-        {viewMode === 'list' ? (
+        {viewMode === "list" ? (
           <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">
@@ -448,7 +512,10 @@ export default function TimingsPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Actualizar tiempos"
               >
-                <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                <RefreshCw
+                  size={18}
+                  className={isRefreshing ? "animate-spin" : ""}
+                />
                 Actualizar
               </button>
             </div>
@@ -464,21 +531,29 @@ export default function TimingsPage() {
               taskEffortDates={taskEffortDates}
             />
           </div>
-        ) : viewMode === 'metrics' ? (
+        ) : viewMode === "metrics" ? (
           <div className="space-y-8">
             {/* Gráfico de distribución */}
             <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-              <TimingMetricsDistributionChart metrics={metrics} loading={metricsLoading} />
+              <TimingMetricsDistributionChart
+                metrics={metrics}
+                loading={metricsLoading}
+              />
             </div>
 
             {/* Gráfico comparativo */}
             <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-              <TimingMetricsComparisonChart metrics={metrics} loading={metricsLoading} />
+              <TimingMetricsComparisonChart
+                metrics={metrics}
+                loading={metricsLoading}
+              />
             </div>
 
             {/* Tarjetas de resumen detalladas */}
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Análisis Detallado por Producto</h2>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Análisis Detallado por Producto
+              </h2>
               {metrics.map((metric) => (
                 <div key={metric.product_type}>
                   <SquadTimingSummaryCard metric={metric} />
@@ -493,19 +568,33 @@ export default function TimingsPage() {
             <QAHoursBarChart qaMetrics={qaMetrics} loading={qaMetricsLoading} />
 
             {/* Tabla de eficiencia por QA */}
-            <QAEfficiencyChart qaMetrics={qaMetrics} loading={qaMetricsLoading} timings={timings} tasks={tasks} />
+            <QAEfficiencyChart
+              qaMetrics={qaMetrics}
+              loading={qaMetricsLoading}
+              timings={timings}
+              tasks={tasks}
+            />
 
             {/* Tarjetas resumen por QA - se oculta si no hay datos */}
             {!qaMetricsLoading && qaMetrics.length > 0 && (
               <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Resumen Individual por QA</h2>
-                <QASummaryCards qaMetrics={qaMetrics} loading={qaMetricsLoading} />
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  Resumen Individual por QA
+                </h2>
+                <QASummaryCards
+                  qaMetrics={qaMetrics}
+                  loading={qaMetricsLoading}
+                />
               </div>
             )}
 
             {/* Comparativa por Complejidad y Categoría */}
             <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-              <TshirtSizeComparison timings={allTimings} tasks={allTasks} loading={allTimingsLoading || allTasksLoading} />
+              <TshirtSizeComparison
+                timings={allTimings}
+                tasks={allTasks}
+                loading={allTimingsLoading || allTasksLoading}
+              />
             </div>
           </div>
         )}
@@ -514,7 +603,11 @@ export default function TimingsPage() {
       {/* Modal de formulario */}
       <Modal
         isOpen={showForm}
-        title={editingTiming ? `Actualizar Timing - ${tasks.find(t => t.id === editingTiming?.task_id)?.name || 'Tarea'}` : 'Crear Nuevo Timing'}
+        title={
+          editingTiming
+            ? `Actualizar Timing - ${tasks.find((t) => t.id === editingTiming?.task_id)?.name || "Tarea"}`
+            : "Crear Nuevo Timing"
+        }
         onClose={handleCancelForm}
         onHeaderClose={handleCancelFormWithConfirm}
       >
@@ -526,7 +619,9 @@ export default function TimingsPage() {
           isLoading={submitting}
           isEditing={!!editingTiming}
           availableTasks={tasks}
-          selectedTaskIds={timings.filter((t) => t.id !== editingTiming?.id).map((t) => t.task_id)}
+          selectedTaskIds={timings
+            .filter((t) => t.id !== editingTiming?.id)
+            .map((t) => t.task_id)}
           safeFetch={safeFetch}
         />
       </Modal>
@@ -540,7 +635,8 @@ export default function TimingsPage() {
       >
         <div className="p-6">
           <p className="mb-6 text-gray-600">
-            ¿Estás seguro de que deseas eliminar este timing? Esta acción no se puede deshacer.
+            ¿Estás seguro de que deseas eliminar este timing? Esta acción no se
+            puede deshacer.
           </p>
           <div className="flex gap-3">
             <Button

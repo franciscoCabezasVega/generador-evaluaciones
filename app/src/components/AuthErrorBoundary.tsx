@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { ReactNode, useLayoutEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { ReactNode, useLayoutEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 interface AuthErrorBoundaryProps {
   children: ReactNode;
@@ -22,36 +22,36 @@ export function AuthErrorBoundary({ children }: AuthErrorBoundaryProps) {
     setMounted(true);
 
     // Escuchar cambios en la sesión y detectar errores
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Solo redirigir en un cierre de sesión EXPLÍCITO sin sesión residual.
-        // Esto evita falsos positivos por eventos transitorios durante
-        // el refresh de token o al restaurar la pestaña del navegador.
-        if (event === 'SIGNED_OUT' && session === null) {
-          console.warn('Session cleared - user was signed out');
-          router.push('/auth/login');
-        }
-        
-        // TOKEN_REFRESHED sin sesión indica un fallo real de refresh
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          console.warn('Token refresh failed');
-          router.push('/auth/login');
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Solo redirigir en un cierre de sesión EXPLÍCITO sin sesión residual.
+      // Esto evita falsos positivos por eventos transitorios durante
+      // el refresh de token o al restaurar la pestaña del navegador.
+      if (event === "SIGNED_OUT" && session === null) {
+        console.warn("Session cleared - user was signed out");
+        router.push("/auth/login");
       }
-    );
+
+      // TOKEN_REFRESHED sin sesión indica un fallo real de refresh
+      if (event === "TOKEN_REFRESHED" && !session) {
+        console.warn("Token refresh failed");
+        router.push("/auth/login");
+      }
+    });
 
     // Manejar posibles errores de refresh token de forma global
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key?.includes('auth') && e.newValue === null) {
-        console.warn('Auth tokens cleared from storage');
-        router.push('/auth/login');
+      if (e.key?.includes("auth") && e.newValue === null) {
+        console.warn("Auth tokens cleared from storage");
+        router.push("/auth/login");
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
       subscription?.unsubscribe();
     };
   }, [router]);

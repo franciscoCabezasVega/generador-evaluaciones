@@ -1,5 +1,5 @@
-import { calculateTaskScore } from '@/lib/scoreCalculator';
-import { TaskSquad } from '@/lib/types';
+import { calculateTaskScore } from "@/lib/scoreCalculator";
+import { TaskSquad } from "@/lib/types";
 
 // Tipos compartidos
 export interface SquadFieldChange {
@@ -25,7 +25,10 @@ export const normalizeNumber = (value: unknown): number => {
 };
 
 // Detectar cambios en squads (compartido)
-export const detectSquadChanges = (oldData: unknown, newData: unknown): SquadChange[] => {
+export const detectSquadChanges = (
+  oldData: unknown,
+  newData: unknown,
+): SquadChange[] => {
   const old = Array.isArray(oldData) ? oldData : [];
   const newSqs = Array.isArray(newData) ? newData : [];
 
@@ -34,8 +37,10 @@ export const detectSquadChanges = (oldData: unknown, newData: unknown): SquadCha
 
   // Procesar squads viejos
   old.forEach((oldSquad: Partial<TaskSquad>) => {
-    processedSquads.add(oldSquad.squad || '');
-    const newSquad = newSqs.find((s: Partial<TaskSquad>) => s.squad === oldSquad.squad);
+    processedSquads.add(oldSquad.squad || "");
+    const newSquad = newSqs.find(
+      (s: Partial<TaskSquad>) => s.squad === oldSquad.squad,
+    );
 
     const oldLow = normalizeNumber(oldSquad.low_returns);
     const newLow = normalizeNumber(newSquad?.low_returns);
@@ -53,13 +58,19 @@ export const detectSquadChanges = (oldData: unknown, newData: unknown): SquadCha
       mediumReturns: newMedium,
       highReturns: newHigh,
     });
-    const oldNotes = oldSquad.additional_notes || '';
-    const newNotes = newSquad?.additional_notes || '';
+    const oldNotes = oldSquad.additional_notes || "";
+    const newNotes = newSquad?.additional_notes || "";
 
     // Si algún valor cambió, registrar el cambio
-    if (oldLow !== newLow || oldMedium !== newMedium || oldHigh !== newHigh || oldScore !== newScore || oldNotes !== newNotes) {
+    if (
+      oldLow !== newLow ||
+      oldMedium !== newMedium ||
+      oldHigh !== newHigh ||
+      oldScore !== newScore ||
+      oldNotes !== newNotes
+    ) {
       changes.push({
-        squad: oldSquad.squad || '',
+        squad: oldSquad.squad || "",
         low: { old: oldLow, new: newLow },
         medium: { old: oldMedium, new: newMedium },
         high: { old: oldHigh, new: newHigh },
@@ -71,7 +82,7 @@ export const detectSquadChanges = (oldData: unknown, newData: unknown): SquadCha
 
   // Procesar squads nuevos (no existían antes)
   newSqs.forEach((newSquad: Partial<TaskSquad>) => {
-    if (!processedSquads.has(newSquad.squad || '')) {
+    if (!processedSquads.has(newSquad.squad || "")) {
       const newLow = normalizeNumber(newSquad.low_returns);
       const newMedium = normalizeNumber(newSquad.medium_returns);
       const newHigh = normalizeNumber(newSquad.high_returns);
@@ -81,12 +92,12 @@ export const detectSquadChanges = (oldData: unknown, newData: unknown): SquadCha
         highReturns: newHigh,
       });
       changes.push({
-        squad: newSquad.squad || '',
+        squad: newSquad.squad || "",
         low: { old: 0, new: newLow },
         medium: { old: 0, new: newMedium },
         high: { old: 0, new: newHigh },
         score: { old: 0, new: newScore },
-        additional_notes: { old: '', new: newSquad.additional_notes || '' },
+        additional_notes: { old: "", new: newSquad.additional_notes || "" },
       });
     }
   });

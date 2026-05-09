@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { authService } from '@/lib/services/authService';
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/lib/services/authService";
 
 /**
  * Componente que valida la sesión periódicamente en background
  * No renderiza nada, solo mantiene tokens frescos
- * 
+ *
  * NOTA: El manejo de timeout por inactividad está en useSessionTimeoutManager
  * Este componente solo se encarga de validar y refrescar tokens periódicamente
- * 
+ *
  * Debe colocarse en el layout.tsx dentro de AuthProvider para que funcione globalmente
  */
 export function SessionChecker() {
@@ -45,7 +45,7 @@ export function SessionChecker() {
 
     const performValidation = async () => {
       const now = Date.now();
-      
+
       // No validar si ya se validó hace menos de 1 minuto
       if (now - lastCheckRef.current < 60000) {
         return;
@@ -53,7 +53,7 @@ export function SessionChecker() {
 
       // NUEVO: No validar si hay actividad reciente (últimos 30 segundos)
       // Esto evita competir con requests de la UI cuando el usuario está activo
-      const { getTimeSinceLastActivity } = await import('@/lib/fetchAuth');
+      const { getTimeSinceLastActivity } = await import("@/lib/fetchAuth");
       if (getTimeSinceLastActivity() < 30000) {
         // Actividad reciente detectada, omitir validación
         return;
@@ -69,20 +69,25 @@ export function SessionChecker() {
         }
 
         if (!isValid) {
-          console.warn('SessionChecker: Token validation failed, attempting refresh');
+          console.warn(
+            "SessionChecker: Token validation failed, attempting refresh",
+          );
           const refreshed = await authService.silentRefreshToken();
-          
+
           if (!refreshed && isMountedRef.current) {
-            console.warn('SessionChecker: Token refresh failed, session lost');
+            console.warn("SessionChecker: Token refresh failed, session lost");
           } else if (refreshed && isMountedRef.current) {
-            console.warn('SessionChecker: Token refreshed successfully');
+            console.warn("SessionChecker: Token refreshed successfully");
           }
         } else if (isMountedRef.current) {
-          console.warn('SessionChecker: Token validation passed');
+          console.warn("SessionChecker: Token validation passed");
         }
       } catch (error) {
         if (isMountedRef.current) {
-          console.error('SessionChecker: Error during session validation:', error);
+          console.error(
+            "SessionChecker: Error during session validation:",
+            error,
+          );
         }
       }
     };
@@ -115,35 +120,41 @@ export function SessionChecker() {
       if (!isMounted) return;
 
       // Si se borró toda la storage o alguna key de auth
-      if (
-        e.key?.includes('sb-') || 
-        e.key?.includes('auth') || 
-        (e.key === null)
-      ) {
-        console.warn('SessionChecker: Storage changed externally - validating session');
-        
+      if (e.key?.includes("sb-") || e.key?.includes("auth") || e.key === null) {
+        console.warn(
+          "SessionChecker: Storage changed externally - validating session",
+        );
+
         // Validar con Supabase en lugar de hacer reload
-        authService.getSession()
+        authService
+          .getSession()
           .then((session) => {
             if (!session?.user && isMountedRef.current) {
-              console.warn('SessionChecker: Session invalidated after storage clear');
+              console.warn(
+                "SessionChecker: Session invalidated after storage clear",
+              );
               // Redirigir al login sin reload usando router
-              router.push('/auth/login?sessionExpired=true&reason=storage_cleared');
+              router.push(
+                "/auth/login?sessionExpired=true&reason=storage_cleared",
+              );
             }
             // Si la sesión sigue válida, no hacer nada (evitar reload innecesario)
           })
           .catch((err) => {
-            console.error('SessionChecker: Error validating after storage clear:', err);
+            console.error(
+              "SessionChecker: Error validating after storage clear:",
+              err,
+            );
             // En caso de error de red, NO recargar - podría ser transitorio
           });
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, [user?.id, router]);
 

@@ -1,15 +1,28 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import { useTour } from '@/contexts/TourContext';
-import { X, ChevronLeft, ChevronRight, SkipForward } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useState } from "react";
+import { useTour } from "@/contexts/TourContext";
+import { X, ChevronLeft, ChevronRight, SkipForward } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function TourOverlay() {
-  const { currentStep, isRunning, nextStep, previousStep, skipTour, endTour, getCurrentStepData, getTotalSteps } =
-    useTour();
+  const {
+    currentStep,
+    isRunning,
+    nextStep,
+    previousStep,
+    skipTour,
+    endTour,
+    getCurrentStepData,
+    getTotalSteps,
+  } = useTour();
   const [, setTargetElement] = useState<HTMLElement | null>(null);
-  const [position, setPosition] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   const stepData = getCurrentStepData();
   const totalSteps = getTotalSteps();
@@ -17,9 +30,16 @@ export default function TourOverlay() {
 
   useEffect(() => {
     // Detectar cuando el usuario hace clic en el botón de expansión en paso 8
-    if (isRunning && stepData && stepData.target.includes('task-row-expand-btn') && currentStep === 7) {
-      const expandBtn = document.querySelector('[data-tour="task-row-expand-btn"]') as HTMLElement;
-      
+    if (
+      isRunning &&
+      stepData &&
+      stepData.target.includes("task-row-expand-btn") &&
+      currentStep === 7
+    ) {
+      const expandBtn = document.querySelector(
+        '[data-tour="task-row-expand-btn"]',
+      ) as HTMLElement;
+
       if (expandBtn && !waitingForExpand) {
         const handleClick = () => {
           setWaitingForExpand(true);
@@ -29,9 +49,9 @@ export default function TourOverlay() {
             setWaitingForExpand(false);
           }, 400);
         };
-        
-        expandBtn.addEventListener('click', handleClick);
-        return () => expandBtn.removeEventListener('click', handleClick);
+
+        expandBtn.addEventListener("click", handleClick);
+        return () => expandBtn.removeEventListener("click", handleClick);
       }
     }
   }, [isRunning, stepData, currentStep, waitingForExpand, nextStep]);
@@ -44,9 +64,10 @@ export default function TourOverlay() {
     let timeoutId: NodeJS.Timeout;
 
     // Buscar el elemento objetivo
-    const element = stepData.target === 'body' 
-      ? (document.body as HTMLElement) 
-      : (document.querySelector(stepData.target) as HTMLElement);
+    const element =
+      stepData.target === "body"
+        ? (document.body as HTMLElement)
+        : (document.querySelector(stepData.target) as HTMLElement);
 
     if (element) {
       setTargetElement(element);
@@ -60,13 +81,17 @@ export default function TourOverlay() {
     } else {
       // Si el elemento no existe pero estamos buscando task-filters,
       // automáticamente expandir los filtros
-      if (stepData.target.includes('task-filters')) {
-        const filterButton = document.querySelector('[data-tour="task-filter-button"]') as HTMLElement;
+      if (stepData.target.includes("task-filters")) {
+        const filterButton = document.querySelector(
+          '[data-tour="task-filter-button"]',
+        ) as HTMLElement;
         if (filterButton) {
           filterButton.click();
           // Esperar a que el DOM se actualice
           timeoutId = setTimeout(() => {
-            const newElement = document.querySelector(stepData.target) as HTMLElement;
+            const newElement = document.querySelector(
+              stepData.target,
+            ) as HTMLElement;
             if (newElement) {
               setTargetElement(newElement);
               const rect = newElement.getBoundingClientRect();
@@ -79,15 +104,22 @@ export default function TourOverlay() {
             }
           }, 300);
         }
-      } else if (stepData.target.includes('task-row-details') || stepData.target.includes('task-actions')) {
+      } else if (
+        stepData.target.includes("task-row-details") ||
+        stepData.target.includes("task-actions")
+      ) {
         // Si el elemento no existe pero estamos buscando task-row-details o task-actions,
         // automáticamente expandir la primera fila
-        const expandButton = document.querySelector('[data-tour="task-row-expand-btn"]') as HTMLElement;
+        const expandButton = document.querySelector(
+          '[data-tour="task-row-expand-btn"]',
+        ) as HTMLElement;
         if (expandButton) {
           expandButton.click();
           // Esperar a que el DOM se actualice
           timeoutId = setTimeout(() => {
-            const newElement = document.querySelector(stepData.target) as HTMLElement;
+            const newElement = document.querySelector(
+              stepData.target,
+            ) as HTMLElement;
             if (newElement) {
               setTargetElement(newElement);
               const rect = newElement.getBoundingClientRect();
@@ -129,30 +161,36 @@ export default function TourOverlay() {
     const tooltipWidth = 450;
     const tooltipHeight = 450;
 
-    const placement = stepData.placement || 'bottom';
+    const placement = stepData.placement || "bottom";
 
     switch (placement) {
-      case 'top':
+      case "top":
         return {
           top: position.top - tooltipHeight - padding,
-          left: Math.min(position.left + position.width / 2 - tooltipWidth / 2, window.innerWidth - tooltipWidth - 20),
+          left: Math.min(
+            position.left + position.width / 2 - tooltipWidth / 2,
+            window.innerWidth - tooltipWidth - 20,
+          ),
         };
-      case 'bottom':
+      case "bottom":
         return {
           top: position.top + position.height + padding,
-          left: Math.min(position.left + position.width / 2 - tooltipWidth / 2, window.innerWidth - tooltipWidth - 20),
+          left: Math.min(
+            position.left + position.width / 2 - tooltipWidth / 2,
+            window.innerWidth - tooltipWidth - 20,
+          ),
         };
-      case 'left':
+      case "left":
         return {
           top: position.top + position.height / 2 - tooltipHeight / 2,
           left: position.left - tooltipWidth - padding,
         };
-      case 'right':
+      case "right":
         return {
           top: position.top + position.height / 2 - tooltipHeight / 2,
           left: position.left + position.width + padding,
         };
-      case 'center':
+      case "center":
         return {
           top: window.innerHeight / 2 - tooltipHeight / 2,
           left: window.innerWidth / 2 - tooltipWidth / 2,
@@ -160,7 +198,10 @@ export default function TourOverlay() {
       default:
         return {
           top: position.top + position.height + padding,
-          left: Math.min(position.left + position.width / 2 - tooltipWidth / 2, window.innerWidth - tooltipWidth - 20),
+          left: Math.min(
+            position.left + position.width / 2 - tooltipWidth / 2,
+            window.innerWidth - tooltipWidth - 20,
+          ),
         };
     }
   };
@@ -173,7 +214,10 @@ export default function TourOverlay() {
       <div
         className="fixed inset-0 bg-black/50 z-40 pointer-events-none"
         style={{
-          clipPath: stepData.target === 'body' ? 'none' : `polygon(
+          clipPath:
+            stepData.target === "body"
+              ? "none"
+              : `polygon(
             0% 0%,
             0% 100%,
             100% 100%,
@@ -189,7 +233,7 @@ export default function TourOverlay() {
       />
 
       {/* Highlight box */}
-      {stepData.target !== 'body' && (
+      {stepData.target !== "body" && (
         <div
           className="fixed border-2 border-blue-500 pointer-events-none bg-blue-50/10 z-40 rounded-lg shadow-lg shadow-blue-500/50 transition-all duration-300"
           style={{
@@ -205,15 +249,20 @@ export default function TourOverlay() {
       <div
         className="fixed bg-white rounded-lg shadow-2xl z-50 p-6 border border-gray-200 max-h-[500px] overflow-y-auto"
         style={{
-          width: '450px',
+          width: "450px",
           top: Math.max(10, Math.min(tooltipPos.top, window.innerHeight - 500)),
-          left: Math.max(10, Math.min(tooltipPos.left, window.innerWidth - 470)),
-          animation: 'slideIn 0.3s ease-out',
+          left: Math.max(
+            10,
+            Math.min(tooltipPos.left, window.innerWidth - 470),
+          ),
+          animation: "slideIn 0.3s ease-out",
         }}
       >
         {/* Header */}
         <div className="flex justify-between items-start mb-3">
-          <h3 className="text-lg font-bold text-gray-800 flex-1">{stepData.title}</h3>
+          <h3 className="text-lg font-bold text-gray-800 flex-1">
+            {stepData.title}
+          </h3>
           <button
             onClick={endTour}
             className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0"
@@ -224,7 +273,9 @@ export default function TourOverlay() {
         </div>
 
         {/* Content */}
-        <p className="text-gray-600 text-sm mb-4 whitespace-pre-line">{stepData.content}</p>
+        <p className="text-gray-600 text-sm mb-4 whitespace-pre-line">
+          {stepData.content}
+        </p>
 
         {/* Progress */}
         <div className="mb-4">
@@ -232,10 +283,15 @@ export default function TourOverlay() {
             <span className="text-xs text-gray-500">
               Paso {currentStep + 1} de {totalSteps}
             </span>
-            <div className="text-xs text-gray-400">{Math.round(((currentStep + 1) / totalSteps) * 100)}%</div>
+            <div className="text-xs text-gray-400">
+              {Math.round(((currentStep + 1) / totalSteps) * 100)}%
+            </div>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-blue-500 h-2 rounded-full transition-all duration-300" style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }} />
+            <div
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+            />
           </div>
         </div>
 
@@ -270,8 +326,10 @@ export default function TourOverlay() {
             size="sm"
             className="gap-1 bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
           >
-            {currentStep === totalSteps - 1 ? 'Finalizar' : 'Siguiente'}
-            {currentStep < totalSteps - 1 && <ChevronRight className="w-4 h-4" />}
+            {currentStep === totalSteps - 1 ? "Finalizar" : "Siguiente"}
+            {currentStep < totalSteps - 1 && (
+              <ChevronRight className="w-4 h-4" />
+            )}
           </Button>
         </div>
       </div>

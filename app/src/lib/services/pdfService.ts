@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import jsPDF from "jspdf";
 
 interface TaskData {
   name: string;
@@ -29,29 +29,31 @@ const drawSimpleTable = (
   pageHeight: number,
   marginLeft: number,
   marginRight: number,
-  alignmentOverride?: ('left' | 'center')[] // Para permitir alineación custom por columna
+  alignmentOverride?: ("left" | "center")[], // Para permitir alineación custom por columna
 ): number => {
   const headerHeight = 7;
   const baseRowHeight = 6;
-  const colPadding = 3;  // Aumentado para mejor espaciado
-  
+  const colPadding = 3; // Aumentado para mejor espaciado
+
   let currentY = startY;
   const availableWidth = pageWidth - marginLeft - marginRight;
-  
+
   // Calcular anchos de columna con proporciones personalizadas
   // Optimizado para maximizar espacio en Nombre y minimizar en columnas numéricas
   const columnWeights = headers.map((_, idx) => {
-    if (idx === 0) return 0.35;     // N° muy angosta
-    if (idx === 1) return 3.0;      // Nombre muy ancha
-    return 0.6;                     // Otras columnas (Bajas, Medias, Graves, Estado, Nota) angostas
+    if (idx === 0) return 0.35; // N° muy angosta
+    if (idx === 1) return 3.0; // Nombre muy ancha
+    return 0.6; // Otras columnas (Bajas, Medias, Graves, Estado, Nota) angostas
   });
-  
+
   const totalWeight = columnWeights.reduce((a, b) => a + b, 0);
-  const columnWidths = columnWeights.map(w => (availableWidth * w) / totalWeight);
+  const columnWidths = columnWeights.map(
+    (w) => (availableWidth * w) / totalWeight,
+  );
 
   // Dibujar header
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont("helvetica", "bold");
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
   doc.setTextColor(0, 0, 0);
@@ -69,7 +71,7 @@ const drawSimpleTable = (
       headers[i],
       cellX + colPadding,
       currentY + headerHeight / 2 + 0.5,
-      { maxWidth: columnWidths[i] - colPadding * 2 }
+      { maxWidth: columnWidths[i] - colPadding * 2 },
     );
 
     cellX += columnWidths[i];
@@ -83,7 +85,7 @@ const drawSimpleTable = (
   currentY += headerHeight;
 
   // Dibujar filas
-  doc.setFont('helvetica', 'normal');
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
 
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
@@ -93,12 +95,12 @@ const drawSimpleTable = (
     let maxLines = 1;
     for (let colIdx = 0; colIdx < headers.length; colIdx++) {
       const splitText = doc.splitTextToSize(
-        row[colIdx] || '',
-        columnWidths[colIdx] - colPadding * 2
+        row[colIdx] || "",
+        columnWidths[colIdx] - colPadding * 2,
       );
       maxLines = Math.max(maxLines, splitText.length);
     }
-    
+
     const rowHeight = baseRowHeight + (maxLines - 1) * 3; // Agregar altura por cada línea adicional
 
     // Verificar si necesitamos nueva página
@@ -117,29 +119,29 @@ const drawSimpleTable = (
       doc.setTextColor(0, 0, 0);
       const alignment = alignmentOverride
         ? alignmentOverride[colIdx]
-        : colIdx === 0 ? 'center' : 'left';
-      
+        : colIdx === 0
+          ? "center"
+          : "left";
+
       const splitText = doc.splitTextToSize(
-        row[colIdx] || '',
-        columnWidths[colIdx] - colPadding * 2
+        row[colIdx] || "",
+        columnWidths[colIdx] - colPadding * 2,
       );
-      
+
       // Calcular posición Y centrada verticalmente
       const lineHeight = 3.5; // altura aproximada de una línea de texto a 7pt
       const textTotalHeight = splitText.length * lineHeight;
       const availableHeight = rowHeight - colPadding * 2;
-      const verticalOffset = Math.max(0, (availableHeight - textTotalHeight) / 2);
-      const textY = currentY + colPadding + verticalOffset;
-      
-      doc.text(
-        splitText,
-        cellX + colPadding,
-        textY,
-        {
-          maxWidth: columnWidths[colIdx] - colPadding * 2,
-          align: alignment as 'left' | 'center',
-        }
+      const verticalOffset = Math.max(
+        0,
+        (availableHeight - textTotalHeight) / 2,
       );
+      const textY = currentY + colPadding + verticalOffset;
+
+      doc.text(splitText, cellX + colPadding, textY, {
+        maxWidth: columnWidths[colIdx] - colPadding * 2,
+        align: alignment as "left" | "center",
+      });
 
       cellX += columnWidths[colIdx];
     }
@@ -159,7 +161,7 @@ const drawSimpleTable = (
 export const generateReportPDF = (
   reportData: ReportDataStructure,
   month: number,
-  year: number
+  year: number,
 ) => {
   const pageWidth = 279; // Ancho en mm (horizontal/landscape - 11 inches)
   const pageHeight = 215.9; // Alto en mm (horizontal/landscape - 8.5 inches)
@@ -169,10 +171,10 @@ export const generateReportPDF = (
   const marginBottom = 10;
 
   const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'letter',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsPDF constructor returns incompatible overloaded types
+    orientation: "landscape",
+    unit: "mm",
+    format: "letter",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsPDF constructor returns incompatible overloaded types
   }) as any;
 
   let isFirstPage = true;
@@ -189,19 +191,19 @@ export const generateReportPDF = (
 
   // Helper para agregar encabezado
   const addHeader = (squadName: string): number => {
-    doc.setFont('helvetica', 'bold');
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
     doc.text(`Squad: ${squadName}`, marginLeft, marginTop);
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     const dateStr = `${month}/${year}`;
     doc.text(`Período: ${dateStr}`, marginLeft, marginTop + 8);
     doc.text(
-      `Generado: ${new Date().toLocaleDateString('es-ES')}`,
+      `Generado: ${new Date().toLocaleDateString("es-ES")}`,
       marginLeft,
-      marginTop + 13
+      marginTop + 13,
     );
 
     return marginTop + 18;
@@ -211,7 +213,7 @@ export const generateReportPDF = (
   const addComments = (
     performanceComment: string | undefined,
     communicationComment: string | undefined,
-    startY: number
+    startY: number,
   ): number => {
     let currentY = startY + 5;
     const commentIndent = marginLeft + 3; // Indentación para las notas
@@ -219,67 +221,67 @@ export const generateReportPDF = (
 
     if (performanceComment) {
       doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont("helvetica", "bold");
       doc.setTextColor(31, 78, 121); // Azul
-      doc.text('Desempeño: ', commentIndent, currentY);
+      doc.text("Desempeño: ", commentIndent, currentY);
 
       // Calcular el ancho disponible después del título
-      const titleWidth = doc.getTextWidth('Desempeño: ');
-      
-      doc.setFont('helvetica', 'normal');
+      const titleWidth = doc.getTextWidth("Desempeño: ");
+
+      doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
       const perfSplitText = doc.splitTextToSize(
         performanceComment,
-        commentWidth - titleWidth
+        commentWidth - titleWidth,
       );
-      
+
       doc.setFontSize(8);
-      
+
       // Primera línea junto al título
       if (perfSplitText.length > 0) {
         doc.text(perfSplitText[0], commentIndent + titleWidth, currentY);
       }
-      
+
       // Líneas siguientes con indentación
       if (perfSplitText.length > 1) {
         const restLines = perfSplitText.slice(1);
         doc.text(restLines, commentIndent, currentY + 3.5);
         currentY += restLines.length * 3.5;
       }
-      
+
       currentY += 6;
     }
 
     if (communicationComment) {
       doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont("helvetica", "bold");
       doc.setTextColor(34, 139, 34); // Verde
-      doc.text('Comunicación: ', commentIndent, currentY);
+      doc.text("Comunicación: ", commentIndent, currentY);
 
       // Calcular el ancho disponible después del título
-      const titleWidth = doc.getTextWidth('Comunicación: ');
-      
-      doc.setFont('helvetica', 'normal');
+      const titleWidth = doc.getTextWidth("Comunicación: ");
+
+      doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
       const commSplitText = doc.splitTextToSize(
         communicationComment,
-        commentWidth - titleWidth
+        commentWidth - titleWidth,
       );
-      
+
       doc.setFontSize(8);
-      
+
       // Primera línea junto al título
       if (commSplitText.length > 0) {
         doc.text(commSplitText[0], commentIndent + titleWidth, currentY);
       }
-      
+
       // Líneas siguientes con indentación
       if (commSplitText.length > 1) {
         const restLines = commSplitText.slice(1);
         doc.text(restLines, commentIndent, currentY + 3.5);
         currentY += restLines.length * 3.5;
       }
-      
+
       currentY += 6;
     }
 
@@ -287,19 +289,23 @@ export const generateReportPDF = (
   };
 
   // Procesar tareas por squad
-  const sortedSquads = Object.keys(reportData.tasksBySquad || {}).sort((a, b) => {
-    const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-    const numB = parseInt(b.match(/\d+/)?.[0] || '0');
-    return numA - numB;
-  });
+  const sortedSquads = Object.keys(reportData.tasksBySquad || {}).sort(
+    (a, b) => {
+      const numA = parseInt(a.match(/\d+/)?.[0] || "0");
+      const numB = parseInt(b.match(/\d+/)?.[0] || "0");
+      return numA - numB;
+    },
+  );
 
-  const performanceComments = typeof reportData.performanceComments === 'string'
-    ? JSON.parse(reportData.performanceComments)
-    : reportData.performanceComments || {};
+  const performanceComments =
+    typeof reportData.performanceComments === "string"
+      ? JSON.parse(reportData.performanceComments)
+      : reportData.performanceComments || {};
 
-  const communicationComments = typeof reportData.communicationComments === 'string'
-    ? JSON.parse(reportData.communicationComments)
-    : reportData.communicationComments || {};
+  const communicationComments =
+    typeof reportData.communicationComments === "string"
+      ? JSON.parse(reportData.communicationComments)
+      : reportData.communicationComments || {};
 
   sortedSquads.forEach((squad) => {
     const tasks = reportData.tasksBySquad[squad] || [];
@@ -313,20 +319,24 @@ export const generateReportPDF = (
 
       doc.setFontSize(9);
       doc.setTextColor(150, 100, 100);
-      doc.text('Este equipo no tuvo tareas asignadas en este período.', marginLeft, currentY);
+      doc.text(
+        "Este equipo no tuvo tareas asignadas en este período.",
+        marginLeft,
+        currentY,
+      );
 
       // Agregar nota final
       currentY += 10;
-      doc.setFont('helvetica', 'bold');
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       doc.text(
-        `Nota Final: ${squadScore.toLocaleString('es-ES', {
+        `Nota Final: ${squadScore.toLocaleString("es-ES", {
           minimumFractionDigits: 0,
           maximumFractionDigits: 1,
         })}/10`,
         marginLeft,
-        currentY
+        currentY,
       );
 
       // Agregar comentarios si existen
@@ -338,17 +348,24 @@ export const generateReportPDF = (
       let currentY = addHeader(squad);
 
       // Preparar datos para la tabla
-      const tableHeaders = ['N°', 'Nombre', 'Bajas', 'Medias', 'Graves', 'Nota'];
+      const tableHeaders = [
+        "N°",
+        "Nombre",
+        "Bajas",
+        "Medias",
+        "Graves",
+        "Nota",
+      ];
       const tableRows = tasks.map((task, idx) => [
         (idx + 1).toString(),
         task.name, // Sin truncar - ahora se divide en múltiples líneas
-        task.low_returns?.toString() || '0',
-        task.medium_returns?.toString() || '0',
-        task.high_returns?.toString() || '0',
-        task.calculated_score?.toLocaleString('es-ES', {
+        task.low_returns?.toString() || "0",
+        task.medium_returns?.toString() || "0",
+        task.high_returns?.toString() || "0",
+        task.calculated_score?.toLocaleString("es-ES", {
           minimumFractionDigits: 0,
           maximumFractionDigits: 1,
-        }) || '0',
+        }) || "0",
       ]);
 
       // Agregar tabla
@@ -360,21 +377,21 @@ export const generateReportPDF = (
         pageWidth,
         pageHeight,
         marginLeft,
-        marginRight
+        marginRight,
       );
 
       // Agregar nota final
       currentY += 5;
-      doc.setFont('helvetica', 'bold');
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(25, 118, 210); // Azul
       doc.text(
-        `Nota Final: ${squadScore.toLocaleString('es-ES', {
+        `Nota Final: ${squadScore.toLocaleString("es-ES", {
           minimumFractionDigits: 0,
           maximumFractionDigits: 1,
         })}/10`,
         marginLeft,
-        currentY
+        currentY,
       );
 
       // Agregar comentarios
@@ -388,32 +405,32 @@ export const generateReportPDF = (
   // Procesar tareas deprecadas y pendientes
   const deprecatedPending = reportData.deprecatedPendingBySquad || {};
   const hasDeprecatedOrPending = Object.values(deprecatedPending).some(
-    (tasks: unknown) => Array.isArray(tasks) && tasks.length > 0
+    (tasks: unknown) => Array.isArray(tasks) && tasks.length > 0,
   );
 
   if (hasDeprecatedOrPending) {
     addNewPage();
     // Encabezado sin "Squad:" para tareas deprecadas
-    doc.setFont('helvetica', 'bold');
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
-    doc.text('Tareas Deprecadas y Pendientes', marginLeft, marginTop);
+    doc.text("Tareas Deprecadas y Pendientes", marginLeft, marginTop);
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     const dateStr = `${month}/${year}`;
     doc.text(`Período: ${dateStr}`, marginLeft, marginTop + 8);
     doc.text(
-      `Generado: ${new Date().toLocaleDateString('es-ES')}`,
+      `Generado: ${new Date().toLocaleDateString("es-ES")}`,
       marginLeft,
-      marginTop + 13
+      marginTop + 13,
     );
 
     let currentY = marginTop + 18;
 
     const sortedDepSquads = Object.keys(deprecatedPending).sort((a, b) => {
-      const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-      const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+      const numA = parseInt(a.match(/\d+/)?.[0] || "0");
+      const numB = parseInt(b.match(/\d+/)?.[0] || "0");
       return numA - numB;
     });
 
@@ -422,18 +439,18 @@ export const generateReportPDF = (
       if (tasks.length === 0) return;
 
       // Agregar título del squad
-      doc.setFont('helvetica', 'bold');
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       doc.text(`${squad}:`, marginLeft, currentY);
       currentY += 5;
 
       // Preparar datos para la tabla
-      const tableHeaders = ['N°', 'Nombre', 'Estado'];
+      const tableHeaders = ["N°", "Nombre", "Estado"];
       const tableRows = tasks.map((task: TaskData, idx: number) => [
         (idx + 1).toString(),
         task.name, // Sin truncar - ahora se divide en múltiples líneas
-        task.status || 'Deprecada',
+        task.status || "Deprecada",
       ]);
 
       // Agregar tabla con alineación custom: [center, left, left]
@@ -446,7 +463,7 @@ export const generateReportPDF = (
         pageHeight,
         marginLeft,
         marginRight,
-        ['center', 'left', 'left'] // N° centrado, Nombre y Estado a la izquierda
+        ["center", "left", "left"], // N° centrado, Nombre y Estado a la izquierda
       );
 
       currentY += 5;
@@ -464,25 +481,23 @@ export const generateReportPDF = (
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(
-      `Página ${i} de ${pageCount}`,
-      pageWidth / 2,
-      pageHeight - 5,
-      { align: 'center' }
-    );
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, pageHeight - 5, {
+      align: "center",
+    });
   }
 
   return doc;
-}
+};
 
 export const downloadReportPDF = (
   reportData: ReportDataStructure,
   month: number,
   year: number,
-  productType: string = 'Platform',
-  fileName?: string
+  productType: string = "Platform",
+  fileName?: string,
 ) => {
   const doc = generateReportPDF(reportData, month, year);
-  const finalFileName = fileName || `Reporte-Evaluaciones-${productType}-${month}-${year}.pdf`;
+  const finalFileName =
+    fileName || `Reporte-Evaluaciones-${productType}-${month}-${year}.pdf`;
   doc.save(finalFileName);
 };

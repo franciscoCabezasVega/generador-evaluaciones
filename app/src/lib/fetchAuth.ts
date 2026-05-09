@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from "./supabase";
 
 type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
 
@@ -25,7 +25,10 @@ class SessionManager {
   private static _instance: SessionManager | null = null;
 
   // Caché en memoria con TTL de 5 min (alineado con TTL del JWT de Supabase)
-  private _cache: { session: GetSessionResult['data']['session']; at: number } | null = null;
+  private _cache: {
+    session: GetSessionResult["data"]["session"];
+    at: number;
+  } | null = null;
   private readonly _TTL = 300_000;
 
   // La única promesa en vuelo hacia supabase.auth.getSession()
@@ -35,10 +38,10 @@ class SessionManager {
   private _channel: BroadcastChannel | null = null;
 
   private constructor() {
-    if (typeof BroadcastChannel !== 'undefined') {
-      this._channel = new BroadcastChannel('session_cache_sync');
+    if (typeof BroadcastChannel !== "undefined") {
+      this._channel = new BroadcastChannel("session_cache_sync");
       this._channel.onmessage = (e: MessageEvent) => {
-        if (e.data?.type === 'session_invalidated') {
+        if (e.data?.type === "session_invalidated") {
           this._cache = null;
           this._inflight = null;
         }
@@ -58,7 +61,7 @@ class SessionManager {
     this._cache = null;
     this._inflight = null;
     if (broadcast) {
-      this._channel?.postMessage({ type: 'session_invalidated' });
+      this._channel?.postMessage({ type: "session_invalidated" });
     }
   }
 
@@ -75,7 +78,10 @@ class SessionManager {
   getSession(signal?: AbortSignal): Promise<GetSessionResult> {
     // Nivel 1: caché fresco
     if (this._cache && Date.now() - this._cache.at < this._TTL) {
-      return Promise.resolve({ data: { session: this._cache.session }, error: null } as GetSessionResult);
+      return Promise.resolve({
+        data: { session: this._cache.session },
+        error: null,
+      } as GetSessionResult);
     }
 
     // Nivel 2 + 3: una sola llamada en vuelo
@@ -96,14 +102,19 @@ class SessionManager {
     // Permitir al caller abortar su espera sin afectar a los demás
     if (signal) {
       if (signal.aborted) {
-        return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
+        return Promise.reject(
+          new DOMException("The operation was aborted.", "AbortError"),
+        );
       }
       return Promise.race([
         this._inflight,
         new Promise<never>((_, reject) => {
           signal.addEventListener(
-            'abort',
-            () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+            "abort",
+            () =>
+              reject(
+                new DOMException("The operation was aborted.", "AbortError"),
+              ),
             { once: true },
           );
         }),
@@ -161,13 +172,16 @@ export async function warmSession(signal?: AbortSignal): Promise<boolean> {
  * - Timeout externo → el AbortSignal del caller (useSafeAuthFetch usa 15 s)
  *                     cancela la espera sin afectar a otros callers.
  */
-export async function authenticatedFetch(url: string, options: RequestInit = {}) {
+export async function authenticatedFetch(
+  url: string,
+  options: RequestInit = {},
+) {
   markActivity();
 
   const signal = options.signal as AbortSignal | undefined;
 
   if (signal?.aborted) {
-    throw new DOMException('The operation was aborted.', 'AbortError');
+    throw new DOMException("The operation was aborted.", "AbortError");
   }
 
   const result = await SessionManager.getInstance().getSession(signal);
@@ -178,19 +192,18 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
 
   if (!result.data.session) {
     // Estado transitorio: el auto-refresh aún no terminó. El caller reintentará.
-    throw new Error('Session not available — token may be refreshing');
+    throw new Error("Session not available — token may be refreshing");
   }
 
   const headers = new Headers(options.headers || {});
-  headers.set('Authorization', `Bearer ${result.data.session.access_token}`);
+  headers.set("Authorization", `Bearer ${result.data.session.access_token}`);
 
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    console.warn('Got 401 Unauthorized, session may be expired');
-    throw new Error('Unauthorized - token may be expired');
+    console.warn("Got 401 Unauthorized, session may be expired");
+    throw new Error("Unauthorized - token may be expired");
   }
 
   return response;
 }
-

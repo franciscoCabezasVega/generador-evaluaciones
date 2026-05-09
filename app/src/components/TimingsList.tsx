@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { TaskTiming } from '@/lib/types';
-import { Edit2, Trash2, AlertCircle, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { formatTime } from '@/lib/timingUtils';
+import { TaskTiming } from "@/lib/types";
+import { Edit2, Trash2, AlertCircle, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { formatTime } from "@/lib/timingUtils";
 
 interface TimingsListProps {
   timings: TaskTiming[];
@@ -32,7 +32,10 @@ export default function TimingsList({
     return (
       <div className="space-y-2">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="animate-pulse rounded-lg border border-gray-200 bg-gray-100 h-16" />
+          <div
+            key={i}
+            className="animate-pulse rounded-lg border border-gray-200 bg-gray-100 h-16"
+          />
         ))}
       </div>
     );
@@ -56,8 +59,8 @@ export default function TimingsList({
         const category = taskCategories[timing.task_id];
         const effortDate = taskEffortDates[timing.task_id];
         const qaEntries = timing.qa_entries || [];
-        const qaNames = qaEntries.map(e => e.qa_name);
-        
+        const qaNames = qaEntries.map((e) => e.qa_name);
+
         return (
           <div
             key={timing.id}
@@ -96,7 +99,7 @@ export default function TimingsList({
                     </span>
                   )}
                 </div>
-                
+
                 {/* QA Badges */}
                 {qaNames.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -142,15 +145,24 @@ export default function TimingsList({
                     {qaEntries.map((entry) => {
                       const total = Number(entry.total_hours) || 0;
                       return (
-                        <div key={entry.id} className="flex items-center gap-2 text-xs text-gray-500">
-                          <span className="font-medium w-28 truncate">{entry.qa_name}</span>
+                        <div
+                          key={entry.id}
+                          className="flex items-center gap-2 text-xs text-gray-500"
+                        >
+                          <span className="font-medium w-28 truncate">
+                            {entry.qa_name}
+                          </span>
                           <div className="flex-1 bg-gray-100 rounded-full h-1.5 border border-gray-300">
                             <div
                               className="h-1.5 rounded-full bg-blue-400"
-                              style={{ width: `${timing.total_hours > 0 ? (total / timing.total_hours) * 100 : 0}%` }}
+                              style={{
+                                width: `${timing.total_hours > 0 ? (total / timing.total_hours) * 100 : 0}%`,
+                              }}
                             />
                           </div>
-                          <span className="font-semibold">{formatTime(total)}</span>
+                          <span className="font-semibold">
+                            {formatTime(total)}
+                          </span>
                         </div>
                       );
                     })}

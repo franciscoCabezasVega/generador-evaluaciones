@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useCallback } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
-import Modal from './Modal';
-import { Button } from '@/components/ui/button';
+import React, { useCallback } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
 
 interface NetworkErrorModalProps {
   isOpen: boolean;
@@ -43,7 +43,7 @@ export default function NetworkErrorModal({
       try {
         await onRetry();
       } catch (error) {
-        console.error('Error during retry:', error);
+        console.error("Error during retry:", error);
       }
     }
   }, [onRetry]);
@@ -59,11 +59,11 @@ export default function NetworkErrorModal({
   if (!isOpen) return null;
 
   const shouldShowRetryButton = showRetryButton && attemptCount < maxRetries;
-  const title = isDanger ? 'Error de Conexión' : 'Problema de Conexión';
+  const title = isDanger ? "Error de Conexión" : "Problema de Conexión";
 
   return (
-    <Modal 
-      isOpen={isOpen} 
+    <Modal
+      isOpen={isOpen}
       title={title}
       onClose={onDismiss || (() => {})}
       size="md"
@@ -72,9 +72,11 @@ export default function NetworkErrorModal({
         {/* Icon and message */}
         <div className="flex items-start gap-3">
           <AlertTriangle
-            className={`w-6 h-6 flex-shrink-0 mt-0.5 ${isDanger ? 'text-red-600' : 'text-yellow-600'}`}
+            className={`w-6 h-6 flex-shrink-0 mt-0.5 ${isDanger ? "text-red-600" : "text-yellow-600"}`}
           />
-          <p className={`text-sm mb-2 ${isDanger ? 'text-red-700' : 'text-gray-700'}`}>
+          <p
+            className={`text-sm mb-2 ${isDanger ? "text-red-700" : "text-gray-700"}`}
+          >
             {message}
           </p>
         </div>
@@ -87,7 +89,7 @@ export default function NetworkErrorModal({
         )}
 
         {/* Error details (development) */}
-        {errorDetails && process.env.NODE_ENV === 'development' && (
+        {errorDetails && process.env.NODE_ENV === "development" && (
           <details className="mt-3">
             <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
               Detalles del error
@@ -101,7 +103,8 @@ export default function NetworkErrorModal({
         {/* Auto-close countdown */}
         {attemptCount >= maxRetries && (
           <p className="text-xs text-gray-500 text-center">
-            Se han agotado los reintentos. Por favor, recarga la página o intenta más tarde.
+            Se han agotado los reintentos. Por favor, recarga la página o
+            intenta más tarde.
           </p>
         )}
       </div>
@@ -115,17 +118,15 @@ export default function NetworkErrorModal({
             variant="default"
             className="flex-1 flex items-center justify-center gap-2"
           >
-            <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />
-            {retrying ? 'Reintentando...' : 'Reintentar'}
+            <RefreshCw
+              className={`w-4 h-4 ${retrying ? "animate-spin" : ""}`}
+            />
+            {retrying ? "Reintentando..." : "Reintentar"}
           </Button>
         )}
 
         {showRefreshButton && (
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            className="flex-1"
-          >
+          <Button onClick={handleRefresh} variant="outline" className="flex-1">
             Recargar Página
           </Button>
         )}

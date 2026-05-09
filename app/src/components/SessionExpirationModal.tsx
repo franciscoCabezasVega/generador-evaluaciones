@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { AlertCircle, Clock, X } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { AlertCircle, Clock, X } from "lucide-react";
 
 interface SessionExpirationModalProps {
   isOpen: boolean;
@@ -62,7 +62,7 @@ export function SessionExpirationModal({
     <>
       {/* Backdrop */}
       <div className="fixed inset-0 backdrop-blur-sm z-40" onClick={onExpire} />
-      
+
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
@@ -86,9 +86,9 @@ export function SessionExpirationModal({
                 <Clock className="w-5 h-5 text-yellow-600" />
               </div>
               <p className="text-gray-700 pt-1">
-                Tu sesión expirará por inactividad en{' '}
+                Tu sesión expirará por inactividad en{" "}
                 <span className="font-bold text-yellow-600">
-                  {displayTime} segundo{displayTime !== 1 ? 's' : ''}
+                  {displayTime} segundo{displayTime !== 1 ? "s" : ""}
                 </span>
                 .
               </p>
@@ -99,8 +99,8 @@ export function SessionExpirationModal({
               <div className="flex gap-3">
                 <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-blue-800">
-                  Haz clic en "Continuar" para mantener tu sesión activa y evitar
-                  perder tu trabajo.
+                  Haz clic en "Continuar" para mantener tu sesión activa y
+                  evitar perder tu trabajo.
                 </p>
               </div>
             </div>

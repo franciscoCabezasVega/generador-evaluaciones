@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ============================================================================
 // CacheStore — Singleton que centraliza caché + suscriptores
@@ -89,8 +89,8 @@ function getJitterDelay(): number {
 function buildFilterKey(filters: Record<string, unknown>): string {
   return Object.keys(filters)
     .sort()
-    .map((k) => `${k}=${String(filters[k] ?? '')}`)
-    .join('&');
+    .map((k) => `${k}=${String(filters[k] ?? "")}`)
+    .join("&");
 }
 
 // ============================================================================
@@ -127,10 +127,11 @@ export function useCachedFetch<T>({
   const fullKey = `${cacheKey}:${buildFilterKey(filters)}`;
 
   const cached = cacheStore.get<T>(fullKey);
-  const hasFreshCache = cached != null && cacheStore.isFresh(fullKey, staleTime);
+  const hasFreshCache =
+    cached != null && cacheStore.isFresh(fullKey, staleTime);
 
   const [data, setDataState] = useState<T>(
-    hasFreshCache ? cached!.data : (initialData as T)
+    hasFreshCache ? cached!.data : (initialData as T),
   );
   const [loading, setLoading] = useState(!hasFreshCache);
   const [error, setError] = useState<string | null>(null);
@@ -146,54 +147,65 @@ export function useCachedFetch<T>({
 
   useEffect(() => {
     isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
-  const doFetch = useCallback(async (isBackground: boolean, signal: AbortSignal) => {
-    fetchIdRef.current += 1;
-    const myId = fetchIdRef.current;
+  const doFetch = useCallback(
+    async (isBackground: boolean, signal: AbortSignal) => {
+      fetchIdRef.current += 1;
+      const myId = fetchIdRef.current;
 
-    isBackground ? setIsRefreshing(true) : setLoading(true);
-    setError(null);
+      if (isBackground) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
 
-    try {
-      const result = await fetchFnRef.current(signal);
+      try {
+        const result = await fetchFnRef.current(signal);
 
-      if (!isMountedRef.current || signal.aborted) return;
-      if (fetchIdRef.current !== myId) return;
+        if (!isMountedRef.current || signal.aborted) return;
+        if (fetchIdRef.current !== myId) return;
 
-      setDataState(result);
-      cacheStore.set(fullKeyRef.current, result);
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (err instanceof Error && err.message?.includes('aborted')) return;
-      if (!isMountedRef.current || fetchIdRef.current !== myId) return;
+        setDataState(result);
+        cacheStore.set(fullKeyRef.current, result);
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (err instanceof Error && err.message?.includes("aborted")) return;
+        if (!isMountedRef.current || fetchIdRef.current !== myId) return;
 
-      const isLockError =
-        (err instanceof Error && err.name === 'SessionLockError') ||
-        (err instanceof Error && err.message.includes('sesión está ocupada'));
+        const isLockError =
+          (err instanceof Error && err.name === "SessionLockError") ||
+          (err instanceof Error && err.message.includes("sesión está ocupada"));
 
-      if (isLockError && !isBackground) {
-        console.warn(`[useCachedFetch:${cacheKey}] SessionLock, reintentando en 3s...`);
-        await new Promise((r) => setTimeout(r, 3000));
-        if (isMountedRef.current && !signal.aborted) {
-          abortRef.current?.abort();
-          const retry = new AbortController();
-          abortRef.current = retry;
-          void doFetch(false, retry.signal);
+        if (isLockError && !isBackground) {
+          console.warn(
+            `[useCachedFetch:${cacheKey}] SessionLock, reintentando en 3s...`,
+          );
+          await new Promise((r) => setTimeout(r, 3000));
+          if (isMountedRef.current && !signal.aborted) {
+            abortRef.current?.abort();
+            const retry = new AbortController();
+            abortRef.current = retry;
+            void doFetch(false, retry.signal);
+          }
+          return;
         }
-        return;
-      }
 
-      console.error(`[useCachedFetch:${cacheKey}]`, err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      if (isMountedRef.current && fetchIdRef.current === myId) {
-        setLoading(false);
-        setIsRefreshing(false);
+        console.error(`[useCachedFetch:${cacheKey}]`, err);
+        setError(err instanceof Error ? err.message : "Error desconocido");
+      } finally {
+        if (isMountedRef.current && fetchIdRef.current === myId) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
       }
-    }
-  }, [cacheKey]);
+    },
+    [cacheKey],
+  );
 
   // Fetch al montar o cambiar filtros/enabled
   useEffect(() => {
@@ -249,7 +261,10 @@ export function useCachedFetch<T>({
 
   const setData = useCallback((updater: T | ((prev: T) => T)) => {
     setDataState((prev) => {
-      const next = typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater;
+      const next =
+        typeof updater === "function"
+          ? (updater as (p: T) => T)(prev)
+          : updater;
       cacheStore.set(fullKeyRef.current, next);
       return next;
     });

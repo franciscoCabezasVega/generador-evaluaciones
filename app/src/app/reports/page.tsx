@@ -1,36 +1,41 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
-import { useCachedFetch } from '@/hooks/useCachedFetch';
-import Navbar from '@/components/Navbar';
-import CacheWarningBanner from '@/components/CacheWarningBanner';
-import { Button } from '@/components/ui/button';
-import { SkeletonReports } from '@/components/Skeleton';
-import { useAuth } from '@/contexts/AuthContext';
-import { useMutationQueue } from '@/contexts/MutationQueueContext';
-import { Eye, Trash2, Download, RefreshCw } from 'lucide-react';
-import { downloadReportPDF } from '@/lib/services/pdfService';
-import Modal from '@/components/Modal';
-import dynamic from 'next/dynamic';
-import { Report } from '@/lib/types';
-import { useCatalogData } from '@/hooks/useCatalogData';
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import Navbar from "@/components/Navbar";
+import CacheWarningBanner from "@/components/CacheWarningBanner";
+import { Button } from "@/components/ui/button";
+import { SkeletonReports } from "@/components/Skeleton";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutationQueue } from "@/contexts/MutationQueueContext";
+import { Eye, Trash2, Download, RefreshCw } from "lucide-react";
+import { downloadReportPDF } from "@/lib/services/pdfService";
+import Modal from "@/components/Modal";
+import dynamic from "next/dynamic";
+import { Report } from "@/lib/types";
+import { useCatalogData } from "@/hooks/useCatalogData";
 
-const ReportDetailModal = dynamic(() => import('@/components/ReportDetailModal'), {
-  loading: () => null,
-});
+const ReportDetailModal = dynamic(
+  () => import("@/components/ReportDetailModal"),
+  {
+    loading: () => null,
+  },
+);
 
 export default function ReportsPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(
+    null,
+  );
   const [isClient, setIsClient] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showListFilters, setShowListFilters] = useState(true);
-  
+
   // Calcular mes anterior para filtros por defecto — se computa una sola vez
   const prevMonth = useMemo(() => {
     const today = new Date();
@@ -41,17 +46,17 @@ export default function ReportsPage() {
     }
     return { month: currentMonth - 1, year: currentYear };
   }, []);
-  
+
   const [filters, setFilters] = useState({
     month: prevMonth.month,
     year: prevMonth.year,
-    productType: '',
-    squad: '',
+    productType: "",
+    squad: "",
   });
   const [listFilters, setListFilters] = useState({
     month: prevMonth.month,
     year: prevMonth.year,
-    productType: '',
+    productType: "",
   });
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,17 +68,21 @@ export default function ReportsPage() {
   // Redirigir a login si no hay sesión
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/auth/login');
+      router.push("/auth/login");
     }
   }, [user, authLoading, router]);
 
   // Leer filtros desde URL params al cargar el cliente
   useEffect(() => {
     setIsClient(true);
-    const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : prevMonth.month;
-    const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : prevMonth.year;
-    const productType = searchParams.get('productType') || '';
-    const squad = searchParams.get('squad') || '';
+    const month = searchParams.get("month")
+      ? parseInt(searchParams.get("month")!)
+      : prevMonth.month;
+    const year = searchParams.get("year")
+      ? parseInt(searchParams.get("year")!)
+      : prevMonth.year;
+    const productType = searchParams.get("productType") || "";
+    const squad = searchParams.get("squad") || "";
 
     setFilters({
       month,
@@ -87,15 +96,19 @@ export default function ReportsPage() {
   const fetchReports = useCallback(
     async (signal: AbortSignal) => {
       const params = new URLSearchParams();
-      if (listFilters.month) params.append('month', listFilters.month.toString());
-      if (listFilters.year) params.append('year', listFilters.year.toString());
-      if (listFilters.productType) params.append('squad', listFilters.productType);
+      if (listFilters.month)
+        params.append("month", listFilters.month.toString());
+      if (listFilters.year) params.append("year", listFilters.year.toString());
+      if (listFilters.productType)
+        params.append("squad", listFilters.productType);
 
-      const response = await safeFetch(`/api/reports?${params.toString()}`, { signal });
+      const response = await safeFetch(`/api/reports?${params.toString()}`, {
+        signal,
+      });
 
       if (!response.ok) {
         if (response.status === 401) {
-          router.push('/auth/login');
+          router.push("/auth/login");
           return [];
         }
         throw new Error(`Error al cargar reportes: ${response.status}`);
@@ -120,7 +133,7 @@ export default function ReportsPage() {
     invalidate: invalidateReports,
     setData: setReports,
   } = useCachedFetch<Report[]>({
-    cacheKey: 'reports',
+    cacheKey: "reports",
     fetchFn: fetchReports,
     filters: listFilters,
     enabled: !authLoading,
@@ -129,7 +142,8 @@ export default function ReportsPage() {
 
   const hasError = !!fetchError;
 
-  const canGenerateReports = profile?.role === 'admin' || profile?.role === 'gestor';
+  const canGenerateReports =
+    profile?.role === "admin" || profile?.role === "gestor";
 
   // Función para actualizar filtros y URL
   const updateFilters = (newFilters: Partial<typeof filters>) => {
@@ -139,36 +153,45 @@ export default function ReportsPage() {
     // Actualizar URL params
     if (isClient) {
       const params = new URLSearchParams();
-      if (updatedFilters.month) params.set('month', updatedFilters.month.toString());
-      if (updatedFilters.year) params.set('year', updatedFilters.year.toString());
-      if (updatedFilters.productType) params.set('productType', updatedFilters.productType);
-      if (updatedFilters.squad) params.set('squad', updatedFilters.squad);
-      
+      if (updatedFilters.month)
+        params.set("month", updatedFilters.month.toString());
+      if (updatedFilters.year)
+        params.set("year", updatedFilters.year.toString());
+      if (updatedFilters.productType)
+        params.set("productType", updatedFilters.productType);
+      if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
+
       router.push(`/reports?${params.toString()}`, { scroll: false });
     }
   };
 
-  const generateAICommentsBatch = async (comments: { tasks: Record<string, unknown>[]; type: string; squadName: string }[]) => {
+  const generateAICommentsBatch = async (
+    comments: {
+      tasks: Record<string, unknown>[];
+      type: string;
+      squadName: string;
+    }[],
+  ) => {
     try {
-      console.warn('Enviando comentarios a IA:', comments);
-      
-      const response = await safeFetch('/api/generate-ai-comments-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      console.warn("Enviando comentarios a IA:", comments);
+
+      const response = await safeFetch("/api/generate-ai-comments-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ comments }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Error response from API:', errorData);
-        throw new Error(errorData.error || 'Error al generar comentarios');
+        console.error("Error response from API:", errorData);
+        throw new Error(errorData.error || "Error al generar comentarios");
       }
-      
+
       const result = await response.json();
-      console.warn('Comentarios generados exitosamente:', result);
+      console.warn("Comentarios generados exitosamente:", result);
       return result;
     } catch (error: unknown) {
-      console.error('Error en generateAICommentsBatch:', error);
+      console.error("Error en generateAICommentsBatch:", error);
       throw error;
     }
   };
@@ -179,70 +202,99 @@ export default function ReportsPage() {
       setGenerationProgress(0);
 
       const tasksResponse = await safeFetch(
-        `/api/tasks?month=${filters.month}&year=${filters.year}`
+        `/api/tasks?month=${filters.month}&year=${filters.year}`,
       );
-      if (!tasksResponse.ok) throw new Error('Error al obtener tareas');
+      if (!tasksResponse.ok) throw new Error("Error al obtener tareas");
       const allTasks = await tasksResponse.json();
-      
-      console.warn('All tasks fetched:', allTasks);
-      console.warn('Filtering for productType:', filters.productType, 'status:', 'Completada');
+
+      console.warn("All tasks fetched:", allTasks);
+      console.warn(
+        "Filtering for productType:",
+        filters.productType,
+        "status:",
+        "Completada",
+      );
 
       const productObj = products.find((p) => p.name === filters.productType);
       const squadsForProduct = productObj
-        ? allSquads.filter((s) => s.product_id === productObj.id).map((s) => s.name)
+        ? allSquads
+            .filter((s) => s.product_id === productObj.id)
+            .map((s) => s.name)
         : [];
       let currentStep = 1;
       const totalSteps = squadsForProduct.length * 2 + 2;
 
       const tasksBySquad: Record<string, Record<string, unknown>[]> = {};
-      const deprecatedPendingBySquad: Record<string, Record<string, unknown>[]> = {};
+      const deprecatedPendingBySquad: Record<
+        string,
+        Record<string, unknown>[]
+      > = {};
       const squadsScores: Record<string, number> = {};
 
       for (const squad of squadsForProduct) {
         // Filtrar tareas completadas que tengan este squad en task_squad
         const squadTasks = allTasks.filter((t: Record<string, unknown>) => {
-          if (t.status !== 'Completada') return false;
+          if (t.status !== "Completada") return false;
           // Buscar si este squad está en los squads de la tarea
-          return Array.isArray(t.squads) && t.squads.some((sq: Record<string, unknown>) => sq.squad === squad);
+          return (
+            Array.isArray(t.squads) &&
+            t.squads.some((sq: Record<string, unknown>) => sq.squad === squad)
+          );
         });
-        
+
         console.warn(`Tasks for ${squad}:`, squadTasks);
-        
+
         // Para cada tarea, obtener los datos específicos de este squad
-        tasksBySquad[squad] = squadTasks.map((task: Record<string, unknown>) => {
-          // Encontrar el squad data específico para este squad
-          const squadsArr = Array.isArray(task.squads) ? task.squads : [];
-          const squadData = squadsArr.find((sq: Record<string, unknown>) => sq.squad === squad) as Record<string, unknown> | undefined;
-          
-          if (!squadData) {
-            return null; // No debería pasar ya que filtramos arriba
-          }
+        tasksBySquad[squad] = squadTasks
+          .map((task: Record<string, unknown>) => {
+            // Encontrar el squad data específico para este squad
+            const squadsArr = Array.isArray(task.squads) ? task.squads : [];
+            const squadData = squadsArr.find(
+              (sq: Record<string, unknown>) => sq.squad === squad,
+            ) as Record<string, unknown> | undefined;
 
-          // Usar la nota calculada que está en task_squad
-          // Usar ?? en lugar de || para evitar que 0 sea reemplazado por 10 (0 es falsy en JS)
-          const score = (squadData?.calculated_score as number) ?? 10;
+            if (!squadData) {
+              return null; // No debería pasar ya que filtramos arriba
+            }
 
-          return {
-            ...task,
-            squad: squad,
-            low_returns: (squadData?.low_returns as number) || 0,
-            medium_returns: (squadData?.medium_returns as number) || 0,
-            high_returns: (squadData?.high_returns as number) || 0,
-            calculated_score: score,
-            additional_notes: (squadData?.additional_notes as string) || '', // Usar notas del squad específico
-          };
-        }).filter((t: Record<string, unknown> | null): t is Record<string, unknown> => t !== null);
+            // Usar la nota calculada que está en task_squad
+            // Usar ?? en lugar de || para evitar que 0 sea reemplazado por 10 (0 es falsy en JS)
+            const score = (squadData?.calculated_score as number) ?? 10;
+
+            return {
+              ...task,
+              squad: squad,
+              low_returns: (squadData?.low_returns as number) || 0,
+              medium_returns: (squadData?.medium_returns as number) || 0,
+              high_returns: (squadData?.high_returns as number) || 0,
+              calculated_score: score,
+              additional_notes: (squadData?.additional_notes as string) || "", // Usar notas del squad específico
+            };
+          })
+          .filter(
+            (t: Record<string, unknown> | null): t is Record<string, unknown> =>
+              t !== null,
+          );
 
         // Obtener tareas deprecadas/pendientes que tengan este squad
-        const deprecatedOrPending = allTasks.filter((t: Record<string, unknown>) => {
-          if (t.status === 'Completada') return false;
-          return Array.isArray(t.squads) && t.squads.some((sq: Record<string, unknown>) => sq.squad === squad);
-        });
+        const deprecatedOrPending = allTasks.filter(
+          (t: Record<string, unknown>) => {
+            if (t.status === "Completada") return false;
+            return (
+              Array.isArray(t.squads) &&
+              t.squads.some((sq: Record<string, unknown>) => sq.squad === squad)
+            );
+          },
+        );
         deprecatedPendingBySquad[squad] = deprecatedOrPending;
 
         // Calcular nota final del squad
         if (tasksBySquad[squad].length > 0) {
-          const totalScore = tasksBySquad[squad].reduce((sum: number, task: Record<string, unknown>) => sum + (task.calculated_score as number), 0);
+          const totalScore = tasksBySquad[squad].reduce(
+            (sum: number, task: Record<string, unknown>) =>
+              sum + (task.calculated_score as number),
+            0,
+          );
           squadsScores[squad] = totalScore / tasksBySquad[squad].length;
         } else {
           squadsScores[squad] = 0;
@@ -252,29 +304,40 @@ export default function ReportsPage() {
         setGenerationProgress(Math.round((currentStep / totalSteps) * 100));
       }
 
-      console.warn('tasksBySquad to save:', tasksBySquad);
-      console.warn('deprecatedPendingBySquad to save:', deprecatedPendingBySquad);
+      console.warn("tasksBySquad to save:", tasksBySquad);
+      console.warn(
+        "deprecatedPendingBySquad to save:",
+        deprecatedPendingBySquad,
+      );
 
       const commentsToGenerate = [];
       for (const squad of squadsForProduct) {
         if (tasksBySquad[squad].length > 0) {
           commentsToGenerate.push(
-            { squadName: squad, tasks: tasksBySquad[squad], type: 'performance' as const },
-            { squadName: squad, tasks: tasksBySquad[squad], type: 'communication' as const }
+            {
+              squadName: squad,
+              tasks: tasksBySquad[squad],
+              type: "performance" as const,
+            },
+            {
+              squadName: squad,
+              tasks: tasksBySquad[squad],
+              type: "communication" as const,
+            },
           );
         }
       }
 
       setGenerationProgress(Math.round((currentStep / totalSteps) * 100));
-      
+
       // Los comentarios de IA son opcionales - solo generar si hay tareas completadas
       const performanceComments: Record<string, string> = {};
       const communicationComments: Record<string, string> = {};
-      
+
       if (commentsToGenerate.length > 0) {
         try {
           const allComments = await generateAICommentsBatch(commentsToGenerate);
-          
+
           for (const squad of squadsForProduct) {
             const perfKey = `${squad}-performance`;
             const commKey = `${squad}-communication`;
@@ -286,19 +349,24 @@ export default function ReportsPage() {
             }
           }
         } catch (aiError: unknown) {
-          console.warn('Advertencia: No se pudieron generar comentarios IA, continuando sin ellos:', aiError);
+          console.warn(
+            "Advertencia: No se pudieron generar comentarios IA, continuando sin ellos:",
+            aiError,
+          );
           // Continuar sin comentarios IA
         }
       } else {
-        console.warn('No hay tareas completadas, generando reporte sin comentarios IA');
+        console.warn(
+          "No hay tareas completadas, generando reporte sin comentarios IA",
+        );
       }
 
       currentStep++;
       setGenerationProgress(Math.round((currentStep / totalSteps) * 100));
 
-      const reportResponse = await safeFetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const reportResponse = await safeFetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           squad: filters.productType,
           month: filters.month,
@@ -315,16 +383,19 @@ export default function ReportsPage() {
         }),
       });
 
-      if (!reportResponse.ok) throw new Error('Error al crear reporte');
+      if (!reportResponse.ok) throw new Error("Error al crear reporte");
 
       invalidateReports();
       setGeneratingReport(false);
       setGenerationProgress(0);
     } catch (error: unknown) {
-      console.error('Error en generateReport:', error);
+      console.error("Error en generateReport:", error);
       setGeneratingReport(false);
       setGenerationProgress(0);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al generar reporte';
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Error desconocido al generar reporte";
       alert(`Error: ${errorMessage}`);
     }
   };
@@ -336,8 +407,8 @@ export default function ReportsPage() {
 
     enqueue({
       url: `/api/reports/${reportId}`,
-      method: 'DELETE',
-      cacheKeys: ['reports'],
+      method: "DELETE",
+      cacheKeys: ["reports"],
       onRollback: () => {
         // Restaurar la lista si el DELETE falla permanentemente
         invalidateReports();
@@ -348,17 +419,17 @@ export default function ReportsPage() {
   const handleDownloadPDF = async (report: Report) => {
     try {
       setDownloadingReportId(report.id);
-      
+
       downloadReportPDF(
         report.report_data,
         report.month,
         report.year,
-        '',
-        `Reporte-Evaluaciones-${report.month}-${report.year}-v${report.version}.pdf`
+        "",
+        `Reporte-Evaluaciones-${report.month}-${report.year}-v${report.version}.pdf`,
       );
     } catch (error) {
-      console.error('Error descargando PDF:', error);
-      alert('Error al descargar el reporte');
+      console.error("Error descargando PDF:", error);
+      alert("Error al descargar el reporte");
     } finally {
       setDownloadingReportId(null);
     }
@@ -380,15 +451,27 @@ export default function ReportsPage() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <CacheWarningBanner />
         <div className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Reportes</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Reportes
+          </h1>
         </div>
 
         {canGenerateReports && (
-          <div className="bg-gray-100 border border-gray-200 rounded-xl p-6 mb-8" data-tour="report-filters">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600 mb-4">Generar Reporte</h2>
+          <div
+            className="bg-gray-100 border border-gray-200 rounded-xl p-6 mb-8"
+            data-tour="report-filters"
+          >
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600 mb-4">
+              Generar Reporte
+            </h2>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
-                <label htmlFor="reports-year" className="block text-sm font-medium mb-1">Año</label>
+                <label
+                  htmlFor="reports-year"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Año
+                </label>
                 <select
                   id="reports-year"
                   value={filters.year}
@@ -398,13 +481,20 @@ export default function ReportsPage() {
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   {Array.from({ length: 5 }, (_, i) => 2026 + i).map((y) => (
-                    <option key={y} value={y}>{y}</option>
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="reports-month" className="block text-sm font-medium mb-1">Mes</label>
+                <label
+                  htmlFor="reports-month"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Mes
+                </label>
                 <select
                   id="reports-month"
                   value={filters.month}
@@ -414,13 +504,20 @@ export default function ReportsPage() {
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>{m}</option>
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="reports-product" className="block text-sm font-medium mb-1">Producto</label>
+                <label
+                  htmlFor="reports-product"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Producto
+                </label>
                 <select
                   id="reports-product"
                   value={filters.productType}
@@ -431,7 +528,9 @@ export default function ReportsPage() {
                 >
                   <option value="">Seleccionar producto</option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
+                    <option key={p.id} value={p.name}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -443,20 +542,24 @@ export default function ReportsPage() {
                   className="w-full"
                   data-tour="report-generate-btn"
                 >
-                  {generatingReport ? `Generando... ${generationProgress}%` : 'Generar Reporte'}
+                  {generatingReport
+                    ? `Generando... ${generationProgress}%`
+                    : "Generar Reporte"}
                 </Button>
               </div>
             </div>
-            
+
             {generatingReport && (
               <div className="mt-4">
                 <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div 
+                  <div
                     className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                     style={{ width: `${generationProgress}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-600 mt-2 num">Generando reporte... {generationProgress}%</p>
+                <p className="text-xs text-gray-600 mt-2 num">
+                  Generando reporte... {generationProgress}%
+                </p>
               </div>
             )}
           </div>
@@ -465,60 +568,92 @@ export default function ReportsPage() {
         {/* Filtros de reportes generados */}
         <div className="bg-gray-100 border border-gray-200 rounded-xl p-5 mb-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">Reportes Generados</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">
+              Reportes Generados
+            </h2>
             <button
               onClick={() => setShowListFilters(!showListFilters)}
               className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-medium transition-colors"
             >
-              {showListFilters ? '▲ Ocultar Filtros' : '▼ Mostrar Filtros'}
+              {showListFilters ? "▲ Ocultar Filtros" : "▼ Mostrar Filtros"}
             </button>
           </div>
           {showListFilters && (
             <div className="grid grid-cols-3 gap-4 mt-4">
               <div>
-                <label htmlFor="list-filter-year" className="block text-sm font-medium mb-1">Año</label>
+                <label
+                  htmlFor="list-filter-year"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Año
+                </label>
                 <select
                   id="list-filter-year"
                   value={listFilters.year}
                   onChange={(e) =>
-                    setListFilters((prev) => ({ ...prev, year: parseInt(e.target.value) }))
+                    setListFilters((prev) => ({
+                      ...prev,
+                      year: parseInt(e.target.value),
+                    }))
                   }
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   {Array.from({ length: 5 }, (_, i) => 2026 + i).map((y) => (
-                    <option key={y} value={y}>{y}</option>
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label htmlFor="list-filter-month" className="block text-sm font-medium mb-1">Mes</label>
+                <label
+                  htmlFor="list-filter-month"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Mes
+                </label>
                 <select
                   id="list-filter-month"
                   value={listFilters.month}
                   onChange={(e) =>
-                    setListFilters((prev) => ({ ...prev, month: parseInt(e.target.value) }))
+                    setListFilters((prev) => ({
+                      ...prev,
+                      month: parseInt(e.target.value),
+                    }))
                   }
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value={0}>Todos</option>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>{m}</option>
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label htmlFor="list-filter-product" className="block text-sm font-medium mb-1">Producto</label>
+                <label
+                  htmlFor="list-filter-product"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Producto
+                </label>
                 <select
                   id="list-filter-product"
                   value={listFilters.productType}
                   onChange={(e) =>
-                    setListFilters((prev) => ({ ...prev, productType: e.target.value }))
+                    setListFilters((prev) => ({
+                      ...prev,
+                      productType: e.target.value,
+                    }))
                   }
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value="">Todos</option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
+                    <option key={p.id} value={p.name}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -534,7 +669,10 @@ export default function ReportsPage() {
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             title="Actualizar reportes"
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              size={18}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
             Actualizar
           </button>
         </div>
@@ -553,8 +691,8 @@ export default function ReportsPage() {
           <div className="text-center py-8 text-gray-600">
             <p>
               {hasError
-                ? 'Ocurrió un error al consultar los registros. Por favor, intenta nuevamente.'
-                : 'No hay reportes para los filtros seleccionados'}
+                ? "Ocurrió un error al consultar los registros. Por favor, intenta nuevamente."
+                : "No hay reportes para los filtros seleccionados"}
             </p>
             <button
               onClick={() => window.location.reload()}
@@ -564,18 +702,27 @@ export default function ReportsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 fade-in-smooth" data-tour="report-list">
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 fade-in-smooth"
+            data-tour="report-list"
+          >
             {reports.map((report) => (
-              <div key={report.id} className="bg-gray-100 border border-gray-200 rounded-xl p-5 flex flex-col justify-between card-glow transition-all">
+              <div
+                key={report.id}
+                className="bg-gray-100 border border-gray-200 rounded-xl p-5 flex flex-col justify-between card-glow transition-all"
+              >
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 mb-1.5">
                     Producto: {report.squad}
                   </h3>
-                  <p className="text-gray-600 text-xs mb-1 num" data-tour="report-versioning">
+                  <p
+                    className="text-gray-600 text-xs mb-1 num"
+                    data-tour="report-versioning"
+                  >
                     {report.month}/{report.year} — v{report.version}
                   </p>
                   <p className="text-xs text-gray-600">
-                    {new Date(report.created_at).toLocaleDateString('es-ES')}
+                    {new Date(report.created_at).toLocaleDateString("es-ES")}
                   </p>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -630,7 +777,8 @@ export default function ReportsPage() {
                   >
                     <div className="space-y-6">
                       <p className="text-gray-600">
-                        ¿Estás seguro de que deseas eliminar este reporte? Esta acción no se puede deshacer.
+                        ¿Estás seguro de que deseas eliminar este reporte? Esta
+                        acción no se puede deshacer.
                       </p>
                       <div className="flex gap-3">
                         <Button
@@ -659,7 +807,7 @@ export default function ReportsPage() {
 
       <ReportDetailModal
         isOpen={isDetailModalOpen}
-        reportId={selectedReportId || ''}
+        reportId={selectedReportId || ""}
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedReportId(null);

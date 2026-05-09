@@ -1,24 +1,24 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { authService } from '@/lib/services/authService';
+import { useEffect, useRef, useCallback } from "react";
+import { authService } from "@/lib/services/authService";
 
 /**
  * Hook que detecta inactividad y cierra la sesión automáticamente
- * 
+ *
  * Rastreo de actividad:
  * - Clicks en la página
  * - Key presses
  * - Mouse movement
- * 
+ *
  * @param timeout - Tiempo en milisegundos antes de cerrar sesión por inactividad (default: 30 minutos)
  * @param checkInterval - Intervalo para validar token en milisegundos (default: 5 minutos)
  */
 export function useSessionTimeout(
   timeout: number = 30 * 60 * 1000, // 30 minutos
-  checkInterval: number = 5 * 60 * 1000 // 5 minutos
+  checkInterval: number = 5 * 60 * 1000, // 5 minutos
 ) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   /**
    * Reinicia el timeout de inactividad
    */
@@ -30,8 +30,8 @@ export function useSessionTimeout(
 
     // Establecer nuevo timeout
     timeoutRef.current = setTimeout(async () => {
-      console.warn('Session timeout due to inactivity');
-      await authService.clearSession('timeout');
+      console.warn("Session timeout due to inactivity");
+      await authService.clearSession("timeout");
     }, timeout);
   }, [timeout]);
 
@@ -41,10 +41,10 @@ export function useSessionTimeout(
   const validateTokenPeriodically = useCallback(() => {
     checkIntervalRef.current = setInterval(async () => {
       const isValid = await authService.isTokenValid();
-      
+
       if (!isValid) {
-        console.warn('Token validation failed, clearing session');
-        await authService.clearSession('error');
+        console.warn("Token validation failed, clearing session");
+        await authService.clearSession("error");
       }
     }, checkInterval);
   }, [checkInterval]);
@@ -64,20 +64,20 @@ export function useSessionTimeout(
     resetTimeout();
 
     // Rastrear actividad del usuario
-    window.addEventListener('click', handleActivity);
-    window.addEventListener('keypress', handleActivity);
-    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener("click", handleActivity);
+    window.addEventListener("keypress", handleActivity);
+    window.addEventListener("mousemove", handleActivity);
 
     // Cleanup
     return () => {
-      window.removeEventListener('click', handleActivity);
-      window.removeEventListener('keypress', handleActivity);
-      window.removeEventListener('mousemove', handleActivity);
-      
+      window.removeEventListener("click", handleActivity);
+      window.removeEventListener("keypress", handleActivity);
+      window.removeEventListener("mousemove", handleActivity);
+
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-      
+
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
       }

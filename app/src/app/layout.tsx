@@ -7,6 +7,8 @@ import { AuthErrorBoundary } from "@/components/AuthErrorBoundary";
 import { SessionChecker } from "@/components/SessionChecker";
 import { SessionManager } from "@/components/SessionManager";
 import ClientProviders from "@/components/ClientProviders";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -50,6 +52,8 @@ export default function RootLayout({
             </ClientProviders>
           </AuthProvider>
         </AuthErrorBoundary>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

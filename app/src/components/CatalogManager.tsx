@@ -1,11 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Check, X, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import Modal from '@/components/Modal';
-import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
-import { invalidateCatalogCache } from '@/hooks/useCatalogData';
+import { useState, useCallback } from "react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  ToggleLeft,
+  ToggleRight,
+  AlertCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Modal from "@/components/Modal";
+import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import { invalidateCatalogCache } from "@/hooks/useCatalogData";
 
 // ─── Tipos genéricos ──────────────────────────────────────────────────────────
 
@@ -19,7 +28,7 @@ export interface CatalogItem {
 export interface FieldDef {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'select';
+  type: "text" | "number" | "select";
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
@@ -34,7 +43,10 @@ interface CatalogManagerProps {
   fields: FieldDef[];
   onRefresh: () => void;
   /** Columnas adicionales a mostrar en la tabla (aparte de nombre y estado) */
-  extraColumns?: { header: string; render: (item: CatalogItem) => React.ReactNode }[];
+  extraColumns?: {
+    header: string;
+    render: (item: CatalogItem) => React.ReactNode;
+  }[];
   /** Nombre amigable del plural (para mensajes) */
   itemLabel?: string;
 }
@@ -44,7 +56,7 @@ type FormValues = Record<string, string | number | boolean>;
 function buildEmptyForm(fields: FieldDef[]): FormValues {
   const v: FormValues = {};
   for (const f of fields) {
-    v[f.key] = f.type === 'number' ? 0 : '';
+    v[f.key] = f.type === "number" ? 0 : "";
   }
   return v;
 }
@@ -52,7 +64,9 @@ function buildEmptyForm(fields: FieldDef[]): FormValues {
 function buildFormFromItem(item: CatalogItem, fields: FieldDef[]): FormValues {
   const v: FormValues = {};
   for (const f of fields) {
-    v[f.key] = (item[f.key] as string | number | boolean) ?? (f.type === 'number' ? 0 : '');
+    v[f.key] =
+      (item[f.key] as string | number | boolean) ??
+      (f.type === "number" ? 0 : "");
   }
   return v;
 }
@@ -66,7 +80,7 @@ export default function CatalogManager({
   fields,
   onRefresh,
   extraColumns = [],
-  itemLabel = 'elemento',
+  itemLabel = "elemento",
 }: CatalogManagerProps) {
   const { safeFetch } = useSafeAuthFetch();
 
@@ -96,7 +110,7 @@ export default function CatalogManager({
       setFormError(null);
       setShowModal(true);
     },
-    [fields]
+    [fields],
   );
 
   const closeModal = useCallback(() => {
@@ -105,9 +119,12 @@ export default function CatalogManager({
     setFormError(null);
   }, []);
 
-  const handleFieldChange = useCallback((key: string, value: string | number) => {
-    setFormValues((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const handleFieldChange = useCallback(
+    (key: string, value: string | number) => {
+      setFormValues((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   // ─── Save ────────────────────────────────────────────────────────────────────
 
@@ -116,7 +133,7 @@ export default function CatalogManager({
     for (const f of fields) {
       if (f.required !== false) {
         const val = formValues[f.key];
-        if (val === '' || val === null || val === undefined) {
+        if (val === "" || val === null || val === undefined) {
           setFormError(`El campo "${f.label}" es requerido`);
           return;
         }
@@ -128,18 +145,18 @@ export default function CatalogManager({
 
     try {
       const url = editingItem ? `${apiPath}/${editingItem.id}` : apiPath;
-      const method = editingItem ? 'PATCH' : 'POST';
+      const method = editingItem ? "PATCH" : "POST";
 
       const res = await safeFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formValues),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setFormError(data.error ?? 'Error al guardar');
+        setFormError(data.error ?? "Error al guardar");
         return;
       }
 
@@ -147,11 +164,19 @@ export default function CatalogManager({
       onRefresh();
       closeModal();
     } catch {
-      setFormError('Error de conexión. Intenta de nuevo.');
+      setFormError("Error de conexión. Intenta de nuevo.");
     } finally {
       setSaving(false);
     }
-  }, [editingItem, fields, formValues, apiPath, safeFetch, onRefresh, closeModal]);
+  }, [
+    editingItem,
+    fields,
+    formValues,
+    apiPath,
+    safeFetch,
+    onRefresh,
+    closeModal,
+  ]);
 
   // ─── Toggle activo/inactivo ──────────────────────────────────────────────────
 
@@ -160,8 +185,8 @@ export default function CatalogManager({
       setToggling(item.id);
       try {
         const res = await safeFetch(`${apiPath}/${item.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ is_active: !item.is_active }),
         });
         if (res.ok) {
@@ -174,7 +199,7 @@ export default function CatalogManager({
         setToggling(null);
       }
     },
-    [apiPath, safeFetch, onRefresh]
+    [apiPath, safeFetch, onRefresh],
   );
 
   // ─── Delete ──────────────────────────────────────────────────────────────────
@@ -184,22 +209,22 @@ export default function CatalogManager({
       setDeleting(true);
       setDeleteError(null);
       try {
-        const res = await safeFetch(`${apiPath}/${id}`, { method: 'DELETE' });
+        const res = await safeFetch(`${apiPath}/${id}`, { method: "DELETE" });
         const data = await res.json();
         if (!res.ok) {
-          setDeleteError(data.error ?? 'Error al eliminar');
+          setDeleteError(data.error ?? "Error al eliminar");
           return;
         }
         invalidateCatalogCache();
         onRefresh();
         setDeleteConfirm(null);
       } catch {
-        setDeleteError('Error de conexión. Intenta de nuevo.');
+        setDeleteError("Error de conexión. Intenta de nuevo.");
       } finally {
         setDeleting(false);
       }
     },
-    [apiPath, safeFetch, onRefresh]
+    [apiPath, safeFetch, onRefresh],
   );
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -224,7 +249,9 @@ export default function CatalogManager({
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
               {extraColumns.map((col) => (
-                <th key={col.header} className="px-4 py-3 text-left">{col.header}</th>
+                <th key={col.header} className="px-4 py-3 text-left">
+                  {col.header}
+                </th>
               ))}
               <th className="px-4 py-3 text-center">Activo</th>
               <th className="px-4 py-3 text-right">Acciones</th>
@@ -242,8 +269,13 @@ export default function CatalogManager({
               </tr>
             ) : (
               items.map((item) => (
-                <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
+                <tr
+                  key={item.id}
+                  className={`hover:bg-gray-50 transition-colors ${!item.is_active ? "opacity-50" : ""}`}
+                >
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {item.name}
+                  </td>
                   {extraColumns.map((col) => (
                     <td key={col.header} className="px-4 py-3 text-gray-600">
                       {col.render(item)}
@@ -253,13 +285,14 @@ export default function CatalogManager({
                     <button
                       onClick={() => handleToggleActive(item)}
                       disabled={toggling === item.id}
-                      title={item.is_active ? 'Desactivar' : 'Activar'}
+                      title={item.is_active ? "Desactivar" : "Activar"}
                       className="inline-flex items-center justify-center text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-40"
                     >
-                      {item.is_active
-                        ? <ToggleRight size={22} className="text-blue-500" />
-                        : <ToggleLeft size={22} />
-                      }
+                      {item.is_active ? (
+                        <ToggleRight size={22} className="text-blue-500" />
+                      ) : (
+                        <ToggleLeft size={22} />
+                      )}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -272,7 +305,10 @@ export default function CatalogManager({
                         <Pencil size={15} />
                       </button>
                       <button
-                        onClick={() => { setDeleteConfirm(item.id); setDeleteError(null); }}
+                        onClick={() => {
+                          setDeleteConfirm(item.id);
+                          setDeleteError(null);
+                        }}
                         className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
                         title="Eliminar"
                       >
@@ -299,34 +335,42 @@ export default function CatalogManager({
             <div key={field.key}>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {field.label}
-                {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
+                {field.required !== false && (
+                  <span className="text-red-500 ml-0.5">*</span>
+                )}
               </label>
               {field.description && (
-                <p className="text-xs text-gray-500 mb-1">{field.description}</p>
+                <p className="text-xs text-gray-500 mb-1">
+                  {field.description}
+                </p>
               )}
-              {field.type === 'select' ? (
+              {field.type === "select" ? (
                 <select
-                  value={String(formValues[field.key] ?? '')}
+                  value={String(formValues[field.key] ?? "")}
                   onChange={(e) => handleFieldChange(field.key, e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="">Seleccionar...</option>
                   {field.options?.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
                   ))}
                 </select>
               ) : (
                 <input
                   type={field.type}
-                  value={String(formValues[field.key] ?? '')}
+                  value={String(formValues[field.key] ?? "")}
                   onChange={(e) =>
                     handleFieldChange(
                       field.key,
-                      field.type === 'number' ? Number(e.target.value) : e.target.value
+                      field.type === "number"
+                        ? Number(e.target.value)
+                        : e.target.value,
                     )
                   }
                   min={field.min}
-                  placeholder={field.placeholder ?? ''}
+                  placeholder={field.placeholder ?? ""}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 />
               )}
@@ -335,7 +379,10 @@ export default function CatalogManager({
 
           {formError && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-              <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+              <AlertCircle
+                size={16}
+                className="text-red-500 mt-0.5 flex-shrink-0"
+              />
               <p className="text-sm text-red-700">{formError}</p>
             </div>
           )}
@@ -345,10 +392,12 @@ export default function CatalogManager({
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Guardando...' : (
+              {saving ? (
+                "Guardando..."
+              ) : (
                 <>
                   <Check size={15} className="mr-1" />
-                  {editingItem ? 'Guardar cambios' : 'Crear'}
+                  {editingItem ? "Guardar cambios" : "Crear"}
                 </>
               )}
             </Button>
@@ -360,18 +409,25 @@ export default function CatalogManager({
       <Modal
         isOpen={deleteConfirm !== null}
         title="Confirmar eliminación"
-        onClose={() => { setDeleteConfirm(null); setDeleteError(null); }}
+        onClose={() => {
+          setDeleteConfirm(null);
+          setDeleteError(null);
+        }}
         size="sm"
       >
         <div className="space-y-4 p-1">
           <p className="text-sm text-gray-700">
-            ¿Eliminar <strong>{itemToDelete?.name}</strong>? Esta acción no se puede deshacer.
-            Si está en uso en tareas existentes, la eliminación será bloqueada.
+            ¿Eliminar <strong>{itemToDelete?.name}</strong>? Esta acción no se
+            puede deshacer. Si está en uso en tareas existentes, la eliminación
+            será bloqueada.
           </p>
 
           {deleteError && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-              <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+              <AlertCircle
+                size={16}
+                className="text-red-500 mt-0.5 flex-shrink-0"
+              />
               <p className="text-sm text-red-700">{deleteError}</p>
             </div>
           )}
@@ -379,7 +435,10 @@ export default function CatalogManager({
           <div className="flex justify-end gap-3">
             <Button
               variant="outline"
-              onClick={() => { setDeleteConfirm(null); setDeleteError(null); }}
+              onClick={() => {
+                setDeleteConfirm(null);
+                setDeleteError(null);
+              }}
               disabled={deleting}
             >
               <X size={15} className="mr-1" />
@@ -390,7 +449,9 @@ export default function CatalogManager({
               onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
               disabled={deleting}
             >
-              {deleting ? 'Eliminando...' : (
+              {deleting ? (
+                "Eliminando..."
+              ) : (
                 <>
                   <Trash2 size={15} className="mr-1" />
                   Eliminar

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { FeedbackType, EvidenceItem } from '@/lib/types';
-import { authenticatedFetch, warmSession } from '@/lib/fetchAuth';
+import { useState } from "react";
+import { FeedbackType, EvidenceItem } from "@/lib/types";
+import { authenticatedFetch, warmSession } from "@/lib/fetchAuth";
 
 interface UseFeedbackOptions {
   onSuccess?: () => void;
@@ -10,13 +10,17 @@ interface UseFeedbackOptions {
 interface UseFeedbackReturn {
   isLoading: boolean;
   error: string | null;
-  submitFeedback: (type: FeedbackType, description: string, evidence?: EvidenceItem[]) => Promise<void>;
+  submitFeedback: (
+    type: FeedbackType,
+    description: string,
+    evidence?: EvidenceItem[],
+  ) => Promise<void>;
   clearError: () => void;
 }
 
 const MIN_DESCRIPTION_LENGTH = 10;
 const MAX_EVIDENCE_ITEMS = 3;
-const JAM_DOMAIN = 'jam.dev';
+const JAM_DOMAIN = "jam.dev";
 
 export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
   const [isLoading, setIsLoading] = useState(false);
@@ -25,11 +29,11 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
   const validateInput = (
     type: FeedbackType,
     description: string,
-    evidence?: EvidenceItem[]
+    evidence?: EvidenceItem[],
   ): string | null => {
     // Validate type
-    if (!['suggestion', 'incident'].includes(type)) {
-      return 'Tipo de reporte inválido';
+    if (!["suggestion", "incident"].includes(type)) {
+      return "Tipo de reporte inválido";
     }
 
     // Validate description
@@ -45,8 +49,8 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
 
       // Validate each evidence item
       for (const item of evidence) {
-        if (item.type === 'link') {
-          const urlString = typeof item.value === 'string' ? item.value : '';
+        if (item.type === "link") {
+          const urlString = typeof item.value === "string" ? item.value : "";
           if (urlString) {
             try {
               const url = new URL(urlString);
@@ -54,7 +58,7 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
                 return `El enlace debe ser de ${JAM_DOMAIN}`;
               }
             } catch {
-              return 'El enlace no es una URL válida';
+              return "El enlace no es una URL válida";
             }
           }
         }
@@ -67,7 +71,7 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
   const submitFeedback = async (
     type: FeedbackType,
     description: string,
-    evidence?: EvidenceItem[]
+    evidence?: EvidenceItem[],
   ) => {
     setError(null);
     setIsLoading(true);
@@ -82,15 +86,19 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
       }
 
       // Build request body
-      const requestBody: { type: string; description: string; evidence_url?: string } = {
+      const requestBody: {
+        type: string;
+        description: string;
+        evidence_url?: string;
+      } = {
         type,
         description: description.trim(),
       };
 
       // Add evidence URL if provided
       if (evidence && evidence.length > 0) {
-        const linkEvidence = evidence.find(item => item.type === 'link');
-        if (linkEvidence && typeof linkEvidence.value === 'string') {
+        const linkEvidence = evidence.find((item) => item.type === "link");
+        if (linkEvidence && typeof linkEvidence.value === "string") {
           requestBody.evidence_url = linkEvidence.value;
         }
       }
@@ -99,23 +107,24 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
       await warmSession();
 
       // Submit to API (con autenticación)
-      const response = await authenticatedFetch('/api/feedback', {
-        method: 'POST',
+      const response = await authenticatedFetch("/api/feedback", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al enviar el reporte');
+        throw new Error(errorData.message || "Error al enviar el reporte");
       }
 
       // Success
       options?.onSuccess?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      const errorMessage =
+        err instanceof Error ? err.message : "Error desconocido";
       setError(errorMessage);
       options?.onError?.(errorMessage);
     } finally {

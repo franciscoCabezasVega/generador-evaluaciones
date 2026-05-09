@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { withRetry, RetryError, type RetryConfig } from '@/lib/withRetry';
-import { TimeoutError } from '@/lib/withTimeout';
+import { useState, useCallback, useRef, useEffect } from "react";
+import { withRetry, RetryError, type RetryConfig } from "@/lib/withRetry";
+import { TimeoutError } from "@/lib/withTimeout";
 
 export interface FetchWithRetryOptions extends RetryConfig {
   onError?: (error: Error) => void;
@@ -11,10 +11,7 @@ export interface FetchWithRetryOptions extends RetryConfig {
 }
 
 export interface UseFetchWithRetryReturn {
-  execute: (
-    url: string,
-    options?: RequestInit
-  ) => Promise<Response | null>;
+  execute: (url: string, options?: RequestInit) => Promise<Response | null>;
   isLoading: boolean;
   error: Error | null;
   attemptCount: number;
@@ -28,11 +25,11 @@ export interface UseFetchWithRetryReturn {
  * - Timeout configurable
  * - Detección de errores de red vs timeout
  * - Callbacks para UI feedback
- * 
+ *
  * @param options - Opciones de reintentos y callbacks
  */
 export function useFetchWithRetry(
-  options: FetchWithRetryOptions = {}
+  options: FetchWithRetryOptions = {},
 ): UseFetchWithRetryReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -55,7 +52,7 @@ export function useFetchWithRetry(
     return () => {
       isMountedRef.current = false;
       // Abortar todas las requests pendientes al desmontar
-      controllers.forEach(controller => controller.abort());
+      controllers.forEach((controller) => controller.abort());
       controllers.clear();
     };
   }, []);
@@ -63,7 +60,7 @@ export function useFetchWithRetry(
   const execute = useCallback(
     async (
       url: string,
-      fetchOptions: RequestInit = {}
+      fetchOptions: RequestInit = {},
     ): Promise<Response | null> => {
       if (!isMountedRef.current) return null;
 
@@ -92,7 +89,7 @@ export function useFetchWithRetry(
                 onRetryAttempt?.(attempt, err);
               }
             },
-          }
+          },
         );
 
         abortControllersRef.current.delete(abortController);
@@ -105,8 +102,8 @@ export function useFetchWithRetry(
         return response;
       } catch (err) {
         // Ignorar AbortError (componente se desmontó)
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          console.warn('Fetch aborted - component unmounted');
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.warn("Fetch aborted - component unmounted");
           abortControllersRef.current.delete(abortController);
           return null;
         }
@@ -123,7 +120,15 @@ export function useFetchWithRetry(
         throw error;
       }
     },
-    [maxRetries, timeoutMs, backoffMultiplier, initialBackoffMs, onError, onSuccess, onRetryAttempt]
+    [
+      maxRetries,
+      timeoutMs,
+      backoffMultiplier,
+      initialBackoffMs,
+      onError,
+      onSuccess,
+      onRetryAttempt,
+    ],
   );
 
   const clearError = useCallback(() => {
@@ -142,17 +147,17 @@ export function useFetchWithRetry(
 /**
  * Función auxiliar para determinar el tipo de error
  */
-export function getErrorType(error: Error): 'timeout' | 'network' | 'other' {
+export function getErrorType(error: Error): "timeout" | "network" | "other" {
   if (error instanceof TimeoutError) {
-    return 'timeout';
+    return "timeout";
   }
   if (error instanceof RetryError && error.lastError instanceof TimeoutError) {
-    return 'timeout';
+    return "timeout";
   }
-  if (error.message.includes('fetch') || error.message.includes('network')) {
-    return 'network';
+  if (error.message.includes("fetch") || error.message.includes("network")) {
+    return "network";
   }
-  return 'other';
+  return "other";
 }
 
 /**
@@ -162,11 +167,14 @@ export function getErrorMessage(error: Error): string {
   const errorType = getErrorType(error);
 
   switch (errorType) {
-    case 'timeout':
-      return 'La solicitud tardó demasiado tiempo. Por favor, intenta nuevamente o recarga la página.';
-    case 'network':
-      return 'Error de conexión. Por favor, verifica tu conexión a internet e intenta nuevamente.';
+    case "timeout":
+      return "La solicitud tardó demasiado tiempo. Por favor, intenta nuevamente o recarga la página.";
+    case "network":
+      return "Error de conexión. Por favor, verifica tu conexión a internet e intenta nuevamente.";
     default:
-      return error.message || 'Ocurrió un error inesperado. Por favor, intenta nuevamente.';
+      return (
+        error.message ||
+        "Ocurrió un error inesperado. Por favor, intenta nuevamente."
+      );
   }
 }

@@ -1,21 +1,21 @@
 /**
  * Ejecutar una promise con timeout
  * Si excede el timeout, rechaza con TimeoutError
- * 
+ *
  * @param promise - Promise a ejecutar
  * @param timeoutMs - Timeout en milisegundos
  * @returns Promise que se rechaza si excede el timeout
  */
 export class TimeoutError extends Error {
-  constructor(message = 'Request timeout') {
+  constructor(message = "Request timeout") {
     super(message);
-    this.name = 'TimeoutError';
+    this.name = "TimeoutError";
   }
 }
 
 export async function withTimeout<T>(
   promise: Promise<T>,
-  timeoutMs: number = 10000
+  timeoutMs: number = 10000,
 ): Promise<T> {
   let timeoutId: NodeJS.Timeout;
 
@@ -37,7 +37,7 @@ export async function withTimeout<T>(
 
 /**
  * Ejecutar un fetch con timeout
- * 
+ *
  * @param url - URL a hacer fetch
  * @param options - Opciones de fetch
  * @param timeoutMs - Timeout en milisegundos
@@ -46,7 +46,7 @@ export async function withTimeout<T>(
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeoutMs: number = 10000
+  timeoutMs: number = 10000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -60,7 +60,7 @@ export async function fetchWithTimeout(
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (error instanceof DOMException && error.name === "AbortError") {
       throw new TimeoutError(`Request timeout after ${timeoutMs}ms`);
     }
     throw error;

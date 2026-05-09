@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
-import { useCachedFetch } from '@/hooks/useCachedFetch';
-import { AuditLog, TaskSquad } from '@/lib/types';
-import { calculateTaskScore, formatScore } from '@/lib/scoreCalculator';
-import { detectSquadChanges } from '@/lib/squadChangeUtils';
-import Navbar from '@/components/Navbar';
-import CacheWarningBanner from '@/components/CacheWarningBanner';
-import { SkeletonAuditTable } from '@/components/Skeleton';
-import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { AuditLog, TaskSquad } from "@/lib/types";
+import { calculateTaskScore, formatScore } from "@/lib/scoreCalculator";
+import { detectSquadChanges } from "@/lib/squadChangeUtils";
+import Navbar from "@/components/Navbar";
+import CacheWarningBanner from "@/components/CacheWarningBanner";
+import { SkeletonAuditTable } from "@/components/Skeleton";
+import { RefreshCw } from "lucide-react";
 
 interface AuditLogsResponse {
   data: AuditLog[];
@@ -27,14 +27,14 @@ export default function AuditTrailPage() {
   const router = useRouter();
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = profile?.role === "admin";
 
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const [filters, setFilters] = useState({
-    entityType: '',
-    action: '',
-    userId: '',
+    entityType: "",
+    action: "",
+    userId: "",
     limit: 50,
     offset: 0,
   });
@@ -47,62 +47,74 @@ export default function AuditTrailPage() {
     isRefreshing,
     refresh: handleRefresh,
   } = useCachedFetch<AuditLogsResponse>({
-    cacheKey: 'audit-logs',
-    fetchFn: useCallback(async (signal: AbortSignal) => {
-      const params = new URLSearchParams();
-      
-      if (filters.entityType) params.append('entity_type', filters.entityType);
-      if (filters.action) params.append('action', filters.action);
-      if (filters.userId) params.append('user_id', filters.userId);
-      params.append('limit', String(filters.limit));
-      params.append('offset', String(filters.offset));
+    cacheKey: "audit-logs",
+    fetchFn: useCallback(
+      async (signal: AbortSignal) => {
+        const params = new URLSearchParams();
 
-      const response = await safeFetch(
-        `/api/audit-logs?${params.toString()}`,
-        { signal }
-      );
+        if (filters.entityType)
+          params.append("entity_type", filters.entityType);
+        if (filters.action) params.append("action", filters.action);
+        if (filters.userId) params.append("user_id", filters.userId);
+        params.append("limit", String(filters.limit));
+        params.append("offset", String(filters.offset));
 
-      if (!response.ok) {
-        throw new Error('Failed to load audit logs');
-      }
+        const response = await safeFetch(
+          `/api/audit-logs?${params.toString()}`,
+          { signal },
+        );
 
-      return await response.json();
-    }, [filters, safeFetch]),
+        if (!response.ok) {
+          throw new Error("Failed to load audit logs");
+        }
+
+        return await response.json();
+      },
+      [filters, safeFetch],
+    ),
     filters,
     enabled: !authLoading && !!user,
-    initialData: { data: [], pagination: { total: 0, limit: 50, offset: 0, pages: 0 } },
+    initialData: {
+      data: [],
+      pagination: { total: 0, limit: 50, offset: 0, pages: 0 },
+    },
   });
 
   const auditLogs = auditResponse?.data ?? [];
-  const pagination = auditResponse?.pagination ?? { total: 0, limit: 50, offset: 0, pages: 0 };
+  const pagination = auditResponse?.pagination ?? {
+    total: 0,
+    limit: 50,
+    offset: 0,
+    pages: 0,
+  };
   const hasError = !!fetchError;
 
   // Redirigir a login si no hay sesión
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/auth/login');
+      router.push("/auth/login");
     }
   }, [user, authLoading, router]);
 
   const formatDate = (isoString: string) => {
-    return new Date(isoString).toLocaleString('es-EC', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    return new Date(isoString).toLocaleString("es-EC", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
   };
 
   const translateAction = (action: string): string => {
     switch (action) {
-      case 'CREATE':
-        return 'Crear';
-      case 'UPDATE':
-        return 'Actualizar';
-      case 'DELETE':
-        return 'Eliminar';
+      case "CREATE":
+        return "Crear";
+      case "UPDATE":
+        return "Actualizar";
+      case "DELETE":
+        return "Eliminar";
       default:
         return action;
     }
@@ -110,10 +122,10 @@ export default function AuditTrailPage() {
 
   const translateEntityType = (entityType: string): string => {
     switch (entityType) {
-      case 'TASK':
-        return 'Tarea';
-      case 'REPORT':
-        return 'Reporte';
+      case "TASK":
+        return "Tarea";
+      case "REPORT":
+        return "Reporte";
       default:
         return entityType;
     }
@@ -121,63 +133,63 @@ export default function AuditTrailPage() {
 
   const getActionBadgeColor = (action: string) => {
     switch (action) {
-      case 'CREATE':
-        return 'badge-success';
-      case 'UPDATE':
-        return 'badge-warning';
-      case 'DELETE':
-        return 'badge-danger';
+      case "CREATE":
+        return "badge-success";
+      case "UPDATE":
+        return "badge-warning";
+      case "DELETE":
+        return "badge-danger";
       default:
-        return 'badge-neutral';
+        return "badge-neutral";
     }
   };
 
   const getEntityBadgeColor = (entityType: string) => {
     switch (entityType) {
-      case 'TASK':
-        return 'badge-violet';
-      case 'REPORT':
-        return 'badge-info';
+      case "TASK":
+        return "badge-violet";
+      case "REPORT":
+        return "badge-info";
       default:
-        return 'badge-neutral';
+        return "badge-neutral";
     }
   };
 
   const getFieldLabel = (fieldName: string): string => {
     const fieldMap: Record<string, string> = {
       // Campos básicos
-      name: 'Nombre',
-      task_link: 'Link',
-      task_url: 'Link',
-      url: 'Link',
-      product_type: 'Producto',
-      squad: 'Squad',
-      status: 'Estado',
-      month: 'Mes',
-      year: 'Año',
+      name: "Nombre",
+      task_link: "Link",
+      task_url: "Link",
+      url: "Link",
+      product_type: "Producto",
+      squad: "Squad",
+      status: "Estado",
+      month: "Mes",
+      year: "Año",
       // Devoluciones
-      low_returns: 'Devoluciones Bajas',
-      medium_returns: 'Devoluciones Medias',
-      high_returns: 'Devoluciones Graves',
+      low_returns: "Devoluciones Bajas",
+      medium_returns: "Devoluciones Medias",
+      high_returns: "Devoluciones Graves",
       // Notas
-      additional_notes: 'Notas Adicionales',
+      additional_notes: "Notas Adicionales",
       // Reportes
-      report_date: 'Fecha del Reporte',
-      squad_name: 'Nombre del Squad',
-      team_score: 'Nota del Equipo',
+      report_date: "Fecha del Reporte",
+      squad_name: "Nombre del Squad",
+      team_score: "Nota del Equipo",
       // QA y métricas
-      category: 'Categoría',
-      assigned_qa: 'QA Asignados',
-      tshirt_size: 'Complejidad',
-      effort_score_date: 'Fecha Esfuerzo',
+      category: "Categoría",
+      assigned_qa: "QA Asignados",
+      tshirt_size: "Complejidad",
+      effort_score_date: "Fecha Esfuerzo",
       // Puntuaciones
-      calculated_score: 'Nota Calculada',
-      score: 'Nota',
+      calculated_score: "Nota Calculada",
+      score: "Nota",
       // Otros
-      id: 'ID',
-      user_id: 'ID Usuario',
-      created_at: 'Creado',
-      updated_at: 'Actualizado',
+      id: "ID",
+      user_id: "ID Usuario",
+      created_at: "Creado",
+      updated_at: "Actualizado",
     };
     return fieldMap[fieldName] || fieldName;
   };
@@ -186,10 +198,10 @@ export default function AuditTrailPage() {
   const cleanJsonValue = (value: unknown, key?: string): string => {
     // Arrays (assigned_qa): mostrar como lista separada por comas
     if (Array.isArray(value)) {
-      return value.join(', ');
+      return value.join(", ");
     }
     // Fechas effort_score_date: formatear a DD-MM-YYYY
-    if (key === 'effort_score_date' && typeof value === 'string') {
+    if (key === "effort_score_date" && typeof value === "string") {
       const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (match) {
         const [, year, month, day] = match;
@@ -205,26 +217,28 @@ export default function AuditTrailPage() {
 
   // Orden personalizado para campos de Crear
   const CREATE_FIELD_ORDER = [
-    'id',
-    'name',
-    'year',
-    'month',
-    'squad',
-    'status',
-    'user_id',
-    'task_link',
-    'created_at',
-    'updated_at',
-    'product_type',
-    'additional_notes',
-    'low_returns',
-    'medium_returns',
-    'high_returns',
-    'calculated_score',
+    "id",
+    "name",
+    "year",
+    "month",
+    "squad",
+    "status",
+    "user_id",
+    "task_link",
+    "created_at",
+    "updated_at",
+    "product_type",
+    "additional_notes",
+    "low_returns",
+    "medium_returns",
+    "high_returns",
+    "calculated_score",
   ];
 
   // Función para ordenar valores según CREATE_FIELD_ORDER
-  const getOrderedEntries = (obj: Record<string, unknown>): [string, unknown][] => {
+  const getOrderedEntries = (
+    obj: Record<string, unknown>,
+  ): [string, unknown][] => {
     const entries = Object.entries(obj);
     return entries.sort(([keyA], [keyB]) => {
       const indexA = CREATE_FIELD_ORDER.indexOf(keyA);
@@ -245,13 +259,20 @@ export default function AuditTrailPage() {
     const changes = detectSquadChanges(oldSquads, newSquads);
 
     if (changes.length === 0) {
-      return <div className="text-gray-500 text-sm italic">Sin cambios en equipos</div>;
+      return (
+        <div className="text-gray-500 text-sm italic">
+          Sin cambios en equipos
+        </div>
+      );
     }
 
     return (
       <div className="space-y-3">
         {changes.map((change) => (
-          <div key={change.squad} className="border border-gray-200 rounded-lg overflow-hidden">
+          <div
+            key={change.squad}
+            className="border border-gray-200 rounded-lg overflow-hidden"
+          >
             {/* Squad Header */}
             <div className="px-4 py-2.5 font-semibold bg-gray-200 text-gray-900 text-sm">
               {change.squad}
@@ -262,7 +283,9 @@ export default function AuditTrailPage() {
               {/* Bajas */}
               {change.low.old !== change.low.new && (
                 <div className="px-4 py-3 grid grid-cols-3 gap-4 items-center">
-                  <span className="text-sm font-medium text-gray-700">Bajas:</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Bajas:
+                  </span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
                     <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
@@ -284,7 +307,9 @@ export default function AuditTrailPage() {
               {/* Medias */}
               {change.medium.old !== change.medium.new && (
                 <div className="px-4 py-3 grid grid-cols-3 gap-4 items-center">
-                  <span className="text-sm font-medium text-gray-700">Medias:</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Medias:
+                  </span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
                     <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
@@ -306,7 +331,9 @@ export default function AuditTrailPage() {
               {/* Graves */}
               {change.high.old !== change.high.new && (
                 <div className="px-4 py-3 grid grid-cols-3 gap-4 items-center">
-                  <span className="text-sm font-medium text-gray-700">Graves:</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Graves:
+                  </span>
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
                     <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center">
@@ -350,19 +377,31 @@ export default function AuditTrailPage() {
               {/* Notas Adicionales */}
               {change.additional_notes.old !== change.additional_notes.new && (
                 <div className="px-4 py-3 grid grid-cols-1 gap-4 items-start bg-blue-200/30">
-                  <span className="text-sm font-bold text-blue-700">Notas Adicionales:</span>
+                  <span className="text-sm font-bold text-blue-700">
+                    Notas Adicionales:
+                  </span>
                   <div className="flex gap-3 w-full">
                     <div className="flex-1">
                       <div className="text-xs text-gray-600 mb-1">Anterior</div>
                       <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
-                        {change.additional_notes.old || <span className="italic text-gray-600">Sin notas</span>}
+                        {change.additional_notes.old || (
+                          <span className="italic text-gray-600">
+                            Sin notas
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="text-gray-500 font-bold text-lg flex items-center">→</div>
+                    <div className="text-gray-500 font-bold text-lg flex items-center">
+                      →
+                    </div>
                     <div className="flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
                       <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded text-sm w-full min-h-[60px] max-h-[100px] overflow-y-auto">
-                        {change.additional_notes.new || <span className="italic text-gray-600">Sin notas</span>}
+                        {change.additional_notes.new || (
+                          <span className="italic text-gray-600">
+                            Sin notas
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -376,7 +415,10 @@ export default function AuditTrailPage() {
   };
 
   // Función para renderizar Squads sin comparación (CREATE/DELETE)
-  const renderSquadsSimple = (squads: unknown, colorClass: string = 'bg-green-50 border-green-200') => {
+  const renderSquadsSimple = (
+    squads: unknown,
+    colorClass: string = "bg-green-50 border-green-200",
+  ) => {
     const squadsList = Array.isArray(squads) ? squads : [];
 
     if (squadsList.length === 0) {
@@ -402,8 +444,13 @@ export default function AuditTrailPage() {
           if (graves > 0) changes.push(`Graves: ${graves}`);
 
           return (
-            <div key={idx} className={`border rounded-lg overflow-hidden ${colorClass} bg-opacity-30`}>
-              <div className={`border-b px-4 py-2.5 font-semibold text-gray-800 ${colorClass}`}>
+            <div
+              key={idx}
+              className={`border rounded-lg overflow-hidden ${colorClass} bg-opacity-30`}
+            >
+              <div
+                className={`border-b px-4 py-2.5 font-semibold text-gray-800 ${colorClass}`}
+              >
                 <span>{squad.squad}</span>
               </div>
               {changes.length > 0 ? (
@@ -419,14 +466,19 @@ export default function AuditTrailPage() {
                   {/* Fila de Nota */}
                   <div className="px-4 py-3 bg-blue-50 text-center">
                     <span className="text-sm font-bold text-blue-800">
-                      Nota: <span className="font-bold text-lg">{formatScore(score)}/10</span>
+                      Nota:{" "}
+                      <span className="font-bold text-lg">
+                        {formatScore(score)}/10
+                      </span>
                     </span>
                   </div>
 
                   {/* Notas Adicionales */}
                   {squad.additional_notes && (
                     <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
-                      <div className="text-xs font-semibold text-blue-900 mb-1">Notas Adicionales:</div>
+                      <div className="text-xs font-semibold text-blue-900 mb-1">
+                        Notas Adicionales:
+                      </div>
                       <div className="text-sm text-blue-800 max-h-20 overflow-y-auto">
                         {squad.additional_notes}
                       </div>
@@ -435,19 +487,26 @@ export default function AuditTrailPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  <div className="px-4 py-3 text-sm text-gray-500 italic">Sin devoluciones registradas</div>
+                  <div className="px-4 py-3 text-sm text-gray-500 italic">
+                    Sin devoluciones registradas
+                  </div>
 
                   {/* Fila de Nota */}
                   <div className="px-4 py-3 bg-blue-50 text-center">
                     <span className="text-sm font-bold text-blue-800">
-                      Nota: <span className="font-bold text-lg">{formatScore(score)}/10</span>
+                      Nota:{" "}
+                      <span className="font-bold text-lg">
+                        {formatScore(score)}/10
+                      </span>
                     </span>
                   </div>
 
                   {/* Notas Adicionales */}
                   {squad.additional_notes && (
                     <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
-                      <div className="text-xs font-semibold text-blue-900 mb-1">Notas Adicionales:</div>
+                      <div className="text-xs font-semibold text-blue-900 mb-1">
+                        Notas Adicionales:
+                      </div>
                       <div className="text-sm text-blue-800 max-h-20 overflow-y-auto">
                         {squad.additional_notes}
                       </div>
@@ -488,7 +547,6 @@ export default function AuditTrailPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <CacheWarningBanner />
         <div className="mb-8">
@@ -501,20 +559,32 @@ export default function AuditTrailPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-gray-100 border border-gray-200 rounded-xl mb-2 p-5" data-tour="audit-filters">
+        <div
+          className="bg-gray-100 border border-gray-200 rounded-xl mb-2 p-5"
+          data-tour="audit-filters"
+        >
           <div className="mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">Filtros</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-600">
+              Filtros
+            </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label htmlFor="audit-entity-type" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="audit-entity-type"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Tipo de Entidad
               </label>
               <select
                 id="audit-entity-type"
                 value={filters.entityType}
                 onChange={(e) =>
-                  setFilters({ ...filters, entityType: e.target.value, offset: 0 })
+                  setFilters({
+                    ...filters,
+                    entityType: e.target.value,
+                    offset: 0,
+                  })
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
@@ -525,7 +595,10 @@ export default function AuditTrailPage() {
             </div>
 
             <div>
-              <label htmlFor="audit-action" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="audit-action"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Acción
               </label>
               <select
@@ -544,7 +617,10 @@ export default function AuditTrailPage() {
             </div>
 
             <div>
-              <label htmlFor="audit-limit" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="audit-limit"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Límite
               </label>
               <select
@@ -568,7 +644,12 @@ export default function AuditTrailPage() {
             <div className="flex items-end">
               <button
                 onClick={() =>
-                  setFilters({ ...filters, entityType: '', action: '', offset: 0 })
+                  setFilters({
+                    ...filters,
+                    entityType: "",
+                    action: "",
+                    offset: 0,
+                  })
                 }
                 className="w-full px-3 py-2 border border-red-500/40 hover:border-red-500/70 hover:bg-red-950/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
                 aria-label="Limpiar todos los filtros"
@@ -587,13 +668,19 @@ export default function AuditTrailPage() {
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             title="Actualizar registros"
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              size={18}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
             Actualizar
           </button>
         </div>
 
         {/* Audit Logs Table */}
-        <div className="bg-gray-100 border border-gray-200 rounded-xl overflow-hidden" data-tour="audit-table">
+        <div
+          className="bg-gray-100 border border-gray-200 rounded-xl overflow-hidden"
+          data-tour="audit-table"
+        >
           {loading ? (
             // Mostrar skeleton mientras carga (primera vez o caché expirado)
             <SkeletonAuditTable isAdmin={isAdmin} />
@@ -620,7 +707,8 @@ export default function AuditTrailPage() {
                   Error al cargar los registros
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  {fetchError || 'Ocurrió un error al consultar los registros. Por favor, intenta nuevamente.'}
+                  {fetchError ||
+                    "Ocurrió un error al consultar los registros. Por favor, intenta nuevamente."}
                 </p>
                 <button
                   onClick={handleRefresh}
@@ -663,8 +751,8 @@ export default function AuditTrailPage() {
                 </thead>
                 <tbody className="bg-gray-100 divide-y divide-gray-200">
                   {auditLogs.map((log) => (
-                    <tr 
-                      key={log.id} 
+                    <tr
+                      key={log.id}
                       onClick={() => setSelectedLog(log)}
                       className="hover:bg-gray-200 transition cursor-pointer"
                       data-tour="audit-expand"
@@ -678,7 +766,7 @@ export default function AuditTrailPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionBadgeColor(
-                            log.action
+                            log.action,
                           )}`}
                         >
                           {translateAction(log.action)}
@@ -687,7 +775,7 @@ export default function AuditTrailPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEntityBadgeColor(
-                            log.entity_type
+                            log.entity_type,
                           )}`}
                         >
                           {translateEntityType(log.entity_type)}
@@ -733,10 +821,13 @@ export default function AuditTrailPage() {
 
         {/* Pagination */}
         {!loading && auditLogs.length > 0 && (
-          <div className="mt-6 flex items-center justify-between" data-tour="audit-pagination">
+          <div
+            className="mt-6 flex items-center justify-between"
+            data-tour="audit-pagination"
+          >
             <div className="text-sm text-gray-600">
-              Mostrando {filters.offset + 1} a{' '}
-              {Math.min(filters.offset + filters.limit, pagination.total)} de{' '}
+              Mostrando {filters.offset + 1} a{" "}
+              {Math.min(filters.offset + filters.limit, pagination.total)} de{" "}
               {pagination.total} registros
             </div>
             <div className="flex gap-2">
@@ -759,9 +850,7 @@ export default function AuditTrailPage() {
                     offset: filters.offset + filters.limit,
                   })
                 }
-                disabled={
-                  filters.offset + filters.limit >= pagination.total
-                }
+                disabled={filters.offset + filters.limit >= pagination.total}
                 className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Siguiente
@@ -782,16 +871,24 @@ export default function AuditTrailPage() {
           </ul>
         </div>
       </div>
-
       {/* Modal de Detalles */}
       {selectedLog && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 backdrop-blur-sm z-40" onClick={() => setSelectedLog(null)} />
-          
+          <div
+            className="fixed inset-0 backdrop-blur-sm z-40"
+            onClick={() => setSelectedLog(null)}
+          />
+
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div role="dialog" aria-modal="true" aria-label="Detalles de auditoría" data-testid="audit-detail-modal" className="bg-gray-100 border border-gray-200 rounded-2xl shadow-2xl shadow-black/50 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Detalles de auditoría"
+              data-testid="audit-detail-modal"
+              className="bg-gray-100 border border-gray-200 rounded-2xl shadow-2xl shadow-black/50 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            >
               {/* Header */}
               <div className="flex justify-between items-center sticky top-0 bg-gray-100 border-b border-gray-200 p-5">
                 <h3 className="text-base font-semibold text-gray-900">
@@ -848,19 +945,20 @@ export default function AuditTrailPage() {
                 </div>
 
                 {/* Vista minimalista para UPDATE */}
-                {selectedLog.action === 'UPDATE' &&
+                {selectedLog.action === "UPDATE" &&
                   selectedLog.changes &&
                   Object.keys(selectedLog.changes).length > 0 && (
                     <div className="space-y-6">
                       {/* Cambios en la Tarea - Solo aparece si hay cambios */}
                       {(() => {
-                        const filteredChanges = getOrderedEntries(selectedLog.changes)
-                          .filter(([key]) => {
-                            // Omitir squads ya que se mostrará abajo
-                            if (key === 'squads') return false;
-                            if (key === 'squad') return false;
-                            return true;
-                          });
+                        const filteredChanges = getOrderedEntries(
+                          selectedLog.changes,
+                        ).filter(([key]) => {
+                          // Omitir squads ya que se mostrará abajo
+                          if (key === "squads") return false;
+                          if (key === "squad") return false;
+                          return true;
+                        });
 
                         if (filteredChanges.length === 0) {
                           return null; // No mostrar la sección si no hay cambios
@@ -899,9 +997,19 @@ export default function AuditTrailPage() {
                                           {getFieldLabel(key)}
                                         </div>
                                         <div className="text-red-400 bg-red-950/30 border border-red-800/30 px-3 py-2 rounded font-mono text-xs">
-                                          {key === 'task_link' && typeof oldValue === 'string' ? (
-                                            <a href={oldValue} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{oldValue}</a>
-                                          ) : cleanJsonValue(oldValue, key)}
+                                          {key === "task_link" &&
+                                          typeof oldValue === "string" ? (
+                                            <a
+                                              href={oldValue}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:underline break-all"
+                                            >
+                                              {oldValue}
+                                            </a>
+                                          ) : (
+                                            cleanJsonValue(oldValue, key)
+                                          )}
                                         </div>
                                       </div>
                                       {/* Valor Nuevo */}
@@ -910,9 +1018,19 @@ export default function AuditTrailPage() {
                                           {getFieldLabel(key)}
                                         </div>
                                         <div className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-3 py-2 rounded font-mono text-xs">
-                                          {key === 'task_link' && typeof newValue === 'string' ? (
-                                            <a href={newValue} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{newValue}</a>
-                                          ) : cleanJsonValue(newValue, key)}
+                                          {key === "task_link" &&
+                                          typeof newValue === "string" ? (
+                                            <a
+                                              href={newValue}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:underline break-all"
+                                            >
+                                              {newValue}
+                                            </a>
+                                          ) : (
+                                            cleanJsonValue(newValue, key)
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -932,7 +1050,7 @@ export default function AuditTrailPage() {
                           </h4>
                           {renderSquadChanges(
                             selectedLog.changes.squads?.old,
-                            selectedLog.changes.squads?.new
+                            selectedLog.changes.squads?.new,
                           )}
                         </div>
                       )}
@@ -940,8 +1058,8 @@ export default function AuditTrailPage() {
                   )}
 
                 {/* Vista para CREATE */}
-                {selectedLog.action === 'CREATE' &&
-                  selectedLog.entity_type === 'TASK' &&
+                {selectedLog.action === "CREATE" &&
+                  selectedLog.entity_type === "TASK" &&
                   selectedLog.new_values &&
                   Object.keys(selectedLog.new_values).length > 0 && (
                     <div className="space-y-6">
@@ -954,29 +1072,50 @@ export default function AuditTrailPage() {
                           {getOrderedEntries(selectedLog.new_values)
                             .filter(([key, value]) => {
                               // Omitir campos innecesarios
-                              if (key === 'squads') return false;
-                              if (key === 'squad') return false;
-                              if (key === 'additional_notes') return false;
-                              if (key === 'id') return false;
-                              if (key === 'user_id') return false;
-                              if (key === 'created_at') return false;
-                              if (key === 'updated_at') return false;
+                              if (key === "squads") return false;
+                              if (key === "squad") return false;
+                              if (key === "additional_notes") return false;
+                              if (key === "id") return false;
+                              if (key === "user_id") return false;
+                              if (key === "created_at") return false;
+                              if (key === "updated_at") return false;
                               // Omitir devoluciones con valor 0
-                              if (['low_returns', 'medium_returns', 'high_returns'].includes(key) && value === 0)
+                              if (
+                                [
+                                  "low_returns",
+                                  "medium_returns",
+                                  "high_returns",
+                                ].includes(key) &&
+                                value === 0
+                              )
                                 return false;
                               // Omitir nota calculada nula
-                              if (key === 'calculated_score' && value === null) return false;
+                              if (key === "calculated_score" && value === null)
+                                return false;
                               return true;
                             })
                             .map(([key, value]) => (
-                              <div key={key} className="flex justify-between gap-4">
+                              <div
+                                key={key}
+                                className="flex justify-between gap-4"
+                              >
                                 <span className="text-gray-700 font-medium">
                                   {getFieldLabel(key)}:
                                 </span>
                                 <span className="text-gray-900 text-right font-mono">
-                                  {key === 'task_link' && typeof value === 'string' ? (
-                                    <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{value}</a>
-                                  ) : cleanJsonValue(value, key)}
+                                  {key === "task_link" &&
+                                  typeof value === "string" ? (
+                                    <a
+                                      href={value}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline break-all"
+                                    >
+                                      {value}
+                                    </a>
+                                  ) : (
+                                    cleanJsonValue(value, key)
+                                  )}
                                 </span>
                               </div>
                             ))}
@@ -989,15 +1128,18 @@ export default function AuditTrailPage() {
                           <h4 className="text-sm font-semibold text-gray-900 mb-3">
                             Equipos
                           </h4>
-                          {renderSquadsSimple(selectedLog.new_values.squads, 'bg-emerald-950/30 border-emerald-800/40')}
+                          {renderSquadsSimple(
+                            selectedLog.new_values.squads,
+                            "bg-emerald-950/30 border-emerald-800/40",
+                          )}
                         </div>
                       )}
                     </div>
                   )}
 
                 {/* Vista para DELETE */}
-                {selectedLog.action === 'DELETE' &&
-                  selectedLog.entity_type === 'TASK' &&
+                {selectedLog.action === "DELETE" &&
+                  selectedLog.entity_type === "TASK" &&
                   selectedLog.old_values &&
                   Object.keys(selectedLog.old_values).length > 0 && (
                     <div className="space-y-6">
@@ -1010,29 +1152,50 @@ export default function AuditTrailPage() {
                           {getOrderedEntries(selectedLog.old_values)
                             .filter(([key, value]) => {
                               // Omitir campos innecesarios
-                              if (key === 'squads') return false;
-                              if (key === 'squad') return false;
-                              if (key === 'additional_notes') return false;
-                              if (key === 'id') return false;
-                              if (key === 'user_id') return false;
-                              if (key === 'created_at') return false;
-                              if (key === 'updated_at') return false;
+                              if (key === "squads") return false;
+                              if (key === "squad") return false;
+                              if (key === "additional_notes") return false;
+                              if (key === "id") return false;
+                              if (key === "user_id") return false;
+                              if (key === "created_at") return false;
+                              if (key === "updated_at") return false;
                               // Omitir devoluciones con valor 0
-                              if (['low_returns', 'medium_returns', 'high_returns'].includes(key) && value === 0)
+                              if (
+                                [
+                                  "low_returns",
+                                  "medium_returns",
+                                  "high_returns",
+                                ].includes(key) &&
+                                value === 0
+                              )
                                 return false;
                               // Omitir nota calculada nula
-                              if (key === 'calculated_score' && value === null) return false;
+                              if (key === "calculated_score" && value === null)
+                                return false;
                               return true;
                             })
                             .map(([key, value]) => (
-                              <div key={key} className="flex justify-between gap-4">
+                              <div
+                                key={key}
+                                className="flex justify-between gap-4"
+                              >
                                 <span className="text-gray-700 font-medium">
                                   {getFieldLabel(key)}:
                                 </span>
                                 <span className="text-gray-900 text-right font-mono">
-                                  {key === 'task_link' && typeof value === 'string' ? (
-                                    <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{value}</a>
-                                  ) : cleanJsonValue(value, key)}
+                                  {key === "task_link" &&
+                                  typeof value === "string" ? (
+                                    <a
+                                      href={value}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline break-all"
+                                    >
+                                      {value}
+                                    </a>
+                                  ) : (
+                                    cleanJsonValue(value, key)
+                                  )}
                                 </span>
                               </div>
                             ))}
@@ -1045,12 +1208,14 @@ export default function AuditTrailPage() {
                           <h4 className="text-sm font-semibold text-gray-900 mb-3">
                             Equipos
                           </h4>
-                          {renderSquadsSimple(selectedLog.old_values.squads, 'bg-red-950/30 border-red-800/40')}
+                          {renderSquadsSimple(
+                            selectedLog.old_values.squads,
+                            "bg-red-950/30 border-red-800/40",
+                          )}
                         </div>
                       )}
                     </div>
                   )}
-
               </div>
 
               {/* Footer */}
@@ -1065,6 +1230,7 @@ export default function AuditTrailPage() {
             </div>
           </div>
         </>
-      )}    </div>
+      )}{" "}
+    </div>
   );
 }

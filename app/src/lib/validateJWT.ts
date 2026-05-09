@@ -1,5 +1,5 @@
-import { jwtVerify } from 'jose';
-import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from "jose";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Obtener el secret key de Supabase para validar JWT
@@ -7,10 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 function getJWTSecret(): Uint8Array {
   const secret = process.env.SUPABASE_JWT_SECRET;
-  
+
   if (!secret) {
-    console.warn('SUPABASE_JWT_SECRET not set in environment');
-    throw new Error('JWT secret not configured');
+    console.warn("SUPABASE_JWT_SECRET not set in environment");
+    throw new Error("JWT secret not configured");
   }
 
   // Convertir string a Uint8Array
@@ -33,10 +33,10 @@ export interface JWTPayload {
 
 /**
  * Validar el JWT del header Authorization
- * 
+ *
  * @param request - NextRequest object
  * @returns JWTPayload si es válido, null si no
- * 
+ *
  * Uso en API route:
  * ```
  * export async function GET(request: NextRequest) {
@@ -48,20 +48,22 @@ export interface JWTPayload {
  * }
  * ```
  */
-export async function validateJWT(request: NextRequest): Promise<JWTPayload | null> {
+export async function validateJWT(
+  request: NextRequest,
+): Promise<JWTPayload | null> {
   try {
     // Obtener token del header Authorization
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.warn('Missing or invalid Authorization header');
+    const authHeader = request.headers.get("Authorization");
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.warn("Missing or invalid Authorization header");
       return null;
     }
 
     const token = authHeader.substring(7); // Remover "Bearer "
 
     if (!token) {
-      console.warn('Empty token');
+      console.warn("Empty token");
       return null;
     }
 
@@ -73,21 +75,21 @@ export async function validateJWT(request: NextRequest): Promise<JWTPayload | nu
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);
       if (payload.exp < now) {
-        console.warn('JWT token expired');
+        console.warn("JWT token expired");
         return null;
       }
     }
 
     return payload as JWTPayload;
   } catch (error) {
-    console.error('JWT validation error:', error);
+    console.error("JWT validation error:", error);
     return null;
   }
 }
 
 /**
  * Middleware helper para proteger API routes
- * 
+ *
  * Uso:
  * ```
  * export async function GET(request: NextRequest) {
@@ -98,14 +100,14 @@ export async function validateJWT(request: NextRequest): Promise<JWTPayload | nu
  * ```
  */
 export async function requireAuth(
-  request: NextRequest
+  request: NextRequest,
 ): Promise<NextResponse | null> {
   const payload = await validateJWT(request);
-  
+
   if (!payload) {
     return NextResponse.json(
-      { error: 'Unauthorized: Invalid or expired token' },
-      { status: 401 }
+      { error: "Unauthorized: Invalid or expired token" },
+      { status: 401 },
     );
   }
 
@@ -115,7 +117,9 @@ export async function requireAuth(
 /**
  * Extraer user ID del JWT
  */
-export async function getUserIdFromToken(request: NextRequest): Promise<string | null> {
+export async function getUserIdFromToken(
+  request: NextRequest,
+): Promise<string | null> {
   const payload = await validateJWT(request);
   return payload?.sub || null;
 }
@@ -125,7 +129,7 @@ export async function getUserIdFromToken(request: NextRequest): Promise<string |
  */
 export async function validateUserToken(
   request: NextRequest,
-  expectedUserId: string
+  expectedUserId: string,
 ): Promise<boolean> {
   const payload = await validateJWT(request);
   return payload?.sub === expectedUserId;

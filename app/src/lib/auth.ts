@@ -1,7 +1,7 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { NextRequest } from 'next/server';
-import { getRoleNameById } from '@/lib/cache/rolesCache';
-import { User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { NextRequest } from "next/server";
+import { getRoleNameById } from "@/lib/cache/rolesCache";
+import { User } from "@supabase/supabase-js";
 
 // Singleton service-role client (reused across requests in the same process)
 let _serviceClient: SupabaseClient | null = null;
@@ -10,7 +10,7 @@ function getServiceClient(): SupabaseClient | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('Missing Supabase configuration');
+    console.error("Missing Supabase configuration");
     return null;
   }
   _serviceClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -21,9 +21,9 @@ function getServiceClient(): SupabaseClient | null {
  * Extraer token del header Authorization
  */
 function extractToken(request: NextRequest): string | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  return authHeader.substring('Bearer '.length);
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  return authHeader.substring("Bearer ".length);
 }
 
 /**
@@ -44,13 +44,13 @@ export async function getUserFromRequest(request: NextRequest) {
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error('Token verification failed:', error);
+      console.error("Token verification failed:", error);
       return null;
     }
 
     return user;
   } catch (error) {
-    console.error('Error verifying token:', error);
+    console.error("Error verifying token:", error);
     return null;
   }
 }
@@ -65,19 +65,19 @@ export async function getUserRole(userId: string) {
     if (!supabase) return null;
 
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('role_id')
-      .eq('id', userId)
+      .from("user_profiles")
+      .select("role_id")
+      .eq("id", userId)
       .single();
 
     if (error) {
-      console.error('Error fetching user role:', error);
+      console.error("Error fetching user role:", error);
       return null;
     }
 
     return await getRoleNameById(data.role_id, supabase);
   } catch (error) {
-    console.error('Error in getUserRole:', error);
+    console.error("Error in getUserRole:", error);
     return null;
   }
 }
@@ -112,9 +112,9 @@ export async function getAuthContext(request: NextRequest): Promise<{
     // Obtener rol usando el mismo service client (sin crear otro)
     let role: string | null = null;
     const { data: profileData } = await serviceClient
-      .from('user_profiles')
-      .select('role_id')
-      .eq('id', user.id)
+      .from("user_profiles")
+      .select("role_id")
+      .eq("id", user.id)
       .single();
 
     if (profileData) {
@@ -126,7 +126,7 @@ export async function getAuthContext(request: NextRequest): Promise<{
 
     return { user, role, supabase, token };
   } catch (error) {
-    console.error('Error in getAuthContext:', error);
+    console.error("Error in getAuthContext:", error);
     return null;
   }
 }
@@ -139,7 +139,7 @@ export function getAuthenticatedSupabase(token: string) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase configuration');
+    throw new Error("Missing Supabase configuration");
   }
 
   return createClient(supabaseUrl, supabaseAnonKey, {

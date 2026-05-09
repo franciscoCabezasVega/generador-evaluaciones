@@ -1,7 +1,7 @@
-import { UserProfile } from '@/lib/types';
+import { UserProfile } from "@/lib/types";
 
-const STORAGE_KEY = 'auth_user_profile';
-const STORAGE_EXPIRY = 'auth_user_profile_expiry';
+const STORAGE_KEY = "auth_user_profile";
+const STORAGE_EXPIRY = "auth_user_profile_expiry";
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
 
 /**
@@ -32,9 +32,12 @@ export function getFromLocalStorage(): UserProfile | null {
 export function saveToLocalStorage(profile: UserProfile) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    localStorage.setItem(STORAGE_EXPIRY, (Date.now() + CACHE_DURATION).toString());
+    localStorage.setItem(
+      STORAGE_EXPIRY,
+      (Date.now() + CACHE_DURATION).toString(),
+    );
   } catch (err) {
-    console.error('Error saving to localStorage:', err);
+    console.error("Error saving to localStorage:", err);
   }
 }
 
@@ -55,10 +58,11 @@ export function clearLocalStorage() {
  * Si se provee un callback onUpdate, actualiza también el estado React.
  */
 export async function validateProfileInBackground(
-  onUpdate?: (profile: UserProfile) => void
+  onUpdate?: (profile: UserProfile) => void,
 ) {
   try {
-    const { userProfileService } = await import('@/lib/services/userProfileService');
+    const { userProfileService } =
+      await import("@/lib/services/userProfileService");
     const freshProfile = await userProfileService.getUserProfile();
     if (freshProfile) {
       saveToLocalStorage(freshProfile);

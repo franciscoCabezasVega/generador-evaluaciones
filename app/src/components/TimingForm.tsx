@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   useState,
@@ -6,15 +6,28 @@ import {
   useEffect,
   useImperativeHandle,
   forwardRef,
-} from 'react';
-import { CreateTaskTimingInput, UpdateTaskTimingInput, Task, CreateTimingQAEntryInput } from '@/lib/types';
-import { useCatalogData } from '@/hooks/useCatalogData';
-import { Button } from '@/components/ui/button';
-import Modal from '@/components/Modal';
-import { AlertCircle, ChevronDown, ChevronUp, Users, ExternalLink } from 'lucide-react';
+} from "react";
+import {
+  CreateTaskTimingInput,
+  UpdateTaskTimingInput,
+  Task,
+  CreateTimingQAEntryInput,
+} from "@/lib/types";
+import { useCatalogData } from "@/hooks/useCatalogData";
+import { Button } from "@/components/ui/button";
+import Modal from "@/components/Modal";
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  ExternalLink,
+} from "lucide-react";
 
 interface TimingFormProps {
-  onSubmit: (data: CreateTaskTimingInput | UpdateTaskTimingInput) => Promise<void>;
+  onSubmit: (
+    data: CreateTaskTimingInput | UpdateTaskTimingInput,
+  ) => Promise<void>;
   onCancel?: () => void;
   initialData?: Record<string, unknown> | null;
   isLoading?: boolean;
@@ -53,13 +66,15 @@ function TimingFormComponent(
     selectedTaskIds = [],
     safeFetch,
   }: TimingFormProps,
-  ref: React.Ref<{ handleCancelWithConfirm: () => void }>
+  ref: React.Ref<{ handleCancelWithConfirm: () => void }>,
 ) {
-  const processInitialData = (data: Record<string, unknown> | null | undefined): FormDataState => {
+  const processInitialData = (
+    data: Record<string, unknown> | null | undefined,
+  ): FormDataState => {
     if (!data) {
       return {
-        task_id: '',
-        product_type: '',
+        task_id: "",
+        product_type: "",
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         qa_entries: [],
@@ -67,11 +82,14 @@ function TimingFormComponent(
     }
 
     // Convert existing timing data (with possible QA entries)
-    const qaEntries: QAFormData[] = (Array.isArray(data.qa_entries) ? data.qa_entries : []).map((e: Record<string, unknown>) => ({
-      qa_name: String(e.qa_name || ''),
+    const qaEntries: QAFormData[] = (
+      Array.isArray(data.qa_entries) ? data.qa_entries : []
+    ).map((e: Record<string, unknown>) => ({
+      qa_name: String(e.qa_name || ""),
       effective_testing_hours: Number(e.effective_testing_hours) || 0,
       waiting_environment_hours: Number(e.waiting_environment_hours) || 0,
-      waiting_development_fixes_hours: Number(e.waiting_development_fixes_hours) || 0,
+      waiting_development_fixes_hours:
+        Number(e.waiting_development_fixes_hours) || 0,
       retest_hours: Number(e.retest_hours) || 0,
       clarification_hours: Number(e.clarification_hours) || 0,
       isExpanded: true,
@@ -80,10 +98,11 @@ function TimingFormComponent(
     // If editing with no QA entries, create one from the parent timing data
     if (qaEntries.length === 0 && isEditing) {
       qaEntries.push({
-        qa_name: 'No asignado',
+        qa_name: "No asignado",
         effective_testing_hours: Number(data.effective_testing_hours) || 0,
         waiting_environment_hours: Number(data.waiting_environment_hours) || 0,
-        waiting_development_fixes_hours: Number(data.waiting_development_fixes_hours) || 0,
+        waiting_development_fixes_hours:
+          Number(data.waiting_development_fixes_hours) || 0,
         retest_hours: Number(data.retest_hours) || 0,
         clarification_hours: Number(data.clarification_hours) || 0,
         isExpanded: true,
@@ -91,8 +110,8 @@ function TimingFormComponent(
     }
 
     return {
-      task_id: String(data.task_id || ''),
-      product_type: String(data.product_type || ''),
+      task_id: String(data.task_id || ""),
+      product_type: String(data.product_type || ""),
       month: Number(data.month) || new Date().getMonth() + 1,
       year: Number(data.year) || new Date().getFullYear(),
       qa_entries: qaEntries,
@@ -146,13 +165,13 @@ function TimingFormComponent(
         const response = await safeFetch(url);
 
         if (!response.ok) {
-          throw new Error('Error loading tasks');
+          throw new Error("Error loading tasks");
         }
 
         const data = await response.json();
         setDynamicTasks(data || []);
       } catch (error) {
-        console.error('Error loading tasks:', error);
+        console.error("Error loading tasks:", error);
         setDynamicTasks([]);
       } finally {
         setLoadingTasks(false);
@@ -160,42 +179,54 @@ function TimingFormComponent(
     };
 
     loadTasksForFilters();
-  }, [formData.month, formData.year, formData.product_type, isEditing, safeFetch]);
+  }, [
+    formData.month,
+    formData.year,
+    formData.product_type,
+    isEditing,
+    safeFetch,
+  ]);
 
   const validateHours = (value: string, fieldName: string): string => {
-    if (value === '' || value === '0') return '';
+    if (value === "" || value === "0") return "";
     const num = parseFloat(value);
     if (isNaN(num)) return `${fieldName} debe ser un número válido`;
-    if (!Number.isInteger(num)) return `${fieldName} debe ser un número entero (sin decimales)`;
+    if (!Number.isInteger(num))
+      return `${fieldName} debe ser un número entero (sin decimales)`;
     if (num < 0) return `${fieldName} no puede ser negativo`;
-    return '';
+    return "";
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
 
-    if (name === 'task_id' && value && !isEditing) {
+    if (name === "task_id" && value && !isEditing) {
       // When a task is selected, pre-populate QA entries from the task's assigned_qa
-      const selectedTask = dynamicTasks.find(t => t.id === value);
-      const assignedQAs: string[] = selectedTask?.assigned_qa && Array.isArray(selectedTask.assigned_qa)
-        ? selectedTask.assigned_qa
-        : [];
+      const selectedTask = dynamicTasks.find((t) => t.id === value);
+      const assignedQAs: string[] =
+        selectedTask?.assigned_qa && Array.isArray(selectedTask.assigned_qa)
+          ? selectedTask.assigned_qa
+          : [];
 
       if (assignedQAs.length > 0) {
         const newQAEntries: QAFormData[] = assignedQAs.map((qaName) => {
           // Preserve existing QA entry data if already present
-          const existing = formData.qa_entries.find(e => e.qa_name === qaName);
-          return existing || {
-            qa_name: qaName,
-            effective_testing_hours: 0,
-            waiting_environment_hours: 0,
-            waiting_development_fixes_hours: 0,
-            retest_hours: 0,
-            clarification_hours: 0,
-            isExpanded: true,
-          };
+          const existing = formData.qa_entries.find(
+            (e) => e.qa_name === qaName,
+          );
+          return (
+            existing || {
+              qa_name: qaName,
+              effective_testing_hours: 0,
+              waiting_environment_hours: 0,
+              waiting_development_fixes_hours: 0,
+              retest_hours: 0,
+              clarification_hours: 0,
+              isExpanded: true,
+            }
+          );
         });
 
         setFormData((prev) => ({
@@ -215,55 +246,58 @@ function TimingFormComponent(
 
   // QA entry handlers
   const toggleQAExpanded = (qaName: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      qa_entries: prev.qa_entries.map(e =>
-        e.qa_name === qaName ? { ...e, isExpanded: !e.isExpanded } : e
+      qa_entries: prev.qa_entries.map((e) =>
+        e.qa_name === qaName ? { ...e, isExpanded: !e.isExpanded } : e,
       ),
     }));
   };
 
   const updateQAHours = (qaName: string, field: string, value: string) => {
     // Filtrar para permitir solo números enteros positivos (0-9)
-    if (value !== '') {
+    if (value !== "") {
       // Solo permitir dígitos
-      const filteredValue = value.replace(/[^0-9]/g, '');
-      
+      const filteredValue = value.replace(/[^0-9]/g, "");
+
       const error = validateHours(filteredValue, field);
       if (error) {
-        setErrors(prev => ({ ...prev, [`${qaName}_${field}`]: error }));
+        setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: error }));
         return;
       }
-      
-      setErrors(prev => ({ ...prev, [`${qaName}_${field}`]: '' }));
-      
-      setFormData(prev => ({
+
+      setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: "" }));
+
+      setFormData((prev) => ({
         ...prev,
-        qa_entries: prev.qa_entries.map(e =>
+        qa_entries: prev.qa_entries.map((e) =>
           e.qa_name === qaName
-            ? { ...e, [field]: filteredValue === '' ? 0 : parseInt(filteredValue, 10) }
-            : e
+            ? {
+                ...e,
+                [field]: filteredValue === "" ? 0 : parseInt(filteredValue, 10),
+              }
+            : e,
         ),
       }));
     } else {
-      setErrors(prev => ({ ...prev, [`${qaName}_${field}`]: '' }));
-      setFormData(prev => ({
+      setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: "" }));
+      setFormData((prev) => ({
         ...prev,
-        qa_entries: prev.qa_entries.map(e =>
-          e.qa_name === qaName
-            ? { ...e, [field]: 0 }
-            : e
+        qa_entries: prev.qa_entries.map((e) =>
+          e.qa_name === qaName ? { ...e, [field]: 0 } : e,
         ),
       }));
     }
   };
 
   const getQATotal = (entry: QAFormData) => {
-    return entry.effective_testing_hours +
+    return (
+      entry.effective_testing_hours +
       entry.waiting_environment_hours +
       entry.waiting_development_fixes_hours +
       entry.retest_hours +
-      entry.clarification_hours;
+      entry.clarification_hours
+    );
   };
 
   const getGrandTotal = () => {
@@ -277,14 +311,14 @@ function TimingFormComponent(
     if (!isEditing) {
       if (!formData.task_id) {
         setErrors({
-          task_id: 'La tarea es requerida',
+          task_id: "La tarea es requerida",
         });
         return;
       }
     }
 
     if (formData.qa_entries.length === 0) {
-      setErrors({ qa_entries: 'Debes asignar al menos un QA' });
+      setErrors({ qa_entries: "Debes asignar al menos un QA" });
       return;
     }
 
@@ -292,20 +326,24 @@ function TimingFormComponent(
     for (const entry of formData.qa_entries) {
       const total = getQATotal(entry);
       if (total === 0) {
-        setErrors({ qa_entries: `${entry.qa_name} debe tener al menos una hora registrada` });
+        setErrors({
+          qa_entries: `${entry.qa_name} debe tener al menos una hora registrada`,
+        });
         return;
       }
     }
 
     try {
-      const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map(e => ({
-        qa_name: e.qa_name,
-        effective_testing_hours: e.effective_testing_hours,
-        waiting_environment_hours: e.waiting_environment_hours,
-        waiting_development_fixes_hours: e.waiting_development_fixes_hours,
-        retest_hours: e.retest_hours,
-        clarification_hours: e.clarification_hours,
-      }));
+      const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map(
+        (e) => ({
+          qa_name: e.qa_name,
+          effective_testing_hours: e.effective_testing_hours,
+          waiting_environment_hours: e.waiting_environment_hours,
+          waiting_development_fixes_hours: e.waiting_development_fixes_hours,
+          retest_hours: e.retest_hours,
+          clarification_hours: e.clarification_hours,
+        }),
+      );
 
       const payload = isEditing
         ? { qa_entries: qaEntries }
@@ -318,7 +356,7 @@ function TimingFormComponent(
 
       await onSubmit(payload as CreateTaskTimingInput | UpdateTaskTimingInput);
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error("Error submitting form:", error);
     }
   };
 
@@ -327,28 +365,56 @@ function TimingFormComponent(
   const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
 
   const hoursFields = [
-    { key: 'effective_testing_hours', label: 'Testing efectivo', color: 'bg-blue-100', textColor: 'text-blue-700' },
-    { key: 'waiting_environment_hours', label: 'Espera ambiente', color: 'bg-purple-100', textColor: 'text-purple-700' },
-    { key: 'waiting_development_fixes_hours', label: 'Espera fixes', color: 'bg-orange-100', textColor: 'text-orange-700' },
-    { key: 'retest_hours', label: 'Re-test', color: 'bg-red-100', textColor: 'text-red-700' },
-    { key: 'clarification_hours', label: 'Clarificaciones', color: 'bg-yellow-100', textColor: 'text-yellow-700' },
+    {
+      key: "effective_testing_hours",
+      label: "Testing efectivo",
+      color: "bg-blue-100",
+      textColor: "text-blue-700",
+    },
+    {
+      key: "waiting_environment_hours",
+      label: "Espera ambiente",
+      color: "bg-purple-100",
+      textColor: "text-purple-700",
+    },
+    {
+      key: "waiting_development_fixes_hours",
+      label: "Espera fixes",
+      color: "bg-orange-100",
+      textColor: "text-orange-700",
+    },
+    {
+      key: "retest_hours",
+      label: "Re-test",
+      color: "bg-red-100",
+      textColor: "text-red-700",
+    },
+    {
+      key: "clarification_hours",
+      label: "Clarificaciones",
+      color: "bg-yellow-100",
+      textColor: "text-yellow-700",
+    },
   ];
 
   const grandTotal = getGrandTotal();
 
   // Color palette for QA members
   const QA_COLORS = [
-    'border-blue-400 bg-blue-50',
-    'border-emerald-400 bg-emerald-50',
-    'border-purple-400 bg-purple-50',
-    'border-amber-400 bg-amber-50',
-    'border-pink-400 bg-pink-50',
-    'border-cyan-400 bg-cyan-50',
-    'border-rose-400 bg-rose-50',
+    "border-blue-400 bg-blue-50",
+    "border-emerald-400 bg-emerald-50",
+    "border-purple-400 bg-purple-50",
+    "border-amber-400 bg-amber-50",
+    "border-pink-400 bg-pink-50",
+    "border-cyan-400 bg-cyan-50",
+    "border-rose-400 bg-rose-50",
   ];
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-6 max-h-[80vh] overflow-y-auto">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 p-6 max-h-[80vh] overflow-y-auto"
+    >
       {/* Modal de confirmación de cambios no guardados */}
       <Modal
         isOpen={unsavedConfirm}
@@ -437,14 +503,16 @@ function TimingFormComponent(
           <select
             id="product_type"
             name="product_type"
-            value={formData.product_type || ''}
+            value={formData.product_type || ""}
             onChange={handleInputChange}
             className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
             required
           >
             <option value="">Selecciona un producto</option>
             {products.map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
+              <option key={p.id} value={p.name}>
+                {p.name}
+              </option>
             ))}
           </select>
         </div>
@@ -460,11 +528,12 @@ function TimingFormComponent(
             const hasSelectedMonth = Number(formData.month) > 0;
             const hasSelectedYear = Number(formData.year) > 0;
             const hasSelectedProduct = Boolean(formData.product_type);
-            const isFormReady = hasSelectedMonth && hasSelectedYear && hasSelectedProduct;
+            const isFormReady =
+              hasSelectedMonth && hasSelectedYear && hasSelectedProduct;
 
             const filteredTasks = isFormReady
               ? dynamicTasks.filter(
-                  (task) => !selectedTaskIds.includes(task.id)
+                  (task) => !selectedTaskIds.includes(task.id),
                 )
               : [];
 
@@ -475,18 +544,22 @@ function TimingFormComponent(
                 <select
                   id="task_id"
                   name="task_id"
-                  value={formData.task_id || ''}
+                  value={formData.task_id || ""}
                   onChange={handleInputChange}
                   className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   disabled={!isFormReady || hasNoTasks || loadingTasks}
                   required
                 >
                   {!isFormReady ? (
-                    <option value="">Selecciona Año, Mes y Producto primero</option>
+                    <option value="">
+                      Selecciona Año, Mes y Producto primero
+                    </option>
                   ) : loadingTasks ? (
                     <option value="">Cargando tareas...</option>
                   ) : hasNoTasks ? (
-                    <option value="">No hay tareas completadas que coincidan con esta búsqueda</option>
+                    <option value="">
+                      No hay tareas completadas que coincidan con esta búsqueda
+                    </option>
                   ) : (
                     <>
                       <option value="">Selecciona una tarea</option>
@@ -511,42 +584,53 @@ function TimingFormComponent(
       )}
 
       {/* Info de tarea asociada — modo edición */}
-      {isEditing && (() => {
-        const linkedTask = availableTasks.find(t => t.id === formData.task_id);
-        if (!linkedTask) return null;
-        return (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tarea asociada</span>
-              <a
-                href={`/tasks?edit=${linkedTask.id}`}
-                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Ir a tarea <ExternalLink size={12} />
-              </a>
+      {isEditing &&
+        (() => {
+          const linkedTask = availableTasks.find(
+            (t) => t.id === formData.task_id,
+          );
+          if (!linkedTask) return null;
+          return (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tarea asociada
+                </span>
+                <a
+                  href={`/tasks?edit=${linkedTask.id}`}
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Ir a tarea <ExternalLink size={12} />
+                </a>
+              </div>
+              {linkedTask.task_link ? (
+                <a
+                  href={linkedTask.task_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                >
+                  {linkedTask.name}
+                </a>
+              ) : (
+                <p className="text-sm font-semibold text-gray-900">
+                  {linkedTask.name}
+                </p>
+              )}
+              <div className="flex gap-4 text-xs text-gray-500">
+                <span>{linkedTask.product_type}</span>
+                <span>
+                  {linkedTask.month}/{linkedTask.year}
+                </span>
+                <span
+                  className={`font-medium ${linkedTask.status === "Completada" ? "text-green-600" : "text-yellow-600"}`}
+                >
+                  {linkedTask.status}
+                </span>
+              </div>
             </div>
-            {linkedTask.task_link ? (
-              <a
-                href={linkedTask.task_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
-              >
-                {linkedTask.name}
-              </a>
-            ) : (
-              <p className="text-sm font-semibold text-gray-900">{linkedTask.name}</p>
-            )}
-            <div className="flex gap-4 text-xs text-gray-500">
-              <span>{linkedTask.product_type}</span>
-              <span>{linkedTask.month}/{linkedTask.year}</span>
-              <span className={`font-medium ${linkedTask.status === 'Completada' ? 'text-green-600' : 'text-yellow-600'}`}>
-                {linkedTask.status}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* QA Asignados — solo lectura (se toma de la tarea) */}
       {formData.qa_entries.length > 0 && (
@@ -557,7 +641,8 @@ function TimingFormComponent(
               QA Asignados
             </span>
             <span className="text-xs text-gray-500">
-              {formData.qa_entries.length} QA{formData.qa_entries.length !== 1 ? 's' : ''}
+              {formData.qa_entries.length} QA
+              {formData.qa_entries.length !== 1 ? "s" : ""}
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -577,14 +662,16 @@ function TimingFormComponent(
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
           <p className="text-sm text-yellow-800 flex items-center gap-2">
             <AlertCircle size={16} />
-            La tarea seleccionada no tiene QA asignados. Edita la tarea para asignar QA.
+            La tarea seleccionada no tiene QA asignados. Edita la tarea para
+            asignar QA.
           </p>
         </div>
       )}
 
       {errors.qa_entries && (
         <p className="flex items-center gap-1 text-sm text-red-500">
-          <AlertCircle size={16} />{errors.qa_entries}
+          <AlertCircle size={16} />
+          {errors.qa_entries}
         </p>
       )}
 
@@ -592,7 +679,7 @@ function TimingFormComponent(
       {formData.qa_entries.length > 0 && (
         <div className="space-y-4">
           <h3 className="font-semibold text-sm text-gray-700">Horas por QA</h3>
-          
+
           {formData.qa_entries.map((entry, qaIdx) => {
             const qaTotal = getQATotal(entry);
             return (
@@ -608,11 +695,19 @@ function TimingFormComponent(
                 >
                   <div className="flex items-center gap-2">
                     <Users size={16} />
-                    <span className="font-semibold text-sm">{entry.qa_name}</span>
+                    <span className="font-semibold text-sm">
+                      {entry.qa_name}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold">{qaTotal.toFixed(0)}h</span>
-                    {entry.isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    <span className="text-sm font-bold">
+                      {qaTotal.toFixed(0)}h
+                    </span>
+                    {entry.isExpanded ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
                   </div>
                 </button>
 
@@ -625,15 +720,30 @@ function TimingFormComponent(
                         className={`rounded-lg ${color} p-3`}
                       >
                         <div className="flex items-center justify-between">
-                          <label htmlFor={`${entry.qa_name}-${key}`} className={`text-xs font-medium ${textColor}`}>{label}</label>
+                          <label
+                            htmlFor={`${entry.qa_name}-${key}`}
+                            className={`text-xs font-medium ${textColor}`}
+                          >
+                            {label}
+                          </label>
                           <div className="flex items-center gap-1.5">
                             <input
                               id={`${entry.qa_name}-${key}`}
                               name={`${entry.qa_name}-${key}`}
                               type="text"
                               inputMode="numeric"
-                              value={(entry[key as keyof QAFormData] as number) === 0 ? '' : (entry[key as keyof QAFormData] as number)}
-                              onChange={(ev) => updateQAHours(entry.qa_name, key, ev.target.value)}
+                              value={
+                                (entry[key as keyof QAFormData] as number) === 0
+                                  ? ""
+                                  : (entry[key as keyof QAFormData] as number)
+                              }
+                              onChange={(ev) =>
+                                updateQAHours(
+                                  entry.qa_name,
+                                  key,
+                                  ev.target.value,
+                                )
+                              }
                               onKeyPress={(ev) => {
                                 // Solo permitir números (0-9)
                                 if (!/[0-9]/.test(ev.key)) {
@@ -641,8 +751,8 @@ function TimingFormComponent(
                                 }
                               }}
                               onBlur={(ev) => {
-                                if (ev.target.value === '') {
-                                  updateQAHours(entry.qa_name, key, '0');
+                                if (ev.target.value === "") {
+                                  updateQAHours(entry.qa_name, key, "0");
                                 }
                               }}
                               className="w-16 rounded border border-gray-300 bg-white px-2 py-0.5 text-center text-sm"
@@ -661,8 +771,12 @@ function TimingFormComponent(
                     ))}
                     {/* QA Subtotal */}
                     <div className="rounded-lg bg-white/70 p-2 flex justify-between border border-gray-200">
-                      <span className="text-xs font-medium text-gray-600">Subtotal {entry.qa_name}:</span>
-                      <span className="text-sm font-bold">{qaTotal.toFixed(0)}h</span>
+                      <span className="text-xs font-medium text-gray-600">
+                        Subtotal {entry.qa_name}:
+                      </span>
+                      <span className="text-sm font-bold">
+                        {qaTotal.toFixed(0)}h
+                      </span>
                     </div>
                   </div>
                 )}
@@ -694,18 +808,33 @@ function TimingFormComponent(
               const qaTotal = getQATotal(entry);
               const pct = (qaTotal / grandTotal) * 100;
               return (
-                <div key={entry.qa_name} className="flex items-center gap-2 text-xs">
-                  <span className="w-28 truncate font-medium text-gray-600">{entry.qa_name}</span>
+                <div
+                  key={entry.qa_name}
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <span className="w-28 truncate font-medium text-gray-600">
+                    {entry.qa_name}
+                  </span>
                   <div className="flex-1 bg-gray-200 rounded-full h-2">
                     <div
                       className="h-2 rounded-full transition-all"
                       style={{
                         width: `${pct}%`,
-                        backgroundColor: ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4', '#F43F5E'][idx % 7],
+                        backgroundColor: [
+                          "#3B82F6",
+                          "#10B981",
+                          "#8B5CF6",
+                          "#F59E0B",
+                          "#EC4899",
+                          "#06B6D4",
+                          "#F43F5E",
+                        ][idx % 7],
                       }}
                     />
                   </div>
-                  <span className="w-14 text-right font-semibold">{qaTotal.toFixed(0)}h ({pct.toFixed(0)}%)</span>
+                  <span className="w-14 text-right font-semibold">
+                    {qaTotal.toFixed(0)}h ({pct.toFixed(0)}%)
+                  </span>
                 </div>
               );
             })}
@@ -717,10 +846,12 @@ function TimingFormComponent(
       <div className="flex gap-3">
         <Button
           type="submit"
-          disabled={isLoading || grandTotal === 0 || formData.qa_entries.length === 0}
+          disabled={
+            isLoading || grandTotal === 0 || formData.qa_entries.length === 0
+          }
           className="flex-1 bg-blue-500 hover:bg-blue-600"
         >
-          {isLoading ? 'Guardando...' : isEditing ? 'Actualizar' : 'Crear'}
+          {isLoading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
         </Button>
         <Button
           type="button"

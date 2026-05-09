@@ -1,16 +1,24 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
-import { userProfileService } from '@/lib/services/userProfileService';
-import { authService } from '@/lib/services/authService';
-import { UserProfile, AuthUser } from '@/lib/types';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  ReactNode,
+} from "react";
+import { supabase } from "@/lib/supabase";
+import { userProfileService } from "@/lib/services/userProfileService";
+import { authService } from "@/lib/services/authService";
+import { UserProfile, AuthUser } from "@/lib/types";
 import {
   getFromLocalStorage,
   saveToLocalStorage,
   clearLocalStorage,
   validateProfileInBackground,
-} from './authStorage';
+} from "./authStorage";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -46,21 +54,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Cubre el caso donde el access token está expirado y Supabase
    * aún no completó el refresh cuando se hace la primera llamada.
    */
-  const fetchProfileWithRetry = useCallback(async (maxRetries = 2): Promise<UserProfile | null> => {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const freshProfile = await userProfileService.getUserProfile();
-        if (freshProfile) return freshProfile;
-      } catch (err) {
-        console.error(`AuthContext: Profile fetch attempt ${attempt + 1} failed:`, err);
+  const fetchProfileWithRetry = useCallback(
+    async (maxRetries = 2): Promise<UserProfile | null> => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const freshProfile = await userProfileService.getUserProfile();
+          if (freshProfile) return freshProfile;
+        } catch (err) {
+          console.error(
+            `AuthContext: Profile fetch attempt ${attempt + 1} failed:`,
+            err,
+          );
+        }
+        // Delay progresivo antes de reintentar (500ms, 1000ms)
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        }
       }
-      // Delay progresivo antes de reintentar (500ms, 1000ms)
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-      }
-    }
-    return null;
-  }, []);
+      return null;
+    },
+    [],
+  );
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -70,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         // Solo en cliente - verificar localStorage
-        if (typeof window === 'undefined') {
+        if (typeof window === "undefined") {
           setLoading(false);
           setInitialized(true);
           return;
@@ -109,7 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Paso 4: No hay caché pero sesión válida - obtener perfil fresco con retry
         // eslint-disable-next-line no-console
-        console.debug('AuthContext: Session exists but no cache - fetching fresh profile');
+        console.debug(
+          "AuthContext: Session exists but no cache - fetching fresh profile",
+        );
         const freshProfile = await fetchProfileWithRetry();
         if (freshProfile) {
           setProfile(freshProfile);
@@ -122,12 +138,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         setInitialized(true);
       } catch (err) {
-        console.error('Error in AuthProvider init:', err);
+        console.error("Error in AuthProvider init:", err);
         // Si hay error de refresh token, limpiar sesión
-        if (err instanceof Error && err.message?.includes('Refresh Token')) {
-          await authService.clearSession('error');
+        if (err instanceof Error && err.message?.includes("Refresh Token")) {
+          await authService.clearSession("error");
         }
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : "Unknown error");
         setLoading(false);
         setInitialized(true);
       } finally {
@@ -148,57 +164,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     // Escuchar cambios futuros de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) return;
-        
-        // Manejar evento explícito de cierre de sesión
-        if (event === 'SIGNED_OUT') {
-          // Si estamos en proceso de logout, no actualizar estados de React
-          // para evitar el flash de contenido no autenticado.
-          if (isLoggingOutRef.current) return;
-          setUser(null);
-          setProfile(null);
-          clearLocalStorage();
-          return;
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
 
-        // Para cualquier otro evento con sesión válida, asegurar que el
-        // estado de usuario esté sincronizado.  Esto corrige el escenario
-        // donde `user` fue limpiado transitoriamente y un TOKEN_REFRESHED
-        // o INITIAL_SESSION posterior debería restaurarlo.
-        if (session?.user) {
-          setUser((prev) => {
-            // Solo actualizar si cambió el id o si estaba null
-            if (!prev || prev.id !== session.user.id) {
-              return session.user;
-            }
-            return prev;
-          });
-
-          // En SIGNED_IN o si no hay perfil en caché, refrescar perfil
-          if (event === 'SIGNED_IN') {
-            try {
-              const freshProfile = await userProfileService.getUserProfile();
-              if (freshProfile && isMounted) {
-                setProfile(freshProfile);
-                saveToLocalStorage(freshProfile);
-              }
-            } catch (err) {
-              console.error('Error fetching profile on sign in:', err);
-            }
-          }
-
-          if (event === 'TOKEN_REFRESHED') {
-            // eslint-disable-next-line no-console
-            console.debug('AuthContext: Token refreshed, session active');
-          }
-        }
-        // Si la sesión es null pero el evento NO es SIGNED_OUT,
-        // no limpiar el usuario.  Puede ser un evento transitorio
-        // mientras Supabase termina de restaurar la sesión desde storage.
+      // Manejar evento explícito de cierre de sesión
+      if (event === "SIGNED_OUT") {
+        // Si estamos en proceso de logout, no actualizar estados de React
+        // para evitar el flash de contenido no autenticado.
+        if (isLoggingOutRef.current) return;
+        setUser(null);
+        setProfile(null);
+        clearLocalStorage();
+        return;
       }
-    );
+
+      // Para cualquier otro evento con sesión válida, asegurar que el
+      // estado de usuario esté sincronizado.  Esto corrige el escenario
+      // donde `user` fue limpiado transitoriamente y un TOKEN_REFRESHED
+      // o INITIAL_SESSION posterior debería restaurarlo.
+      if (session?.user) {
+        setUser((prev) => {
+          // Solo actualizar si cambió el id o si estaba null
+          if (!prev || prev.id !== session.user.id) {
+            return session.user;
+          }
+          return prev;
+        });
+
+        // En SIGNED_IN o si no hay perfil en caché, refrescar perfil
+        if (event === "SIGNED_IN") {
+          try {
+            const freshProfile = await userProfileService.getUserProfile();
+            if (freshProfile && isMounted) {
+              setProfile(freshProfile);
+              saveToLocalStorage(freshProfile);
+            }
+          } catch (err) {
+            console.error("Error fetching profile on sign in:", err);
+          }
+        }
+
+        if (event === "TOKEN_REFRESHED") {
+          // eslint-disable-next-line no-console
+          console.debug("AuthContext: Token refreshed, session active");
+        }
+      }
+      // Si la sesión es null pero el evento NO es SIGNED_OUT,
+      // no limpiar el usuario.  Puede ser un evento transitorio
+      // mientras Supabase termina de restaurar la sesión desde storage.
+    });
 
     return () => {
       isMounted = false;
@@ -221,29 +237,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Si el evento es sobre las keys de autenticación
       if (
-        e.key?.includes('sb-') || 
-        e.key?.includes('auth') || 
-        (e.key === null) // null key significa que se limpió todo localStorage
+        e.key?.includes("sb-") ||
+        e.key?.includes("auth") ||
+        e.key === null // null key significa que se limpió todo localStorage
       ) {
-        console.warn('AuthContext: Storage was cleared or changed externally');
-        
+        console.warn("AuthContext: Storage was cleared or changed externally");
+
         // Detectamos que el storage fue modificado externamente
         // Validar inmediatamente con Supabase si aún hay sesión válida
-        authService.getSession().then((session) => {
-          if (!session?.user && isMounted) {
-            console.warn('AuthContext: No session found after storage clear');
-            setUser(null);
-            setProfile(null);
-            clearLocalStorage();
-          }
-        }).catch((err) => {
-          console.error('AuthContext: Error validating session after storage clear:', err);
-          if (isMounted) {
-            setUser(null);
-            setProfile(null);
-            clearLocalStorage();
-          }
-        });
+        authService
+          .getSession()
+          .then((session) => {
+            if (!session?.user && isMounted) {
+              console.warn("AuthContext: No session found after storage clear");
+              setUser(null);
+              setProfile(null);
+              clearLocalStorage();
+            }
+          })
+          .catch((err) => {
+            console.error(
+              "AuthContext: Error validating session after storage clear:",
+              err,
+            );
+            if (isMounted) {
+              setUser(null);
+              setProfile(null);
+              clearLocalStorage();
+            }
+          });
       }
     };
 
@@ -261,7 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const session = await authService.getSession();
           if (session?.user && isMounted) {
             // eslint-disable-next-line no-console
-            console.debug('AuthContext: Recovering user from valid session');
+            console.debug("AuthContext: Recovering user from valid session");
             setUser(session.user);
             // Intentar recuperar o refrescar perfil
             const freshProfile = await userProfileService.getUserProfile();
@@ -272,14 +294,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           // Error de red - no hacer nada, re-intentar en el próximo ciclo
-          console.error('AuthContext: Error recovering session:', err);
+          console.error("AuthContext: Error recovering session:", err);
         }
         return;
       }
 
       // CASO 2: user existe - verificar consistencia con el caché de perfil
       const cachedProfile = getFromLocalStorage();
-      
+
       if (!cachedProfile) {
         // El caché expiró o fue borrado. Antes de limpiar todo, validar con Supabase
         try {
@@ -287,11 +309,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (session?.user) {
             // La sesión sigue válida - refrescar caché en background y actualizar estado React
             // eslint-disable-next-line no-console
-            console.debug('AuthContext: Cache expired but session valid - refreshing cache');
-            validateProfileInBackground((p) => { if (isMounted) setProfile(p); });
+            console.debug(
+              "AuthContext: Cache expired but session valid - refreshing cache",
+            );
+            validateProfileInBackground((p) => {
+              if (isMounted) setProfile(p);
+            });
           } else {
             // Realmente no hay sesión
-            console.warn('AuthContext: No session and no cache - clearing state');
+            console.warn(
+              "AuthContext: No session and no cache - clearing state",
+            );
             if (isMounted) {
               setUser(null);
               setProfile(null);
@@ -299,25 +327,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
         } catch (err) {
-          console.error('AuthContext: Error during integrity check:', err);
+          console.error("AuthContext: Error during integrity check:", err);
           // En caso de error de red, NO limpiar estado (podría ser un problema temporal)
         }
       }
     };
 
     // Agregar listener de storage
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
 
     // Validar integridad cada 5 minutos cuando hay usuario (onAuthStateChange ya cubre cambios reales)
-    const integrityInterval = setInterval(() => {
-      if (isMounted) {
-        validateSessionIntegrity();
-      }
-    }, 5 * 60 * 1000);
+    const integrityInterval = setInterval(
+      () => {
+        if (isMounted) {
+          validateSessionIntegrity();
+        }
+      },
+      5 * 60 * 1000,
+    );
 
     return () => {
       isMounted = false;
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
       clearInterval(integrityInterval);
     };
   }, [initialized, user?.id]);
@@ -332,7 +363,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return null;
     } catch (err) {
-      console.error('Error refreshing profile:', err);
+      console.error("Error refreshing profile:", err);
       return null;
     }
   };
@@ -350,15 +381,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Fallback de seguridad: si clearSession se bloquea (navigator.lock ocupado u otro
     // error silencioso), forzamos el redirect a los 6 s para que el overlay no quede infinito.
     const fallbackTimer = setTimeout(() => {
-      console.warn('[Auth] signOut fallback: forzando redirect tras timeout');
-      window.location.href = '/auth/login';
+      console.warn("[Auth] signOut fallback: forzando redirect tras timeout");
+      window.location.href = "/auth/login";
     }, 6000);
 
     try {
-      await authService.clearSession('user-logout');
+      await authService.clearSession("user-logout");
     } catch (error) {
-      console.error('Error durante logout:', error);
-      window.location.href = '/auth/login';
+      console.error("Error durante logout:", error);
+      window.location.href = "/auth/login";
     } finally {
       clearTimeout(fallbackTimer);
     }
@@ -388,14 +419,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               fill="none"
               viewBox="0 0 24 24"
             >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
               <path
                 className="opacity-75"
                 fill="currentColor"
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            <span className="text-sm font-medium text-gray-600">Cerrando sesión…</span>
+            <span className="text-sm font-medium text-gray-600">
+              Cerrando sesión…
+            </span>
           </div>
         </div>
       )}
@@ -410,8 +450,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 }
-
