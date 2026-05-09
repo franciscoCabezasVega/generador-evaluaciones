@@ -1,7 +1,13 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { TourType, TourStep, TOURS_CONFIG } from '@/lib/tourConfig';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+} from "react";
+import { TourType, TourStep, TOURS_CONFIG } from "@/lib/tourConfig";
 
 interface TourContextType {
   currentTour: TourType;
@@ -39,7 +45,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   const nextStep = useCallback(() => {
     if (currentTour && currentStep < TOURS_CONFIG[currentTour].length - 1) {
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep((prev) => prev + 1);
     } else {
       // Si es el último paso, terminar el tour
       endTour();
@@ -48,7 +54,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   const previousStep = useCallback(() => {
     if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
+      setCurrentStep((prev) => prev - 1);
     }
   }, [currentStep]);
 
@@ -89,7 +95,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 export function useTour() {
   const context = useContext(TourContext);
   if (context === undefined) {
-    throw new Error('useTour must be used within a TourProvider');
+    throw new Error("useTour must be used within a TourProvider");
   }
   return context;
 }

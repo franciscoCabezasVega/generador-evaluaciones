@@ -1,8 +1,8 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 /**
@@ -11,16 +11,16 @@ export function cn(...inputs: ClassValue[]) {
 export function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof Error) {
     // Errores transitorios de lock/timeout NO son sesión expirada
-    if (error.name === 'SessionLockError') return false;
-    if (error.message.includes('Session not available')) return false;
-    if (error.message.includes('getSession timeout')) return false;
+    if (error.name === "SessionLockError") return false;
+    if (error.message.includes("Session not available")) return false;
+    if (error.message.includes("getSession timeout")) return false;
 
     const message = error.message.toLowerCase();
     return (
-      message.includes('session expired') ||
-      message.includes('no hay sesión') ||
-      message.includes('unauthorized') ||
-      message.includes('refresh token')
+      message.includes("session expired") ||
+      message.includes("no hay sesión") ||
+      message.includes("unauthorized") ||
+      message.includes("refresh token")
     );
   }
   return false;
@@ -33,5 +33,5 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return 'Ha ocurrido un error inesperado';
+  return "Ha ocurrido un error inesperado";
 }

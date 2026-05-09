@@ -1,7 +1,7 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { authService } from '@/lib/services/authService';
+import { useEffect, useRef, useCallback, useState } from "react";
+import { authService } from "@/lib/services/authService";
 
-const LAST_ACTIVITY_KEY = 'auth_last_activity';
+const LAST_ACTIVITY_KEY = "auth_last_activity";
 
 interface UseSessionTimeoutManagerOptions {
   enabled?: boolean; // Solo activo cuando hay usuario autenticado
@@ -59,7 +59,7 @@ function clearStoredLastActivity(): void {
  * - handleExpire: forzar expiración inmediata
  */
 export function useSessionTimeoutManager(
-  options: UseSessionTimeoutManagerOptions = {}
+  options: UseSessionTimeoutManagerOptions = {},
 ) {
   const {
     enabled = true,
@@ -112,8 +112,8 @@ export function useSessionTimeoutManager(
     clearAllTimers();
     clearStoredLastActivity();
 
-    console.warn('Session expired due to inactivity');
-    await authService.clearSession('inactive');
+    console.warn("Session expired due to inactivity");
+    await authService.clearSession("inactive");
   }, [clearAllTimers]);
 
   /* ========== Warning phase ========== */
@@ -133,7 +133,7 @@ export function useSessionTimeoutManager(
         await handleSessionExpiration();
       }, remainingMs);
     },
-    [handleSessionExpiration]
+    [handleSessionExpiration],
   );
 
   /* ========== Schedule timers based on last activity ========== */
@@ -168,7 +168,13 @@ export function useSessionTimeoutManager(
         }, timeUntilWarning);
       }
     },
-    [inactivityTimeout, warningTime, clearAllTimers, handleSessionExpiration, startWarning]
+    [
+      inactivityTimeout,
+      warningTime,
+      clearAllTimers,
+      handleSessionExpiration,
+      startWarning,
+    ],
   );
 
   /* ========== Activity tracking ========== */
@@ -243,15 +249,15 @@ export function useSessionTimeoutManager(
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const isInteractive =
-        target.closest('button') ||
-        target.closest('a[href]') ||
+        target.closest("button") ||
+        target.closest("a[href]") ||
         target.closest('[role="button"]') ||
         target.closest('[role="tab"]') ||
         target.closest('[role="menuitem"]') ||
-        target.closest('input') ||
-        target.closest('select') ||
-        target.closest('textarea') ||
-        target.closest('form');
+        target.closest("input") ||
+        target.closest("select") ||
+        target.closest("textarea") ||
+        target.closest("form");
 
       if (isInteractive) {
         recordActivity();
@@ -268,7 +274,7 @@ export function useSessionTimeoutManager(
 
     // Cuando la pestaña vuelve a ser visible, verificar si la sesión debería haber expirado
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== "visible") return;
 
       const storedTs = getStoredLastActivity();
       const lastAct = storedTs ?? lastActivityRef.current;
@@ -291,16 +297,16 @@ export function useSessionTimeoutManager(
       }
     };
 
-    window.addEventListener('click', handleClick);
-    window.addEventListener('keydown', handleKeydown);
-    document.addEventListener('submit', handleFormSubmit);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKeydown);
+    document.addEventListener("submit", handleFormSubmit);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('click', handleClick);
-      window.removeEventListener('keydown', handleKeydown);
-      document.removeEventListener('submit', handleFormSubmit);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKeydown);
+      document.removeEventListener("submit", handleFormSubmit);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearAllTimers();
     };
   }, [

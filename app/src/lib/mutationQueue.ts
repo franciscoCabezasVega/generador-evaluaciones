@@ -1,15 +1,15 @@
-import { authenticatedFetch } from './fetchAuth';
+import { authenticatedFetch } from "./fetchAuth";
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────────
 
-export type MutationMethod = 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+export type MutationMethod = "POST" | "PATCH" | "PUT" | "DELETE";
 
 export type MutationStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'permanent_failure';
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "permanent_failure";
 
 export interface MutationItem {
   id: string;
@@ -45,13 +45,16 @@ export interface EnqueueParams {
   onRollback?: () => void;
 }
 
-export type MutationSuccessCallback = (item: MutationItem, data: unknown) => void;
+export type MutationSuccessCallback = (
+  item: MutationItem,
+  data: unknown,
+) => void;
 export type MutationFailureCallback = (item: MutationItem) => void;
 export type MutationStatusChangeCallback = (queue: MutationItem[]) => void;
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'mutation_queue_v1';
+const STORAGE_KEY = "mutation_queue_v1";
 
 /**
  * Delays de backoff por intento (índice = número de intentos completados).
@@ -104,8 +107,8 @@ export class MutationQueue {
 
   constructor() {
     this.restore();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', this.handleOnline);
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleOnline);
     }
   }
 
@@ -133,7 +136,7 @@ export class MutationQueue {
       url: params.url,
       method: params.method,
       body: params.body,
-      status: 'pending',
+      status: "pending",
       attempts: 0,
       maxAttempts: params.maxAttempts ?? 3,
       createdAt: Date.now(),
@@ -159,10 +162,10 @@ export class MutationQueue {
   async processQueue(): Promise<void> {
     if (this.isProcessing) return;
 
-    const pending = this.queue.filter((i) => i.status === 'pending');
+    const pending = this.queue.filter((i) => i.status === "pending");
     if (pending.length === 0) return;
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       this.scheduleRetry(0);
       return;
     }
@@ -171,7 +174,7 @@ export class MutationQueue {
 
     for (const item of [...pending]) {
       const current = this.queue.find((i) => i.id === item.id);
-      if (!current || current.status !== 'pending') continue;
+      if (!current || current.status !== "pending") continue;
       await this.processItem(current);
     }
 
@@ -180,7 +183,7 @@ export class MutationQueue {
 
     // Programar reintento si quedan ítems fallidos recuperables
     const retryable = this.queue.filter(
-      (i) => i.status === 'failed' && i.attempts < i.maxAttempts
+      (i) => i.status === "failed" && i.attempts < i.maxAttempts,
     );
     if (retryable.length > 0) {
       this.scheduleRetry(retryable[0].attempts);
@@ -191,8 +194,8 @@ export class MutationQueue {
   retryFailed(): void {
     let changed = false;
     this.queue.forEach((item) => {
-      if (item.status === 'failed' || item.status === 'permanent_failure') {
-        item.status = 'pending';
+      if (item.status === "failed" || item.status === "permanent_failure") {
+        item.status = "pending";
         item.attempts = 0;
         item.error = undefined;
         changed = true;
@@ -211,12 +214,12 @@ export class MutationQueue {
 
   getStatus(): { pending: number; processing: boolean; failed: number } {
     const pending = this.queue.filter(
-      (i) => i.status === 'pending' || i.status === 'processing'
+      (i) => i.status === "pending" || i.status === "processing",
     ).length;
     const processing =
-      this.isProcessing || this.queue.some((i) => i.status === 'processing');
+      this.isProcessing || this.queue.some((i) => i.status === "processing");
     const failed = this.queue.filter(
-      (i) => i.status === 'failed' || i.status === 'permanent_failure'
+      (i) => i.status === "failed" || i.status === "permanent_failure",
     ).length;
     return { pending, processing, failed };
   }
@@ -226,15 +229,15 @@ export class MutationQueue {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('online', this.handleOnline);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleOnline);
     }
   }
 
   // ─── Procesamiento interno ──────────────────────────────────────────────────
 
   private async processItem(item: MutationItem): Promise<void> {
-    item.status = 'processing';
+    item.status = "processing";
     item.attempts += 1;
     this.persist();
     this.notifyStatusChange();
@@ -245,7 +248,7 @@ export class MutationQueue {
     try {
       const response = await authenticatedFetch(item.url, {
         method: item.method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
         signal: controller.signal,
       });
@@ -253,7 +256,31 @@ export class MutationQueue {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => `HTTP ${response.status}`);
+        const errorText = await response
+          .text()
+          .catch(() => `HTTP ${response.status}`);
+
+        // 409 en POST = recurso ya existe en el servidor (éxito idempotente).
+        // Ocurre cuando el cliente no recibió la respuesta del primer intento
+        // (p.ej. SessionLockError) y reintentó. El recurso SÍ fue creado.
+        // Tratarlo como completed para que la UI invalide el caché y no haga rollback.
+        if (response.status === 409 && item.method === "POST") {
+          console.warn(
+            "[MutationQueue] 409 en POST — recurso ya existe (éxito idempotente):",
+            item.url,
+          );
+          item.status = "completed";
+          item.completedAt = Date.now();
+          item.error = undefined;
+          this.persist();
+          // Invalidar cachés para que la UI refresque y muestre el recurso existente
+          this.onSuccessGlobal?.(item, {});
+          this.inMemoryCallbacks.delete(item.id);
+          this.notifyStatusChange();
+          this.cleanup();
+          return;
+        }
+
         const err = new Error(errorText || `HTTP ${response.status}`);
 
         // Errores del cliente son deterministas — no reintentar
@@ -264,7 +291,7 @@ export class MutationQueue {
       }
 
       const data = await response.json().catch(() => ({}));
-      item.status = 'completed';
+      item.status = "completed";
       item.completedAt = Date.now();
       item.error = undefined;
       this.persist();
@@ -280,8 +307,22 @@ export class MutationQueue {
       clearTimeout(timeoutId);
       item.error = error instanceof Error ? error.message : String(error);
 
+      // SessionLockError: navigator.lock transitorio — no quemar un intento del budget
+      // (es contención de lock, no un fallo real de red o del servidor)
+      const isLockError =
+        error instanceof Error && error.name === "SessionLockError";
+      if (isLockError) {
+        item.attempts -= 1;
+        item.status = "failed";
+        this.persist();
+        this.notifyStatusChange();
+        // Reintento rápido en 2s para dar tiempo a que el lock se libere
+        this.scheduleRetryMs(2000);
+        return;
+      }
+
       if (item.attempts >= item.maxAttempts) {
-        item.status = 'permanent_failure';
+        item.status = "permanent_failure";
         this.persist();
 
         const cb = this.inMemoryCallbacks.get(item.id);
@@ -290,7 +331,7 @@ export class MutationQueue {
 
         this.onPermanentFailureGlobal?.(item);
       } else {
-        item.status = 'failed';
+        item.status = "failed";
         this.persist();
       }
       this.notifyStatusChange();
@@ -301,24 +342,41 @@ export class MutationQueue {
 
   private handleOnline = () => {
     this.queue.forEach((item) => {
-      if (item.status === 'failed' && item.attempts < item.maxAttempts) {
-        item.status = 'pending';
+      if (item.status === "failed" && item.attempts < item.maxAttempts) {
+        item.status = "pending";
       }
     });
     this.persist();
     void this.processQueue();
   };
 
+  /** Programa un reintento con un delay fijo en ms (para SessionLockError). */
+  private scheduleRetryMs(delayMs: number): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.queue.forEach((item) => {
+        if (item.status === "failed" && item.attempts < item.maxAttempts) {
+          item.status = "pending";
+        }
+      });
+      this.persist();
+      void this.processQueue();
+    }, delayMs);
+  }
+
   private scheduleRetry(completedAttempts: number): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     const delay =
-      BACKOFF_DELAYS_MS[Math.min(completedAttempts, BACKOFF_DELAYS_MS.length - 1)];
+      BACKOFF_DELAYS_MS[
+        Math.min(completedAttempts, BACKOFF_DELAYS_MS.length - 1)
+      ];
 
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.queue.forEach((item) => {
-        if (item.status === 'failed' && item.attempts < item.maxAttempts) {
-          item.status = 'pending';
+        if (item.status === "failed" && item.attempts < item.maxAttempts) {
+          item.status = "pending";
         }
       });
       this.persist();
@@ -329,7 +387,7 @@ export class MutationQueue {
   private cleanup(): void {
     const now = Date.now();
     this.queue = this.queue.filter((item) => {
-      if (item.status === 'completed' && item.completedAt) {
+      if (item.status === "completed" && item.completedAt) {
         return now - item.completedAt < CLEANUP_AGE_MS;
       }
       return true;
@@ -339,11 +397,11 @@ export class MutationQueue {
 
   private persist(): void {
     try {
-      if (typeof localStorage === 'undefined') return;
+      if (typeof localStorage === "undefined") return;
       const toStore = this.queue.filter(
         (i) =>
-          i.status !== 'completed' ||
-          (i.completedAt && Date.now() - i.completedAt < CLEANUP_AGE_MS)
+          i.status !== "completed" ||
+          (i.completedAt && Date.now() - i.completedAt < CLEANUP_AGE_MS),
       );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
     } catch {
@@ -353,19 +411,24 @@ export class MutationQueue {
 
   private restore(): void {
     try {
-      if (typeof localStorage === 'undefined') return;
+      if (typeof localStorage === "undefined") return;
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) return;
 
       const items: MutationItem[] = JSON.parse(stored);
       this.queue = items
         .filter((i) =>
-          ['pending', 'failed', 'processing', 'permanent_failure'].includes(i.status)
+          ["pending", "failed", "processing", "permanent_failure"].includes(
+            i.status,
+          ),
         )
         .map((i) => ({
           ...i,
           // Los ítems que estaban en proceso cuando se cerró la página se reintentarán
-          status: i.status === 'processing' ? ('pending' as MutationStatus) : i.status,
+          status:
+            i.status === "processing"
+              ? ("pending" as MutationStatus)
+              : i.status,
         }));
     } catch {
       // Datos inválidos en localStorage — ignorar

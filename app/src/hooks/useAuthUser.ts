@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { userProfileService } from '@/lib/services/userProfileService';
-import { UserProfile, AuthUser } from '@/lib/types';
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { userProfileService } from "@/lib/services/userProfileService";
+import { UserProfile, AuthUser } from "@/lib/types";
 
-const STORAGE_KEY = 'auth_user_profile';
-const STORAGE_EXPIRY = 'auth_user_profile_expiry';
+const STORAGE_KEY = "auth_user_profile";
+const STORAGE_EXPIRY = "auth_user_profile_expiry";
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
 
 /**
@@ -30,8 +30,10 @@ export function useAuthUser() {
         }
 
         // Paso 2: Validar sesión con Supabase (sin llamar a getUser si no es necesario)
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
         if (!session?.user) {
           // Sin sesión válida
           clearLocalStorage();
@@ -62,8 +64,8 @@ export function useAuthUser() {
         }
         setLoading(false);
       } catch (err) {
-        console.error('Error in useAuthUser:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        console.error("Error in useAuthUser:", err);
+        setError(err instanceof Error ? err.message : "Unknown error");
         setLoading(false);
       }
     };
@@ -71,7 +73,13 @@ export function useAuthUser() {
     initializeAuth();
   }, []);
 
-  return { user, profile, loading, error, refreshProfile: () => refreshProfileManually() };
+  return {
+    user,
+    profile,
+    loading,
+    error,
+    refreshProfile: () => refreshProfileManually(),
+  };
 }
 
 /**
@@ -102,9 +110,12 @@ function getFromLocalStorage(): UserProfile | null {
 function saveToLocalStorage(profile: UserProfile) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    localStorage.setItem(STORAGE_EXPIRY, (Date.now() + CACHE_DURATION).toString());
+    localStorage.setItem(
+      STORAGE_EXPIRY,
+      (Date.now() + CACHE_DURATION).toString(),
+    );
   } catch (err) {
-    console.error('Error saving to localStorage:', err);
+    console.error("Error saving to localStorage:", err);
   }
 }
 
@@ -146,7 +157,7 @@ async function refreshProfileManually() {
     }
     return null;
   } catch (err) {
-    console.error('Error refreshing profile:', err);
+    console.error("Error refreshing profile:", err);
     return null;
   }
 }

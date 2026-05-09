@@ -1,5 +1,5 @@
-import { supabase } from '@/lib/supabase';
-import { AuditLog, CreateAuditLogInput } from '@/lib/types';
+import { supabase } from "@/lib/supabase";
+import { AuditLog, CreateAuditLogInput } from "@/lib/types";
 
 export const auditService = {
   /**
@@ -8,7 +8,7 @@ export const auditService = {
   async logAction(input: CreateAuditLogInput): Promise<AuditLog | null> {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
+        .from("audit_logs")
         .insert({
           user_id: input.user_id,
           user_email: input.user_email,
@@ -25,13 +25,13 @@ export const auditService = {
         .single();
 
       if (error) {
-        console.error('Error logging audit action:', error);
+        console.error("Error logging audit action:", error);
         return null;
       }
 
       return data as AuditLog;
     } catch (error) {
-      console.error('Error in auditService.logAction:', error);
+      console.error("Error in auditService.logAction:", error);
       return null;
     }
   },
@@ -40,32 +40,30 @@ export const auditService = {
    * Obtiene el historial de auditoría con filtros
    */
   async getAuditLogs(filters: {
-    entity_type?: 'TASK' | 'REPORT';
+    entity_type?: "TASK" | "REPORT";
     entity_id?: string;
     user_id?: string;
-    action?: 'CREATE' | 'UPDATE' | 'DELETE';
+    action?: "CREATE" | "UPDATE" | "DELETE";
     limit?: number;
     offset?: number;
   }) {
     try {
-      let query = supabase
-        .from('audit_logs')
-        .select('*', { count: 'exact' });
+      let query = supabase.from("audit_logs").select("*", { count: "exact" });
 
       if (filters.entity_type) {
-        query = query.eq('entity_type', filters.entity_type);
+        query = query.eq("entity_type", filters.entity_type);
       }
       if (filters.entity_id) {
-        query = query.eq('entity_id', filters.entity_id);
+        query = query.eq("entity_id", filters.entity_id);
       }
       if (filters.user_id) {
-        query = query.eq('user_id', filters.user_id);
+        query = query.eq("user_id", filters.user_id);
       }
       if (filters.action) {
-        query = query.eq('action', filters.action);
+        query = query.eq("action", filters.action);
       }
 
-      query = query.order('timestamp', { ascending: false });
+      query = query.order("timestamp", { ascending: false });
 
       if (filters.limit) {
         query = query.limit(filters.limit);
@@ -73,7 +71,7 @@ export const auditService = {
       if (filters.offset) {
         query = query.range(
           filters.offset,
-          filters.offset + (filters.limit || 10) - 1
+          filters.offset + (filters.limit || 10) - 1,
         );
       }
 
@@ -86,7 +84,7 @@ export const auditService = {
         count: count || 0,
       };
     } catch (error) {
-      console.error('Error fetching audit logs:', error);
+      console.error("Error fetching audit logs:", error);
       throw error;
     }
   },
@@ -97,16 +95,16 @@ export const auditService = {
   async getTaskAuditHistory(taskId: string) {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('entity_id', taskId)
-        .eq('entity_type', 'TASK')
-        .order('timestamp', { ascending: false });
+        .from("audit_logs")
+        .select("*")
+        .eq("entity_id", taskId)
+        .eq("entity_type", "TASK")
+        .order("timestamp", { ascending: false });
 
       if (error) throw error;
       return (data as AuditLog[]) || [];
     } catch (error) {
-      console.error('Error fetching task audit history:', error);
+      console.error("Error fetching task audit history:", error);
       throw error;
     }
   },
@@ -117,16 +115,16 @@ export const auditService = {
   async getReportAuditHistory(reportId: string) {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('entity_id', reportId)
-        .eq('entity_type', 'REPORT')
-        .order('timestamp', { ascending: false });
+        .from("audit_logs")
+        .select("*")
+        .eq("entity_id", reportId)
+        .eq("entity_type", "REPORT")
+        .order("timestamp", { ascending: false });
 
       if (error) throw error;
       return (data as AuditLog[]) || [];
     } catch (error) {
-      console.error('Error fetching report audit history:', error);
+      console.error("Error fetching report audit history:", error);
       throw error;
     }
   },
@@ -137,16 +135,16 @@ export const auditService = {
   async getUserActivityLog(userId: string, limit: number = 50) {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
+        .from("audit_logs")
+        .select("*")
+        .eq("user_id", userId)
+        .order("timestamp", { ascending: false })
         .limit(limit);
 
       if (error) throw error;
       return (data as AuditLog[]) || [];
     } catch (error) {
-      console.error('Error fetching user activity log:', error);
+      console.error("Error fetching user activity log:", error);
       throw error;
     }
   },
@@ -156,21 +154,21 @@ export const auditService = {
    */
   async getChangesBetweenVersions(
     entityId: string,
-    entityType: 'TASK' | 'REPORT'
+    entityType: "TASK" | "REPORT",
   ) {
     try {
       const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('entity_id', entityId)
-        .eq('entity_type', entityType)
-        .eq('action', 'UPDATE')
-        .order('timestamp', { ascending: false });
+        .from("audit_logs")
+        .select("*")
+        .eq("entity_id", entityId)
+        .eq("entity_type", entityType)
+        .eq("action", "UPDATE")
+        .order("timestamp", { ascending: false });
 
       if (error) throw error;
       return (data as AuditLog[]) || [];
     } catch (error) {
-      console.error('Error fetching changes:', error);
+      console.error("Error fetching changes:", error);
       throw error;
     }
   },

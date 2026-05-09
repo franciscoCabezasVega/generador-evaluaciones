@@ -1,6 +1,6 @@
-import { supabase } from '@/lib/supabase';
-import { UserProfile, UserRole } from '@/lib/types';
-import { getRoleNameById } from '@/lib/cache/rolesCache';
+import { supabase } from "@/lib/supabase";
+import { UserProfile, UserRole } from "@/lib/types";
+import { getRoleNameById } from "@/lib/cache/rolesCache";
 
 export const userProfileService = {
   // Obtener perfil del usuario autenticado
@@ -17,13 +17,13 @@ export const userProfileService = {
 
       // Query simple sin JOIN para evitar problemas RLS
       const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
+        .from("user_profiles")
+        .select("*")
+        .eq("id", user.id)
         .single();
 
       if (error) {
-        console.error('Error fetching user profile from user_profiles:', error);
+        console.error("Error fetching user profile from user_profiles:", error);
         return null;
       }
 
@@ -37,6 +37,8 @@ export const userProfileService = {
       const profile: UserProfile = {
         id: data.id,
         email: data.email,
+        name: data.name ?? null,
+        lastname: data.lastname ?? null,
         role: roleName as UserRole,
         role_id: data.role_id,
         created_at: data.created_at,
@@ -45,7 +47,7 @@ export const userProfileService = {
 
       return profile;
     } catch (error) {
-      console.error('Exception in getUserProfile:', error);
+      console.error("Exception in getUserProfile:", error);
       return null;
     }
   },
@@ -71,22 +73,22 @@ export const userProfileService = {
         error: authError,
       } = await supabase.auth.getUser();
 
-      if (authError || !user) throw new Error('Not authenticated');
+      if (authError || !user) throw new Error("Not authenticated");
 
       // Verificar que sea admin
       const { data: adminCheck, error: adminError } = await supabase
-        .from('user_profiles')
-        .select('role_id')
-        .eq('id', user.id)
+        .from("user_profiles")
+        .select("role_id")
+        .eq("id", user.id)
         .single();
 
       if (adminError || adminCheck?.role_id !== 1) {
-        throw new Error('Not authorized - admin only');
+        throw new Error("Not authorized - admin only");
       }
 
       const { data, error } = await supabase
-        .from('user_profiles')
-        .select('id, email, role_id')
+        .from("user_profiles")
+        .select("id, email, role_id")
         .returns<Record<string, unknown>[]>();
 
       if (error) throw error;
@@ -95,7 +97,10 @@ export const userProfileService = {
       const rolesMap = await (async () => {
         const map = new Map<number, string>();
         for (const item of data) {
-          const roleName = await getRoleNameById(item.role_id as number, supabase);
+          const roleName = await getRoleNameById(
+            item.role_id as number,
+            supabase,
+          );
           map.set(item.role_id as number, roleName);
         }
         return map;
@@ -104,11 +109,11 @@ export const userProfileService = {
       return data.map((item) => ({
         id: item.id as string,
         email: item.email as string,
-        role: rolesMap.get(item.role_id as number) || 'invitado',
+        role: rolesMap.get(item.role_id as number) || "invitado",
         role_id: item.role_id as number,
       }));
     } catch (error) {
-      console.error('Error in getAllUsers:', error);
+      console.error("Error in getAllUsers:", error);
       throw error;
     }
   },

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, {
   createContext,
@@ -7,9 +7,13 @@ import React, {
   useEffect,
   useRef,
   useState,
-} from 'react';
-import { MutationQueue, MutationItem, EnqueueParams } from '@/lib/mutationQueue';
-import { invalidateCache } from '@/hooks/useCachedFetch';
+} from "react";
+import {
+  MutationQueue,
+  MutationItem,
+  EnqueueParams,
+} from "@/lib/mutationQueue";
+import { invalidateCache } from "@/hooks/useCachedFetch";
 
 // ─── Tipos del contexto ───────────────────────────────────────────────────────
 
@@ -33,11 +37,17 @@ interface MutationQueueContextValue {
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-const MutationQueueContext = createContext<MutationQueueContextValue | null>(null);
+const MutationQueueContext = createContext<MutationQueueContextValue | null>(
+  null,
+);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-export function MutationQueueProvider({ children }: { children: React.ReactNode }) {
+export function MutationQueueProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const queueRef = useRef<MutationQueue | null>(null);
 
   const [queueStatus, setQueueStatus] = useState<QueueStatus>({
@@ -52,7 +62,11 @@ export function MutationQueueProvider({ children }: { children: React.ReactNode 
 
     const syncStatus = () => {
       const s = queue.getStatus();
-      setQueueStatus({ pending: s.pending, processing: s.processing, failed: s.failed });
+      setQueueStatus({
+        pending: s.pending,
+        processing: s.processing,
+        failed: s.failed,
+      });
     };
 
     queue.configure({
@@ -67,11 +81,11 @@ export function MutationQueueProvider({ children }: { children: React.ReactNode 
 
       onPermanentFailure: (item: MutationItem) => {
         console.error(
-          '[MutationQueue] Fallo permanente:',
+          "[MutationQueue] Fallo permanente:",
           item.method,
           item.url,
-          '—',
-          item.error
+          "—",
+          item.error,
         );
       },
     });
@@ -93,7 +107,7 @@ export function MutationQueueProvider({ children }: { children: React.ReactNode 
 
   const enqueue = useCallback((params: EnqueueParams): string => {
     if (!queueRef.current) {
-      throw new Error('[MutationQueue] Cola no inicializada');
+      throw new Error("[MutationQueue] Cola no inicializada");
     }
     return queueRef.current.enqueue(params);
   }, []);
@@ -103,7 +117,9 @@ export function MutationQueueProvider({ children }: { children: React.ReactNode 
   }, []);
 
   return (
-    <MutationQueueContext.Provider value={{ enqueue, queueStatus, retryFailed }}>
+    <MutationQueueContext.Provider
+      value={{ enqueue, queueStatus, retryFailed }}
+    >
       {children}
     </MutationQueueContext.Provider>
   );
@@ -119,7 +135,7 @@ export function useMutationQueue(): MutationQueueContextValue {
   const ctx = useContext(MutationQueueContext);
   if (!ctx) {
     throw new Error(
-      'useMutationQueue debe usarse dentro de <MutationQueueProvider>'
+      "useMutationQueue debe usarse dentro de <MutationQueueProvider>",
     );
   }
   return ctx;

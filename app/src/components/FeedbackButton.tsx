@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { MessageCircle, ChevronDown } from 'lucide-react';
-import { FeedbackForm } from './FeedbackForm';
+import { useState } from "react";
+import { MessageCircle, ChevronDown } from "lucide-react";
+import { FeedbackForm } from "./FeedbackForm";
 
 export function FeedbackButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,11 +29,11 @@ export function FeedbackButton() {
         onClick={toggleForm}
         className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all duration-300 hover:shadow-xl ${
           isOpen
-            ? 'bg-red-500 hover:bg-red-600 text-white'
-            : 'bg-blue-600 hover:bg-blue-700 text-white'
+            ? "bg-red-500 hover:bg-red-600 text-white"
+            : "bg-blue-600 hover:bg-blue-700 text-white"
         }`}
         aria-label="Reportar problema"
-        title={isOpen ? 'Cerrar formulario' : 'Reportar problema'}
+        title={isOpen ? "Cerrar formulario" : "Reportar problema"}
         data-tour="feedback-button"
       >
         {isOpen ? (

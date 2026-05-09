@@ -1,8 +1,8 @@
 export type ProductType = string;
-export type TaskStatus = 'Completada' | 'Deprecada' | 'Pendiente';
+export type TaskStatus = "Completada" | "Deprecada" | "Pendiente";
 export type TshirtSize = string;
 export type TaskCategory = string;
-export type UserRole = 'admin' | 'gestor' | 'reportero' | 'invitado';
+export type UserRole = "admin" | "gestor" | "reportero" | "invitado";
 
 // ─── Interfaces de catálogos dinámicos ───────────────────────────────────────
 export interface CatalogProduct {
@@ -51,12 +51,11 @@ export interface CatalogQAMember {
   updated_at: string;
 }
 
-
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  admin: 'Administrador - Acceso completo',
-  gestor: 'Gestor - Gestiona tareas',
-  reportero: 'Reportero - Genera reportes',
-  invitado: 'Invitado - Solo lectura',
+  admin: "Administrador - Acceso completo",
+  gestor: "Gestor - Gestiona tareas",
+  reportero: "Reportero - Genera reportes",
+  invitado: "Invitado - Solo lectura",
 };
 
 // TaskSquad: relación many-to-many entre tareas y squads
@@ -164,6 +163,8 @@ export interface AuthUser {
 export interface UserProfile {
   id: string;
   email: string;
+  name: string | null;
+  lastname: string | null;
   role: UserRole;
   role_id: number;
   created_at: string;
@@ -177,8 +178,8 @@ export interface Role {
 }
 
 // Audit Trail Types
-export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
-export type AuditEntityType = 'TASK' | 'REPORT';
+export type AuditAction = "CREATE" | "UPDATE" | "DELETE";
+export type AuditEntityType = "TASK" | "REPORT";
 
 // Audit log values with known fields typed
 export interface AuditLogValues {
@@ -213,7 +214,7 @@ export interface CreateAuditLogInput {
 }
 
 // Evidence Types
-export type EvidenceType = 'image' | 'video' | 'link';
+export type EvidenceType = "image" | "video" | "link";
 
 export interface EvidenceItem {
   type: EvidenceType;
@@ -222,8 +223,8 @@ export interface EvidenceItem {
 }
 
 // Feedback Types
-export type FeedbackType = 'suggestion' | 'incident';
-export type FeedbackStatus = 'new' | 'reviewed' | 'in_progress' | 'resolved';
+export type FeedbackType = "suggestion" | "incident";
+export type FeedbackStatus = "new" | "reviewed" | "in_progress" | "resolved";
 
 export interface FeedbackReport {
   id: string;

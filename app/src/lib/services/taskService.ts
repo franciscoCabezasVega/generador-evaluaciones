@@ -1,5 +1,5 @@
-import { supabase } from '@/lib/supabase';
-import { Task, CreateTaskInput, TaskSquad } from '@/lib/types';
+import { supabase } from "@/lib/supabase";
+import { Task, CreateTaskInput, TaskSquad } from "@/lib/types";
 
 export const taskService = {
   // Obtener tareas con filtros - optimizado para evitar queries múltiples
@@ -12,15 +12,15 @@ export const taskService = {
   }) {
     try {
       // Paso 1: Obtener task_squad con filtro de squad si existe
-      let squadQuery = supabase.from('task_squad').select('task_id, *');
-      
+      let squadQuery = supabase.from("task_squad").select("task_id, *");
+
       if (filters.squad) {
-        squadQuery = squadQuery.eq('squad', filters.squad);
+        squadQuery = squadQuery.eq("squad", filters.squad);
       }
 
       const { data: squadsData, error: squadsError } = await squadQuery;
 
-      if (squadsError && squadsError.code !== 'PGRST116') {
+      if (squadsError && squadsError.code !== "PGRST116") {
         throw squadsError;
       }
 
@@ -29,33 +29,40 @@ export const taskService = {
       }
 
       // Paso 2: Obtener todas las tareas en UNA sola query
-      const taskIds = [...new Set((squadsData as TaskSquad[]).map((s) => s.task_id))];
-      
-      let tasksQuery = supabase.from('tasks').select('*').in('id', taskIds);
+      const taskIds = [
+        ...new Set((squadsData as TaskSquad[]).map((s) => s.task_id)),
+      ];
+
+      let tasksQuery = supabase.from("tasks").select("*").in("id", taskIds);
 
       if (filters.month !== undefined) {
-        tasksQuery = tasksQuery.eq('month', filters.month);
+        tasksQuery = tasksQuery.eq("month", filters.month);
       }
       if (filters.year !== undefined) {
-        tasksQuery = tasksQuery.eq('year', filters.year);
+        tasksQuery = tasksQuery.eq("year", filters.year);
       }
       if (filters.status) {
-        tasksQuery = tasksQuery.eq('status', filters.status);
+        tasksQuery = tasksQuery.eq("status", filters.status);
       }
 
-      const { data: tasksData, error: tasksError } = await tasksQuery.order('created_at', {
-        ascending: false,
-      });
+      const { data: tasksData, error: tasksError } = await tasksQuery.order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      );
 
       if (tasksError) throw tasksError;
 
       // Paso 3: Combinar en resultado final
       return (tasksData as Task[]).map((task) => ({
         ...task,
-        squads: (squadsData as TaskSquad[]).filter((sq) => sq.task_id === task.id),
+        squads: (squadsData as TaskSquad[]).filter(
+          (sq) => sq.task_id === task.id,
+        ),
       }));
     } catch (error) {
-      console.error('Error in getTasks:', error);
+      console.error("Error in getTasks:", error);
       throw error;
     }
   },
@@ -63,19 +70,19 @@ export const taskService = {
   // Obtener una tarea por ID con sus squads
   async getTaskById(id: string) {
     const { data: task, error: taskError } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', id)
+      .from("tasks")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (taskError) throw taskError;
 
     const { data: squadsData, error: squadsError } = await supabase
-      .from('task_squad')
-      .select('*')
-      .eq('task_id', id);
+      .from("task_squad")
+      .select("*")
+      .eq("task_id", id);
 
-    if (squadsError && squadsError.code !== 'PGRST116') {
+    if (squadsError && squadsError.code !== "PGRST116") {
       throw squadsError;
     }
 
@@ -92,10 +99,10 @@ export const taskService = {
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) throw new Error('User not authenticated');
+    if (authError || !user) throw new Error("User not authenticated");
 
     const { data, error } = await supabase
-      .from('tasks')
+      .from("tasks")
       .insert({
         name: input.name,
         task_link: input.task_link,
@@ -106,13 +113,13 @@ export const taskService = {
         user_id: user.id,
         assigned_qa: Array.isArray(input.assigned_qa) ? input.assigned_qa : [],
       })
-      .select('id, name')
+      .select("id, name")
       .single();
 
     if (error) throw error;
 
     // Crear registros en task_squad
-    const { calculateTaskScore } = await import('@/lib/scoreCalculator');
+    const { calculateTaskScore } = await import("@/lib/scoreCalculator");
     const squadRecords = input.squads.map((squadData) => {
       const calculatedScore = calculateTaskScore({
         lowReturns: squadData.low_returns,
@@ -125,13 +132,13 @@ export const taskService = {
         low_returns: squadData.low_returns,
         medium_returns: squadData.medium_returns,
         high_returns: squadData.high_returns,
-        additional_notes: squadData.additional_notes || '',
+        additional_notes: squadData.additional_notes || "",
         calculated_score: calculatedScore,
       };
     });
 
     const { error: squadError } = await supabase
-      .from('task_squad')
+      .from("task_squad")
       .insert(squadRecords);
 
     if (squadError) throw squadError;
@@ -151,12 +158,12 @@ export const taskService = {
     const { squads, ...taskUpdateData } = input;
 
     const { data, error } = await supabase
-      .from('tasks')
+      .from("tasks")
       .update({
         ...taskUpdateData,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 
@@ -164,7 +171,7 @@ export const taskService = {
 
     // Si se proporcionan squads, actualizar task_squad
     if (squads && squads.length > 0) {
-      const { calculateTaskScore } = await import('@/lib/scoreCalculator');
+      const { calculateTaskScore } = await import("@/lib/scoreCalculator");
 
       for (const squadData of squads) {
         const calculatedScore = calculateTaskScore({
@@ -173,28 +180,29 @@ export const taskService = {
           highReturns: squadData.high_returns,
         });
 
-        await supabase
-          .from('task_squad')
-          .upsert({
+        await supabase.from("task_squad").upsert(
+          {
             task_id: id,
             squad: squadData.squad,
             low_returns: squadData.low_returns,
             medium_returns: squadData.medium_returns,
             high_returns: squadData.high_returns,
-            additional_notes: squadData.additional_notes || '',
+            additional_notes: squadData.additional_notes || "",
             calculated_score: calculatedScore,
             updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'task_id,squad',
-          });
+          },
+          {
+            onConflict: "task_id,squad",
+          },
+        );
       }
     }
 
     // Obtener squads actualizados
     const { data: squadsData } = await supabase
-      .from('task_squad')
-      .select('*')
-      .eq('task_id', id);
+      .from("task_squad")
+      .select("*")
+      .eq("task_id", id);
 
     return {
       ...data,
@@ -205,9 +213,9 @@ export const taskService = {
   // Eliminar tarea
   async deleteTask(id: string) {
     // Eliminar task_squad records
-    await supabase.from('task_squad').delete().eq('task_id', id);
+    await supabase.from("task_squad").delete().eq("task_id", id);
 
-    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
 
     if (error) throw error;
   },
@@ -216,13 +224,15 @@ export const taskService = {
   async getCompletedTasksBySquadAndMonth(
     squad: string,
     month: number,
-    year: number
+    year: number,
   ) {
     // Obtener task_squad records para este squad
     const { data: squadsData, error: squadsError } = await supabase
-      .from('task_squad')
-      .select('task_id, squad, low_returns, medium_returns, high_returns, calculated_score')
-      .eq('squad', squad);
+      .from("task_squad")
+      .select(
+        "task_id, squad, low_returns, medium_returns, high_returns, calculated_score",
+      )
+      .eq("squad", squad);
 
     if (squadsError) throw squadsError;
 
@@ -230,16 +240,18 @@ export const taskService = {
       return [];
     }
 
-    const taskIds = [...new Set((squadsData as TaskSquad[]).map((sq) => sq.task_id))];
+    const taskIds = [
+      ...new Set((squadsData as TaskSquad[]).map((sq) => sq.task_id)),
+    ];
 
     // Obtener tareas completadas en este mes/año en UNA SOLA query
     const { data: tasksData, error: tasksError } = await supabase
-      .from('tasks')
-      .select('*')
-      .in('id', taskIds)
-      .eq('month', month)
-      .eq('year', year)
-      .eq('status', 'Completada');
+      .from("tasks")
+      .select("*")
+      .in("id", taskIds)
+      .eq("month", month)
+      .eq("year", year)
+      .eq("status", "Completada");
 
     if (tasksError) throw tasksError;
 
@@ -247,7 +259,7 @@ export const taskService = {
     return (tasksData as Task[]).map((task) => ({
       ...task,
       squads: (squadsData as TaskSquad[]).filter(
-        (sq) => sq.task_id === task.id && sq.squad === squad
+        (sq) => sq.task_id === task.id && sq.squad === squad,
       ),
     }));
   },

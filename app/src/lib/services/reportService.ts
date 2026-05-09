@@ -1,26 +1,22 @@
-import { supabase } from '@/lib/supabase';
-import { Report, CreateReportInput } from '@/lib/types';
+import { supabase } from "@/lib/supabase";
+import { Report, CreateReportInput } from "@/lib/types";
 
 export const reportService = {
   // Obtener reportes con filtros
-  async getReports(filters: {
-    squad?: string;
-    month?: number;
-    year?: number;
-  }) {
-    let query = supabase.from('reports').select('*');
+  async getReports(filters: { squad?: string; month?: number; year?: number }) {
+    let query = supabase.from("reports").select("*");
 
     if (filters.squad) {
-      query = query.eq('squad', filters.squad);
+      query = query.eq("squad", filters.squad);
     }
     if (filters.month !== undefined) {
-      query = query.eq('month', filters.month);
+      query = query.eq("month", filters.month);
     }
     if (filters.year !== undefined) {
-      query = query.eq('year', filters.year);
+      query = query.eq("year", filters.year);
     }
 
-    const { data, error } = await query.order('created_at', {
+    const { data, error } = await query.order("created_at", {
       ascending: false,
     });
 
@@ -31,9 +27,9 @@ export const reportService = {
   // Obtener un reporte específico
   async getReportById(id: string) {
     const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .eq('id', id)
+      .from("reports")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (error) throw error;
@@ -43,12 +39,12 @@ export const reportService = {
   // Obtener versiones de un reporte
   async getReportVersions(squad: string, month: number, year: number) {
     const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .eq('squad', squad)
-      .eq('month', month)
-      .eq('year', year)
-      .order('version', { ascending: false });
+      .from("reports")
+      .select("*")
+      .eq("squad", squad)
+      .eq("month", month)
+      .eq("year", year)
+      .order("version", { ascending: false });
 
     if (error) throw error;
     return data as Report[];
@@ -57,16 +53,16 @@ export const reportService = {
   // Obtener la última versión de un reporte
   async getLatestReportVersion(squad: string, month: number, year: number) {
     const { data, error } = await supabase
-      .from('reports')
-      .select('version')
-      .eq('squad', squad)
-      .eq('month', month)
-      .eq('year', year)
-      .order('version', { ascending: false })
+      .from("reports")
+      .select("version")
+      .eq("squad", squad)
+      .eq("month", month)
+      .eq("year", year)
+      .order("version", { ascending: false })
       .limit(1)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error;
+    if (error && error.code !== "PGRST116") throw error;
     return (data as Report) || null;
   },
 
@@ -77,19 +73,19 @@ export const reportService = {
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) throw new Error('User not authenticated');
+    if (authError || !user) throw new Error("User not authenticated");
 
     // Obtener la última versión
     const lastReport = await this.getLatestReportVersion(
       input.squad,
       input.month,
-      input.year
+      input.year,
     );
 
     const nextVersion = (lastReport?.version || 0) + 1;
 
     const { data, error } = await supabase
-      .from('reports')
+      .from("reports")
       .insert({
         ...input,
         version: nextVersion,
@@ -105,9 +101,9 @@ export const reportService = {
   // Actualizar reporte
   async updateReport(id: string, input: Partial<CreateReportInput>) {
     const { data, error } = await supabase
-      .from('reports')
+      .from("reports")
       .update(input)
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 

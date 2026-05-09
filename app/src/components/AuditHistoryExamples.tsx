@@ -1,10 +1,10 @@
 // Archivo de Ejemplo: Cómo integrar historial de auditoría en detalles de tarea/reporte
 // Este archivo muestra cómo usar el componente AuditHistory en tus páginas
 
-import { useEffect, useState } from 'react';
-import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
-import { AuditLog } from '@/lib/types';
-import AuditHistory from '@/components/AuditHistory';
+import { useEffect, useState } from "react";
+import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import { AuditLog } from "@/lib/types";
+import AuditHistory from "@/components/AuditHistory";
 
 /**
  * Ejemplo 1: En la página de detalle de una tarea
@@ -18,17 +18,16 @@ export function TaskDetailWithAuditHistory({ taskId }: { taskId: string }) {
     const loadAuditHistory = async () => {
       try {
         setIsLoading(true);
-        const response = await safeFetch(
-          `/api/audit-logs/task/${taskId}`,
-          { method: 'GET' }
-        );
+        const response = await safeFetch(`/api/audit-logs/task/${taskId}`, {
+          method: "GET",
+        });
 
         if (response.ok) {
           const data = await response.json();
           setAuditLogs(data.data);
         }
       } catch (error) {
-        console.error('Error loading audit history:', error);
+        console.error("Error loading audit history:", error);
       } finally {
         setIsLoading(false);
       }
@@ -50,7 +49,11 @@ export function TaskDetailWithAuditHistory({ taskId }: { taskId: string }) {
 /**
  * Ejemplo 2: En la página de detalle de un reporte
  */
-export function ReportDetailWithAuditHistory({ reportId }: { reportId: string }) {
+export function ReportDetailWithAuditHistory({
+  reportId,
+}: {
+  reportId: string;
+}) {
   const { safeFetch } = useSafeAuthFetch();
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,17 +62,16 @@ export function ReportDetailWithAuditHistory({ reportId }: { reportId: string })
     const loadAuditHistory = async () => {
       try {
         setIsLoading(true);
-        const response = await safeFetch(
-          `/api/audit-logs/report/${reportId}`,
-          { method: 'GET' }
-        );
+        const response = await safeFetch(`/api/audit-logs/report/${reportId}`, {
+          method: "GET",
+        });
 
         if (response.ok) {
           const data = await response.json();
           setAuditLogs(data.data);
         }
       } catch (error) {
-        console.error('Error loading audit history:', error);
+        console.error("Error loading audit history:", error);
       } finally {
         setIsLoading(false);
       }
@@ -91,7 +93,10 @@ export function ReportDetailWithAuditHistory({ reportId }: { reportId: string })
 /**
  * Ejemplo 3: Hook personalizado para reutilizar la lógica
  */
-export function useEntityAuditHistory(entityType: 'task' | 'report', entityId: string) {
+export function useEntityAuditHistory(
+  entityType: "task" | "report",
+  entityId: string,
+) {
   const { safeFetch } = useSafeAuthFetch();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,17 +110,17 @@ export function useEntityAuditHistory(entityType: 'task' | 'report', entityId: s
 
         const response = await safeFetch(
           `/api/audit-logs/${entityType}/${entityId}`,
-          { method: 'GET' }
+          { method: "GET" },
         );
 
         if (!response.ok) {
-          throw new Error('Failed to load audit history');
+          throw new Error("Failed to load audit history");
         }
 
         const data = await response.json();
         setLogs(data.data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setIsLoading(false);
       }
@@ -130,7 +135,7 @@ export function useEntityAuditHistory(entityType: 'task' | 'report', entityId: s
 /**
  * Ejemplo 4: Integración en un Modal
  */
-import Modal from '@/components/Modal';
+import Modal from "@/components/Modal";
 
 export function AuditHistoryModal({
   isOpen,
@@ -140,10 +145,13 @@ export function AuditHistoryModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  entityType: 'task' | 'report';
+  entityType: "task" | "report";
   entityId: string;
 }) {
-  const { logs, isLoading, error } = useEntityAuditHistory(entityType, entityId);
+  const { logs, isLoading, error } = useEntityAuditHistory(
+    entityType,
+    entityId,
+  );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historial de Cambios">
@@ -159,8 +167,12 @@ export function AuditHistoryModal({
 /**
  * Ejemplo 5: Integración en una tabla (mostrar último cambio)
  */
-export function TaskRowWithLastChange({ task }: { task: { id: string; name: string; status: string } }) {
-  const { logs } = useEntityAuditHistory('task', task.id);
+export function TaskRowWithLastChange({
+  task,
+}: {
+  task: { id: string; name: string; status: string };
+}) {
+  const { logs } = useEntityAuditHistory("task", task.id);
   const lastChange = logs[0];
 
   return (
@@ -171,12 +183,10 @@ export function TaskRowWithLastChange({ task }: { task: { id: string; name: stri
         {lastChange ? (
           <div className="text-sm">
             <div>{lastChange.action}</div>
-            <div className="text-gray-500">
-              por {lastChange.user_email}
-            </div>
+            <div className="text-gray-500">por {lastChange.user_email}</div>
           </div>
         ) : (
-          'Sin cambios'
+          "Sin cambios"
         )}
       </td>
     </tr>
@@ -187,7 +197,7 @@ export function TaskRowWithLastChange({ task }: { task: { id: string; name: stri
  * Ejemplo 6: Usando el hook en un componente simple
  */
 export function TaskAuditTimeline({ taskId }: { taskId: string }) {
-  const { logs, isLoading } = useEntityAuditHistory('task', taskId);
+  const { logs, isLoading } = useEntityAuditHistory("task", taskId);
 
   if (isLoading) return <div>Cargando...</div>;
 
@@ -202,13 +212,15 @@ export function TaskAuditTimeline({ taskId }: { taskId: string }) {
             <div className="text-sm text-gray-600">{log.user_email}</div>
           </div>
           <div className="text-right">
-            <div className={`px-2 py-1 rounded text-xs font-semibold ${
-              log.action === 'CREATE'
-                ? 'bg-green-100 text-green-800'
-                : log.action === 'UPDATE'
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
+            <div
+              className={`px-2 py-1 rounded text-xs font-semibold ${
+                log.action === "CREATE"
+                  ? "bg-green-100 text-green-800"
+                  : log.action === "UPDATE"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-red-100 text-red-800"
+              }`}
+            >
               {log.action}
             </div>
           </div>

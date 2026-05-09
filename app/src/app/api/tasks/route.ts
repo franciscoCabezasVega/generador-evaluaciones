@@ -1,83 +1,95 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { CreateTaskInput } from '@/lib/types';
-import { calculateTaskScore, validateReturns } from '@/lib/scoreCalculator';
-import { getAuthContext } from '@/lib/auth';
+import { after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { CreateTaskInput } from "@/lib/types";
+import { calculateTaskScore, validateReturns } from "@/lib/scoreCalculator";
+import { getAuthContext } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
     // Obtener usuario, rol y cliente autenticado en una sola llamada
     const authCtx = await getAuthContext(request);
     if (!authCtx) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { user, role: userRole, supabase } = authCtx;
 
-    if (!userRole || !['admin', 'gestor'].includes(userRole)) {
+    if (!userRole || !["admin", "gestor"].includes(userRole)) {
       return NextResponse.json(
-        { error: 'You do not have permission to create tasks' },
-        { status: 403 }
+        { error: "You do not have permission to create tasks" },
+        { status: 403 },
       );
     }
 
     const body = (await request.json()) as CreateTaskInput;
 
     // Validaciones
-    if (!body.name?.trim() || !body.task_link?.trim() || !body.product_type || !body.squads || body.squads.length === 0) {
+    if (
+      !body.name?.trim() ||
+      !body.task_link?.trim() ||
+      !body.product_type ||
+      !body.squads ||
+      body.squads.length === 0
+    ) {
       return NextResponse.json(
-        { error: 'Missing required fields or empty squads array' },
-        { status: 400 }
+        { error: "Missing required fields or empty squads array" },
+        { status: 400 },
       );
     }
 
     // Validar campos obligatorios nuevos
-    if (!body.assigned_qa || !Array.isArray(body.assigned_qa) || body.assigned_qa.length === 0) {
+    if (
+      !body.assigned_qa ||
+      !Array.isArray(body.assigned_qa) ||
+      body.assigned_qa.length === 0
+    ) {
       return NextResponse.json(
-        { error: 'Debe asignar al menos un QA' },
-        { status: 400 }
+        { error: "Debe asignar al menos un QA" },
+        { status: 400 },
       );
     }
 
     if (!body.effort_score_date) {
       return NextResponse.json(
-        { error: 'La fecha de puntuación de esfuerzo es requerida' },
-        { status: 400 }
+        { error: "La fecha de puntuación de esfuerzo es requerida" },
+        { status: 400 },
       );
     }
 
     if (!body.tshirt_size) {
       return NextResponse.json(
-        { error: 'La complejidad es requerida' },
-        { status: 400 }
+        { error: "La complejidad es requerida" },
+        { status: 400 },
       );
     }
 
     // Validar complejidad y categoría en paralelo
-    const [{ data: complexityExists }, { data: categoryExists }] = await Promise.all([
-      supabase
-        .from('complexities')
-        .select('id')
-        .eq('name', body.tshirt_size)
-        .eq('is_active', true)
-        .maybeSingle(),
-      supabase
-        .from('categories')
-        .select('id')
-        .eq('name', body.category)
-        .eq('is_active', true)
-        .maybeSingle(),
-    ]);
+    const [{ data: complexityExists }, { data: categoryExists }] =
+      await Promise.all([
+        supabase
+          .from("complexities")
+          .select("id")
+          .eq("name", body.tshirt_size)
+          .eq("is_active", true)
+          .maybeSingle(),
+        supabase
+          .from("categories")
+          .select("id")
+          .eq("name", body.category)
+          .eq("is_active", true)
+          .maybeSingle(),
+      ]);
 
     if (!complexityExists) {
       return NextResponse.json(
-        { error: 'Complejidad inválida' },
-        { status: 400 }
+        { error: "Complejidad inválida" },
+        { status: 400 },
       );
     }
 
     if (!categoryExists) {
       return NextResponse.json(
-        { error: 'Categoría inválida' },
-        { status: 400 }
+        { error: "Categoría inválida" },
+        { status: 400 },
       );
     }
 
@@ -92,32 +104,32 @@ export async function POST(request: NextRequest) {
           {
             error: `Returns must be positive integers for squad ${squadData.squad}. Decimals, negative numbers, and letters are not allowed.`,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
 
     // Verificar si ya existe una tarea con el mismo link
     const { data: existingTask, error: checkError } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('task_link', body.task_link)
+      .from("tasks")
+      .select("id")
+      .eq("task_link", body.task_link)
       .single();
 
     if (existingTask) {
       return NextResponse.json(
-        { error: 'Este link ya existe en otra tarea. Usa un link diferente.' },
-        { status: 409 }
+        { error: "Este link ya existe en otra tarea. Usa un link diferente." },
+        { status: 409 },
       );
     }
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking for duplicates:', checkError);
+    if (checkError && checkError.code !== "PGRST116") {
+      console.error("Error checking for duplicates:", checkError);
     }
 
     // Crear tarea sin los campos de devoluciones (se guardan por squad)
     const { data: task, error: taskError } = await supabase
-      .from('tasks')
+      .from("tasks")
       .insert({
         name: body.name,
         task_link: body.task_link,
@@ -135,13 +147,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (taskError) {
-      if (taskError.code === '23505') {
+      if (taskError.code === "23505") {
         return NextResponse.json(
-          { error: 'Este link ya existe en otra tarea. Usa un link diferente.' },
-          { status: 409 }
+          {
+            error: "Este link ya existe en otra tarea. Usa un link diferente.",
+          },
+          { status: 409 },
         );
       }
-      return NextResponse.json({ error: 'Error al crear la tarea' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Error al crear la tarea" },
+        { status: 400 },
+      );
     }
 
     // Crear registros en task_squad para cada squad
@@ -159,49 +176,52 @@ export async function POST(request: NextRequest) {
         medium_returns: squadData.medium_returns,
         high_returns: squadData.high_returns,
         calculated_score: calculatedScore,
-        additional_notes: squadData.additional_notes || '',
+        additional_notes: squadData.additional_notes || "",
       };
     });
 
     const { error: squadError } = await supabase
-      .from('task_squad')
+      .from("task_squad")
       .insert(taskSquadRecords);
 
     if (squadError) {
       // Si falla insertar los squads, eliminar la tarea
-      await supabase.from('tasks').delete().eq('id', task.id);
+      await supabase.from("tasks").delete().eq("id", task.id);
       return NextResponse.json(
-        { error: 'Error creating task squads: ' + squadError.message },
-        { status: 400 }
+        { error: "Error creating task squads: " + squadError.message },
+        { status: 400 },
       );
     }
 
-    // Register audit log
-    const userEmail = user.email || 'unknown';
-    
-    try {
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: user.id,
-          user_email: userEmail,
-          action: 'CREATE',
-          entity_type: 'TASK',
-          entity_id: task.id,
-          entity_name: task.name,
-          new_values: { ...task, squads: taskSquadRecords },
-          timestamp: new Date().toISOString(),
-        });
-    } catch (auditError) {
-      console.error('Error logging audit action:', auditError);
-    }
+    // Register audit log async (no bloquea la respuesta al usuario)
+    const userEmail = user.email || "unknown";
+    const auditPayload = {
+      user_id: user.id,
+      user_email: userEmail,
+      action: "CREATE",
+      entity_type: "TASK",
+      entity_id: task.id,
+      entity_name: task.name,
+      new_values: { ...task, squads: taskSquadRecords },
+      timestamp: new Date().toISOString(),
+    };
+    after(async () => {
+      try {
+        await supabase.from("audit_logs").insert(auditPayload);
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
-    return NextResponse.json({ ...task, squads: taskSquadRecords }, { status: 201 });
-  } catch (error) {
-    console.error('Error creating task:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { ...task, squads: taskSquadRecords },
+      { status: 201 },
+    );
+  } catch (error) {
+    console.error("Error creating task:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
 }
@@ -211,42 +231,73 @@ export async function GET(request: NextRequest) {
     // Obtener usuario y cliente autenticado
     const authCtx = await getAuthContext(request);
     if (!authCtx) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { user, supabase } = authCtx;
+    const { supabase } = authCtx;
 
     const searchParams = request.nextUrl.searchParams;
-    const month = searchParams.get('month');
-    const year = searchParams.get('year');
-    const productType = searchParams.get('product_type');
-    const status = searchParams.get('status');
+    const month = searchParams.get("month");
+    const year = searchParams.get("year");
+    const productType = searchParams.get("product_type");
+    const status = searchParams.get("status");
+    const squad = searchParams.get("squad");
 
-    // Obtener tareas del usuario
-    let tasksQuery = supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', user.id);
+    // Obtener tareas — la visibilidad la controla la política RLS (select_tasks_by_role):
+    // admin/gestor/viewer ven todas; roles inferiores solo las propias.
+    // No aplicar filtro user_id en código: RLS ya lo hace de forma segura en BD.
+    let tasksQuery = supabase.from("tasks").select("*");
 
     if (month) {
-      tasksQuery = tasksQuery.eq('month', parseInt(month));
+      tasksQuery = tasksQuery.eq("month", parseInt(month));
     }
     if (year) {
-      tasksQuery = tasksQuery.eq('year', parseInt(year));
+      tasksQuery = tasksQuery.eq("year", parseInt(year));
     }
     if (productType) {
-      tasksQuery = tasksQuery.eq('product_type', productType);
+      tasksQuery = tasksQuery.eq("product_type", productType);
     }
     if (status) {
-      tasksQuery = tasksQuery.eq('status', status);
+      tasksQuery = tasksQuery.eq("status", status);
     }
 
-    const { data: tasks, error: tasksError } = await tasksQuery.order('created_at', {
-      ascending: false,
-    });
+    // El filtro de squad requiere una subconsulta en task_squad,
+    // ya que el squad no está en la tabla tasks sino en task_squad.
+    if (squad) {
+      const { data: squadTaskIds, error: squadError } = await supabase
+        .from("task_squad")
+        .select("task_id")
+        .eq("squad", squad);
+
+      if (squadError) {
+        console.error("Error fetching squad filter:", squadError);
+        return NextResponse.json(
+          { error: "Error al filtrar por squad" },
+          { status: 400 },
+        );
+      }
+
+      const ids = (squadTaskIds ?? []).map((r) => r.task_id);
+      if (ids.length === 0) {
+        // Ninguna tarea tiene ese squad — responder vacío directamente
+        return NextResponse.json([]);
+      }
+
+      tasksQuery = tasksQuery.in("id", ids);
+    }
+
+    const { data: tasks, error: tasksError } = await tasksQuery.order(
+      "created_at",
+      {
+        ascending: false,
+      },
+    );
 
     if (tasksError) {
-      console.error('Error fetching tasks:', tasksError);
-      return NextResponse.json({ error: 'Error al obtener tareas' }, { status: 400 });
+      console.error("Error fetching tasks:", tasksError);
+      return NextResponse.json(
+        { error: "Error al obtener tareas" },
+        { status: 400 },
+      );
     }
 
     if (!tasks || tasks.length === 0) {
@@ -254,28 +305,28 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener los squads asociados a cada tarea
-    const taskIds = tasks.map(task => task.id);
+    const taskIds = tasks.map((task) => task.id);
     const { data: squadsData, error: squadsError } = await supabase
-      .from('task_squad')
-      .select('*')
-      .in('task_id', taskIds);
+      .from("task_squad")
+      .select("*")
+      .in("task_id", taskIds);
 
-    if (squadsError && squadsError.code !== 'PGRST116') {
-      console.error('Error fetching squad data:', squadsError);
+    if (squadsError && squadsError.code !== "PGRST116") {
+      console.error("Error fetching squad data:", squadsError);
     }
 
     // Mapear squads a tareas
-    const tasksWithSquads = tasks.map(task => ({
+    const tasksWithSquads = tasks.map((task) => ({
       ...task,
-      squads: squadsData?.filter(squad => squad.task_id === task.id) || [],
+      squads: squadsData?.filter((squad) => squad.task_id === task.id) || [],
     }));
 
     return NextResponse.json(tasksWithSquads);
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    console.error("Error fetching tasks:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
 }

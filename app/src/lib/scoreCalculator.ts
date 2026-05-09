@@ -1,6 +1,6 @@
 /**
  * Calcula la nota de una tarea basada en las devoluciones
- * 
+ *
  * Reglas de penalización:
  * - Nota base: 10
  * - Cada devolución grave: -1.50 puntos
@@ -35,7 +35,7 @@ export function calculateTaskScore(input: ScoreCalculationInput): number {
   score -= lowReturnGroups * LOW_RETURN_PENALTY;
 
   // No permitir puntuación menor a 0
-  return Math.max(0, Math.round(score * 100) / 100);
+  return Math.max(0, Math.round(score * 10) / 10);
 }
 
 /**
@@ -44,7 +44,14 @@ export function calculateTaskScore(input: ScoreCalculationInput): number {
 export function calculateTeamScore(taskScores: number[]): number {
   if (taskScores.length === 0) return 0;
   const sum = taskScores.reduce((acc, score) => acc + score, 0);
-  return Math.round((sum / taskScores.length) * 100) / 100;
+  return Math.round((sum / taskScores.length) * 10) / 10;
+}
+
+/**
+ * Formatea una nota para mostrar: sin decimales si es 10, con 1 decimal en cualquier otro caso.
+ */
+export function formatScore(score: number): string {
+  return score === 10 ? "10" : score.toFixed(1);
 }
 
 /**
@@ -52,14 +59,12 @@ export function calculateTeamScore(taskScores: number[]): number {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function validateReturns(value: any): boolean {
-  if (value === null || value === undefined || value === '') return true;
-  
+  if (value === null || value === undefined || value === "") return true;
+
   const num = Number(value);
-  
+
   // Debe ser un número entero no negativo
   return (
-    Number.isInteger(num) &&
-    num >= 0 &&
-    num.toString() === value.toString()
+    Number.isInteger(num) && num >= 0 && num.toString() === value.toString()
   );
 }

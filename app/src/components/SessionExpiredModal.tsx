@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import Modal from './Modal';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useState, useRef } from "react";
+import { AlertTriangle } from "lucide-react";
+import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
 
 interface SessionExpiredModalProps {
   isOpen: boolean;
-  reason?: 'timeout' | 'inactive' | 'error' | 'unknown';
+  reason?: "timeout" | "inactive" | "error" | "unknown";
   onRefresh?: () => void;
 }
 
 /**
  * Modal que se muestra cuando la sesión ha expirado completamente
  * Se diferencia de SessionExpirationModal (que es una advertencia previa)
- * 
+ *
  * Casos de uso:
  * - Sesión expiró por inactividad (30 minutos)
  * - Token refrescado falló
@@ -23,7 +23,7 @@ interface SessionExpiredModalProps {
  */
 export default function SessionExpiredModal({
   isOpen,
-  reason = 'unknown',
+  reason = "unknown",
   onRefresh,
 }: SessionExpiredModalProps) {
   const [autoClose, setAutoClose] = useState(false);
@@ -64,7 +64,7 @@ export default function SessionExpiredModal({
         onRefresh();
       } else {
         // Fallback: navegación directa con window.location para garantizar full reload
-        window.location.href = '/auth/login';
+        window.location.href = "/auth/login";
       }
     }, 2000);
 
@@ -79,14 +79,14 @@ export default function SessionExpiredModal({
 
   const getTitle = () => {
     switch (reason) {
-      case 'timeout':
-        return 'Sesión Expirada';
-      case 'inactive':
-        return 'Sesión Cerrada por Inactividad';
-      case 'error':
-        return 'Error de Seguridad';
+      case "timeout":
+        return "Sesión Expirada";
+      case "inactive":
+        return "Sesión Cerrada por Inactividad";
+      case "error":
+        return "Error de Seguridad";
       default:
-        return 'Sesión Expirada';
+        return "Sesión Expirada";
     }
   };
 
@@ -95,26 +95,25 @@ export default function SessionExpiredModal({
       onRefresh();
     } else {
       // Fallback: navegación directa para garantizar full reload
-      window.location.href = '/auth/login';
+      window.location.href = "/auth/login";
     }
   };
 
   const title = getTitle();
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      title={title}
-      onClose={() => {}}
-      size="md"
-    >
+    <Modal isOpen={isOpen} title={title} onClose={() => {}} size="md">
       <div className="space-y-4">
         {/* Alert Box - Estilo similar a la captura */}
         <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-700" />
           <div className="flex-1">
-            <p className="font-semibold text-yellow-900">Tu sesión ha expirado</p>
-            <p className="text-sm text-yellow-800">Por favor, inicia sesión nuevamente</p>
+            <p className="font-semibold text-yellow-900">
+              Tu sesión ha expirado
+            </p>
+            <p className="text-sm text-yellow-800">
+              Por favor, inicia sesión nuevamente
+            </p>
           </div>
         </div>
 
@@ -134,7 +133,7 @@ export default function SessionExpiredModal({
           className="flex-1"
           disabled={autoClose}
         >
-          {autoClose ? 'Iniciando sesión...' : 'Iniciar Sesión Nuevamente'}
+          {autoClose ? "Iniciando sesión..." : "Iniciar Sesión Nuevamente"}
         </Button>
       </div>
     </Modal>

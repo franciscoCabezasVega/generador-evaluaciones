@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { CreateTaskTimingInput } from '@/lib/types';
-import { getUserFromRequest, getAuthenticatedSupabase } from '@/lib/auth';
-import { timingService } from '@/lib/services/timingService';
+import { NextRequest, NextResponse } from "next/server";
+import { CreateTaskTimingInput } from "@/lib/types";
+import { getUserFromRequest, getAuthenticatedSupabase } from "@/lib/auth";
+import { timingService } from "@/lib/services/timingService";
 
 /**
  * GET /api/timings
@@ -12,38 +12,38 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const token = authHeader.substring('Bearer '.length);
+    const token = authHeader.substring("Bearer ".length);
 
     const { searchParams } = new URL(request.url);
-    const month = searchParams.get('month')
-      ? parseInt(searchParams.get('month')!)
+    const month = searchParams.get("month")
+      ? parseInt(searchParams.get("month")!)
       : undefined;
-    const year = searchParams.get('year')
-      ? parseInt(searchParams.get('year')!)
+    const year = searchParams.get("year")
+      ? parseInt(searchParams.get("year")!)
       : undefined;
-    const task_id = searchParams.get('task_id') || undefined;
-    const startDate = searchParams.get('start_date') || undefined;
-    const endDate = searchParams.get('end_date') || undefined;
-    const product_type = searchParams.get('product_type') || undefined;
+    const task_id = searchParams.get("task_id") || undefined;
+    const startDate = searchParams.get("start_date") || undefined;
+    const endDate = searchParams.get("end_date") || undefined;
+    const product_type = searchParams.get("product_type") || undefined;
 
     const timings = await timingService.getTimings(
       { month, year, task_id, startDate, endDate, product_type },
-      token
+      token,
     );
 
     return NextResponse.json(timings, { status: 200 });
   } catch (error) {
-    console.error('Error in GET /api/timings:', error);
+    console.error("Error in GET /api/timings:", error);
     return NextResponse.json(
-      { error: 'Error fetching timings' },
-      { status: 500 }
+      { error: "Error fetching timings" },
+      { status: 500 },
     );
   }
 }
@@ -57,36 +57,40 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const token = authHeader.substring('Bearer '.length);
+    const token = authHeader.substring("Bearer ".length);
 
     const body = (await request.json()) as CreateTaskTimingInput;
 
     // Validaciones
     if (!body.task_id || body.month === undefined || body.year === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: task_id, month, year' },
-        { status: 400 }
+        { error: "Missing required fields: task_id, month, year" },
+        { status: 400 },
       );
     }
 
     // Validate qa_entries
-    if (!body.qa_entries || !Array.isArray(body.qa_entries) || body.qa_entries.length === 0) {
+    if (
+      !body.qa_entries ||
+      !Array.isArray(body.qa_entries) ||
+      body.qa_entries.length === 0
+    ) {
       return NextResponse.json(
-        { error: 'At least one QA entry is required (qa_entries array)' },
-        { status: 400 }
+        { error: "At least one QA entry is required (qa_entries array)" },
+        { status: 400 },
       );
     }
 
     // Validate each QA entry
     const validateHours = (value: number, fieldName: string) => {
-      if (typeof value !== 'number') {
+      if (typeof value !== "number") {
         throw new Error(`${fieldName} must be a number`);
       }
       if (!Number.isFinite(value)) {
@@ -103,32 +107,50 @@ export async function POST(request: NextRequest) {
     try {
       for (let i = 0; i < body.qa_entries.length; i++) {
         const entry = body.qa_entries[i];
-        if (!entry.qa_name || entry.qa_name.trim() === '') {
+        if (!entry.qa_name || entry.qa_name.trim() === "") {
           throw new Error(`QA entry ${i + 1}: qa_name is required`);
         }
-        validateHours(entry.effective_testing_hours, `QA ${entry.qa_name}: effective_testing_hours`);
-        validateHours(entry.waiting_environment_hours, `QA ${entry.qa_name}: waiting_environment_hours`);
-        validateHours(entry.waiting_development_fixes_hours, `QA ${entry.qa_name}: waiting_development_fixes_hours`);
+        validateHours(
+          entry.effective_testing_hours,
+          `QA ${entry.qa_name}: effective_testing_hours`,
+        );
+        validateHours(
+          entry.waiting_environment_hours,
+          `QA ${entry.qa_name}: waiting_environment_hours`,
+        );
+        validateHours(
+          entry.waiting_development_fixes_hours,
+          `QA ${entry.qa_name}: waiting_development_fixes_hours`,
+        );
         validateHours(entry.retest_hours, `QA ${entry.qa_name}: retest_hours`);
-        validateHours(entry.clarification_hours, `QA ${entry.qa_name}: clarification_hours`);
+        validateHours(
+          entry.clarification_hours,
+          `QA ${entry.qa_name}: clarification_hours`,
+        );
 
-        const entryTotal = entry.effective_testing_hours + entry.waiting_environment_hours +
-          entry.waiting_development_fixes_hours + entry.retest_hours + entry.clarification_hours;
+        const entryTotal =
+          entry.effective_testing_hours +
+          entry.waiting_environment_hours +
+          entry.waiting_development_fixes_hours +
+          entry.retest_hours +
+          entry.clarification_hours;
         if (entryTotal === 0) {
-          throw new Error(`QA ${entry.qa_name}: at least one timing category must have hours > 0`);
+          throw new Error(
+            `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
+          );
         }
       }
 
       // Check for duplicate QA names
-      const qaNames = body.qa_entries.map(e => e.qa_name);
+      const qaNames = body.qa_entries.map((e) => e.qa_name);
       const uniqueNames = new Set(qaNames);
       if (uniqueNames.size !== qaNames.length) {
-        throw new Error('Duplicate QA names are not allowed');
+        throw new Error("Duplicate QA names are not allowed");
       }
     } catch (validationError) {
       return NextResponse.json(
         { error: (validationError as Error).message },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -137,24 +159,27 @@ export async function POST(request: NextRequest) {
         ...body,
         user_id: user.id,
       },
-      token
+      token,
     );
 
     // Sync assigned_qa back to the task
     try {
-      const qaNames = body.qa_entries.map(e => e.qa_name);
+      const qaNames = body.qa_entries.map((e) => e.qa_name);
       const supabase = getAuthenticatedSupabase(token);
       await supabase
-        .from('tasks')
+        .from("tasks")
         .update({ assigned_qa: qaNames, updated_at: new Date().toISOString() })
-        .eq('id', body.task_id);
+        .eq("id", body.task_id);
     } catch (syncError) {
-      console.error('Error syncing assigned_qa to task:', syncError);
+      console.error("Error syncing assigned_qa to task:", syncError);
     }
 
     return NextResponse.json(timing, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /api/timings:', error);
-    return NextResponse.json({ error: 'Error al crear timing' }, { status: 500 });
+    console.error("Error in POST /api/timings:", error);
+    return NextResponse.json(
+      { error: "Error al crear timing" },
+      { status: 500 },
+    );
   }
 }

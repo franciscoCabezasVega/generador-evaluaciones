@@ -1,6 +1,12 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   startOfDay,
   endOfDay,
@@ -22,10 +28,16 @@ import {
   getYear,
   addMonths,
   subYears,
-} from 'date-fns';
-import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+} from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // ── Types ───────────────────────────────────────────────────────────────
 export interface DateRange {
@@ -50,42 +62,45 @@ interface DateRangePickerProps {
 function getDefaultPresets(): DateRangePreset[] {
   return [
     {
-      label: 'Hoy',
+      label: "Hoy",
       getRange: () => ({
         startDate: startOfDay(new Date()),
         endDate: endOfDay(new Date()),
       }),
     },
     {
-      label: 'Ayer',
+      label: "Ayer",
       getRange: () => {
         const yesterday = subDays(new Date(), 1);
-        return { startDate: startOfDay(yesterday), endDate: endOfDay(yesterday) };
+        return {
+          startDate: startOfDay(yesterday),
+          endDate: endOfDay(yesterday),
+        };
       },
     },
     {
-      label: 'Últimos 7 días',
+      label: "Últimos 7 días",
       getRange: () => ({
         startDate: startOfDay(subDays(new Date(), 6)),
         endDate: endOfDay(new Date()),
       }),
     },
     {
-      label: 'Últimos 30 días',
+      label: "Últimos 30 días",
       getRange: () => ({
         startDate: startOfDay(subDays(new Date(), 29)),
         endDate: endOfDay(new Date()),
       }),
     },
     {
-      label: 'Esta semana',
+      label: "Esta semana",
       getRange: () => ({
         startDate: startOfWeek(new Date(), { weekStartsOn: 1 }),
         endDate: endOfWeek(new Date(), { weekStartsOn: 1 }),
       }),
     },
     {
-      label: 'Semana pasada',
+      label: "Semana pasada",
       getRange: () => {
         const lastWeek = subWeeks(new Date(), 1);
         return {
@@ -95,14 +110,14 @@ function getDefaultPresets(): DateRangePreset[] {
       },
     },
     {
-      label: 'Este mes',
+      label: "Este mes",
       getRange: () => ({
         startDate: startOfMonth(new Date()),
         endDate: endOfMonth(new Date()),
       }),
     },
     {
-      label: 'Mes pasado',
+      label: "Mes pasado",
       getRange: () => {
         const lastMonth = subMonths(new Date(), 1);
         return {
@@ -112,21 +127,21 @@ function getDefaultPresets(): DateRangePreset[] {
       },
     },
     {
-      label: 'Últimos 3 meses',
+      label: "Últimos 3 meses",
       getRange: () => ({
         startDate: startOfMonth(subMonths(new Date(), 2)),
         endDate: endOfMonth(new Date()),
       }),
     },
     {
-      label: 'Este año',
+      label: "Este año",
       getRange: () => ({
         startDate: startOfYear(new Date()),
         endDate: endOfDay(new Date()),
       }),
     },
     {
-      label: 'Año pasado',
+      label: "Año pasado",
       getRange: () => {
         const lastYear = subYears(new Date(), 1);
         return {
@@ -139,7 +154,7 @@ function getDefaultPresets(): DateRangePreset[] {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
-const DAY_NAMES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
+const DAY_NAMES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 
 function getCalendarDays(year: number, month: number): (Date | null)[] {
   const firstDay = new Date(year, month, 1);
@@ -162,16 +177,22 @@ function getCalendarDays(year: number, month: number): (Date | null)[] {
 }
 
 function formatDisplayRange(range: DateRange): string {
-  const start = format(range.startDate, 'd MMM yyyy', { locale: es });
-  const end = format(range.endDate, 'd MMM yyyy', { locale: es });
+  const start = format(range.startDate, "d MMM yyyy", { locale: es });
+  const end = format(range.endDate, "d MMM yyyy", { locale: es });
   if (isSameDay(range.startDate, range.endDate)) return start;
   return `${start}  →  ${end}`;
 }
 
-function findMatchingPreset(range: DateRange, presets: DateRangePreset[]): string | null {
+function findMatchingPreset(
+  range: DateRange,
+  presets: DateRangePreset[],
+): string | null {
   for (const preset of presets) {
     const p = preset.getRange();
-    if (isSameDay(p.startDate, range.startDate) && isSameDay(p.endDate, range.endDate)) {
+    if (
+      isSameDay(p.startDate, range.startDate) &&
+      isSameDay(p.endDate, range.endDate)
+    ) {
       return preset.label;
     }
   }
@@ -240,7 +261,7 @@ function MiniCalendar({
           <ChevronLeft size={16} />
         </button>
         <span className="text-sm font-semibold text-gray-800 capitalize">
-          {format(viewDate, 'MMMM yyyy', { locale: es })}
+          {format(viewDate, "MMMM yyyy", { locale: es })}
         </span>
         <button
           type="button"
@@ -254,7 +275,10 @@ function MiniCalendar({
       {/* Day names */}
       <div className="grid grid-cols-7 gap-0 mb-1">
         {DAY_NAMES.map((dn) => (
-          <div key={dn} className="text-center text-[10px] font-medium text-gray-400 py-1">
+          <div
+            key={dn}
+            className="text-center text-[10px] font-medium text-gray-400 py-1"
+          >
             {dn}
           </div>
         ))}
@@ -283,11 +307,11 @@ function MiniCalendar({
               onMouseLeave={() => onHoverDate(null)}
               className={`
                 h-8 text-xs font-medium rounded-md transition-all relative
-                ${disabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer'}
-                ${inRange && !start && !end ? 'bg-blue-50 text-blue-700' : ''}
-                ${start || end ? 'bg-blue-500 text-white shadow-sm' : ''}
-                ${!inRange && !start && !end && !disabled ? 'text-gray-700 hover:bg-gray-100' : ''}
-                ${today && !start && !end ? 'ring-1 ring-blue-300' : ''}
+                ${disabled ? "text-gray-300 cursor-not-allowed" : "cursor-pointer"}
+                ${inRange && !start && !end ? "bg-blue-50 text-blue-700" : ""}
+                ${start || end ? "bg-blue-500 text-white shadow-sm" : ""}
+                ${!inRange && !start && !end && !disabled ? "text-gray-700 hover:bg-gray-100" : ""}
+                ${today && !start && !end ? "ring-1 ring-blue-300" : ""}
               `}
             >
               {day.getDate()}
@@ -303,7 +327,7 @@ function MiniCalendar({
 export default function DateRangePicker({
   value,
   onChange,
-  className = '',
+  className = "",
   maxDate,
 }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -312,25 +336,31 @@ export default function DateRangePicker({
   const [tempEnd, setTempEnd] = useState<Date | null>(value.endDate);
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   const [leftViewDate, setLeftViewDate] = useState(
-    startOfMonth(subMonths(value.startDate, 1))
+    startOfMonth(subMonths(value.startDate, 1)),
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const presets = useMemo(() => getDefaultPresets(), []);
   const matchingPreset = findMatchingPreset(value, presets);
 
-  const rightViewDate = useMemo(() => addMonths(leftViewDate, 1), [leftViewDate]);
+  const rightViewDate = useMemo(
+    () => addMonths(leftViewDate, 1),
+    [leftViewDate],
+  );
 
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
     if (isOpen) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
+      document.addEventListener("mousedown", handleClick);
+      return () => document.removeEventListener("mousedown", handleClick);
     }
   }, [isOpen]);
 
@@ -365,7 +395,7 @@ export default function DateRangePicker({
         setSelectingStart(true);
       }
     },
-    [selectingStart, tempStart]
+    [selectingStart, tempStart],
   );
 
   const handleApply = useCallback(() => {
@@ -386,7 +416,7 @@ export default function DateRangePicker({
       setLeftViewDate(startOfMonth(subMonths(range.startDate, 1)));
       setIsOpen(false);
     },
-    [onChange]
+    [onChange],
   );
 
   const handleClear = useCallback(() => {
@@ -411,7 +441,9 @@ export default function DateRangePicker({
         <span className="flex-1 text-left truncate">
           {matchingPreset ? (
             <span>
-              <span className="font-medium text-blue-600">{matchingPreset}</span>
+              <span className="font-medium text-blue-600">
+                {matchingPreset}
+              </span>
               <span className="text-gray-400 ml-1.5 text-xs">
                 ({formatDisplayRange(value)})
               </span>
@@ -422,7 +454,7 @@ export default function DateRangePicker({
         </span>
         <ChevronDown
           size={16}
-          className={`text-gray-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-gray-400 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -444,9 +476,10 @@ export default function DateRangePicker({
                     onClick={() => handlePreset(preset)}
                     className={`
                       w-full text-left px-2.5 py-1.5 text-xs rounded-md transition-colors
-                      ${active
-                        ? 'bg-blue-100 text-blue-700 font-semibold'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ${
+                        active
+                          ? "bg-blue-100 text-blue-700 font-semibold"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                       }
                     `}
                   >
@@ -464,21 +497,25 @@ export default function DateRangePicker({
                   <div
                     className={`px-2 py-1 rounded-md border transition-colors ${
                       selectingStart
-                        ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
-                        : 'border-gray-200 text-gray-500'
+                        ? "border-blue-400 bg-blue-50 text-blue-700 font-medium"
+                        : "border-gray-200 text-gray-500"
                     }`}
                   >
-                    {tempStart ? format(tempStart, 'd MMM yyyy', { locale: es }) : 'Inicio'}
+                    {tempStart
+                      ? format(tempStart, "d MMM yyyy", { locale: es })
+                      : "Inicio"}
                   </div>
                   <span className="text-gray-300">→</span>
                   <div
                     className={`px-2 py-1 rounded-md border transition-colors ${
                       !selectingStart
-                        ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
-                        : 'border-gray-200 text-gray-500'
+                        ? "border-blue-400 bg-blue-50 text-blue-700 font-medium"
+                        : "border-gray-200 text-gray-500"
                     }`}
                   >
-                    {tempEnd ? format(tempEnd, 'd MMM yyyy', { locale: es }) : 'Fin'}
+                    {tempEnd
+                      ? format(tempEnd, "d MMM yyyy", { locale: es })
+                      : "Fin"}
                   </div>
                 </div>
                 {(tempStart || tempEnd) && (

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { SkeletonLine } from './Skeleton';
+import { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { SkeletonLine } from "./Skeleton";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -12,7 +12,7 @@ interface ProtectedRouteProps {
 
 /**
  * Componente para proteger rutas que requieren autenticación
- * 
+ *
  * Uso:
  * ```
  * <ProtectedRoute requiredRole="admin">
@@ -20,7 +20,10 @@ interface ProtectedRouteProps {
  * </ProtectedRoute>
  * ```
  */
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  children,
+  requiredRole,
+}: ProtectedRouteProps) {
   const { user, loading, profile } = useAuth();
   const router = useRouter();
 
@@ -37,14 +40,14 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   // Si no hay usuario, redirigir a login
   if (!user) {
-    router.push('/auth/login');
+    router.push("/auth/login");
     return null;
   }
 
   // Si se requiere un rol específico, validar
   if (requiredRole && profile) {
     const hasRequiredRole = Array.isArray(requiredRole)
-      ? requiredRole.includes(profile.role || '')
+      ? requiredRole.includes(profile.role || "")
       : profile.role === requiredRole;
 
     if (!hasRequiredRole) {
@@ -58,7 +61,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
               No tienes permiso para acceder a esta página
             </p>
             <button
-              onClick={() => router.push('/tasks')}
+              onClick={() => router.push("/tasks")}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Volver a Tareas

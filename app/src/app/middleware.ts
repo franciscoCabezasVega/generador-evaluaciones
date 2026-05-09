@@ -1,13 +1,13 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * Middleware para proteger rutas que requieren autenticación
- * 
+ *
  * Rutas protegidas:
  * - /tasks
  * - /reports
  * - /audit-trail
- * 
+ *
  * Rutas públicas:
  * - /auth/login
  * - /auth/signup
@@ -17,10 +17,12 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Rutas protegidas que requieren autenticación
-  const protectedRoutes = ['/tasks', '/reports', '/audit-trail'];
+  const protectedRoutes = ["/tasks", "/reports", "/audit-trail"];
 
   // Verificar si es una ruta protegida
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    pathname.startsWith(route),
+  );
 
   if (!isProtectedRoute) {
     // Ruta pública, permitir acceso
@@ -32,15 +34,15 @@ export async function middleware(request: NextRequest) {
   }
 
   // Para rutas protegidas, verificar si hay token válido en cookies
-  const token = request.cookies.get('sb-access-token')?.value;
+  const token = request.cookies.get("sb-access-token")?.value;
 
   if (!token) {
     console.warn(`Unauthorized access attempt to ${pathname}, no token found`);
-    
+
     // Redirigir a login
-    const loginUrl = new URL('/auth/login', request.url);
-    loginUrl.searchParams.set('redirectTo', pathname);
-    
+    const loginUrl = new URL("/auth/login", request.url);
+    loginUrl.searchParams.set("redirectTo", pathname);
+
     return NextResponse.redirect(loginUrl);
   }
 
@@ -62,6 +64,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
-}
+};

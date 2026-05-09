@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { getUserFromRequest } from '@/lib/auth';
+import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
+import { getUserFromRequest } from "@/lib/auth";
 
 const MAX_BATCH_SIZE = 12; // Máximo 6 squads x 2 tipos
 const MAX_CONCURRENCY = 4;
@@ -9,29 +9,29 @@ const MAX_CONCURRENCY = 4;
  * Sanitizar texto de usuario antes de inyectarlo en prompts de IA.
  */
 function sanitizeForPrompt(text: string): string {
-  if (!text) return '';
+  if (!text) return "";
   return text
-    .replace(/```/g, '')
-    .replace(/\bignore\b.*\binstructions\b/gi, '[filtered]')
-    .replace(/\bforget\b.*\babove\b/gi, '[filtered]')
-    .replace(/\bsystem\b.*\bprompt\b/gi, '[filtered]')
-    .replace(/\brole\b.*\bassistant\b/gi, '[filtered]')
+    .replace(/```/g, "")
+    .replace(/\bignore\b.*\binstructions\b/gi, "[filtered]")
+    .replace(/\bforget\b.*\babove\b/gi, "[filtered]")
+    .replace(/\bsystem\b.*\bprompt\b/gi, "[filtered]")
+    .replace(/\brole\b.*\bassistant\b/gi, "[filtered]")
     .slice(0, 500);
 }
 
 export async function POST(request: NextRequest) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY no está configurada');
+      console.error("OPENAI_API_KEY no está configurada");
       return NextResponse.json(
-        { error: 'API key de OpenAI no configurada' },
-        { status: 500 }
+        { error: "API key de OpenAI no configurada" },
+        { status: 500 },
       );
     }
 
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Parsear el body como JSON
@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch (parseError) {
-      console.error('Error parsing request JSON:', parseError);
+      console.error("Error parsing request JSON:", parseError);
       return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
+        { error: "Invalid JSON in request body" },
+        { status: 400 },
       );
     }
 
@@ -50,24 +50,24 @@ export async function POST(request: NextRequest) {
 
     // Validar que comments sea un array no vacío
     if (!commentsData) {
-      console.error('No comments field in request');
+      console.error("No comments field in request");
       return NextResponse.json(
-        { error: 'Missing required field: comments' },
-        { status: 400 }
+        { error: "Missing required field: comments" },
+        { status: 400 },
       );
     }
 
     if (!Array.isArray(commentsData)) {
-      console.error('comments is not an array:', typeof commentsData);
+      console.error("comments is not an array:", typeof commentsData);
       return NextResponse.json(
-        { error: 'comments must be an array' },
-        { status: 400 }
+        { error: "comments must be an array" },
+        { status: 400 },
       );
     }
 
     // Si el array está vacío, retornar objeto vacío de comentarios
     if (commentsData.length === 0) {
-      console.warn('comments array is empty, returning empty comments object');
+      console.warn("comments array is empty, returning empty comments object");
       return NextResponse.json({ comments: {} });
     }
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (commentsData.length > MAX_BATCH_SIZE) {
       return NextResponse.json(
         { error: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -83,10 +83,15 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < commentsData.length; i++) {
       const { squadName, tasks, type } = commentsData[i];
       if (!squadName || !tasks || !type) {
-        console.error(`Invalid comment structure at index ${i}:`, commentsData[i]);
+        console.error(
+          `Invalid comment structure at index ${i}:`,
+          commentsData[i],
+        );
         return NextResponse.json(
-          { error: `Invalid comment structure at index ${i}: missing squadName, tasks, or type` },
-          { status: 400 }
+          {
+            error: `Invalid comment structure at index ${i}: missing squadName, tasks, or type`,
+          },
+          { status: 400 },
         );
       }
     }
@@ -97,16 +102,27 @@ export async function POST(request: NextRequest) {
 
     // Crear un batch de prompts
     const prompts = commentsData.map(({ tasks, type }) => {
-      const taskSummary = tasks.map((t: { name?: string; calculated_score?: number; high_returns?: number; medium_returns?: number; low_returns?: number; additional_notes?: string }) => `
-        - ${sanitizeForPrompt(String(t.name || ''))}
+      const taskSummary = tasks
+        .map(
+          (t: {
+            name?: string;
+            calculated_score?: number;
+            high_returns?: number;
+            medium_returns?: number;
+            low_returns?: number;
+            additional_notes?: string;
+          }) => `
+        - ${sanitizeForPrompt(String(t.name || ""))}
         - Puntuación: ${Number(t.calculated_score) || 0}/10
         - Devoluciones graves: ${Number(t.high_returns) || 0}
         - Devoluciones medias: ${Number(t.medium_returns) || 0}
         - Devoluciones bajas: ${Number(t.low_returns) || 0}
-        - Notas: ${sanitizeForPrompt(String(t.additional_notes || 'N/A'))}
-      `).join('\n');
+        - Notas: ${sanitizeForPrompt(String(t.additional_notes || "N/A"))}
+      `,
+        )
+        .join("\n");
 
-      return type === 'performance'
+      return type === "performance"
         ? `Genera un comentario profesional y conciso (máximo 100 palabras) sobre el desempeño del equipo basado en estos datos de tareas:
 ${taskSummary}
 
@@ -122,28 +138,30 @@ Evalúa la claridad en la documentación, atención a observaciones del QA, acti
     for (let i = 0; i < prompts.length; i += MAX_CONCURRENCY) {
       const batch = prompts.slice(i, i + MAX_CONCURRENCY);
       const batchResponses = await Promise.all(
-        batch.map(prompt =>
+        batch.map((prompt) =>
           openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: "gpt-3.5-turbo",
             max_tokens: 500,
-            messages: [{ role: 'user', content: prompt }],
-          })
-        )
+            messages: [{ role: "user", content: prompt }],
+          }),
+        ),
       );
       batchResponses.forEach((response, batchIndex) => {
         const globalIndex = i + batchIndex;
         const { squadName, type } = commentsData[globalIndex];
         const key = `${squadName}-${type}`;
-        comments[key] = response.choices[0]?.message?.content || 'No se pudo generar comentario';
+        comments[key] =
+          response.choices[0]?.message?.content ||
+          "No se pudo generar comentario";
       });
     }
 
     return NextResponse.json({ comments });
   } catch (error: unknown) {
-    console.error('Error generando comentarios IA:', error);
+    console.error("Error generando comentarios IA:", error);
     return NextResponse.json(
-      { error: 'Error al generar comentarios de IA' },
-      { status: 500 }
+      { error: "Error al generar comentarios de IA" },
+      { status: 500 },
     );
   }
 }

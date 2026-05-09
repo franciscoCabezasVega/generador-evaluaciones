@@ -1,15 +1,14 @@
-[![Seed Random Data](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/seed-data.yml/badge.svg?branch=main)](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/seed-data.yml)
 [![CI](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/ci.yml/badge.svg)](https://github.com/franciscoCabezasVega/generador-evaluaciones/actions/workflows/ci.yml)
 
 # Generador de Evaluaciones
 
-Sistema integral de gestión y evaluación de tareas mensuales por squad, con cálculo automático de notas, generación de reportes versionados, soporte de IA para comentarios cualitativos, auditoría completa y pipeline CI/CD con tests automatizados.
+Sistema integral y configurable de gestión y evaluación de tareas mensuales por equipo, con catálogos completamente personalizables (tipos de sistema, equipos, categorías, complejidades y miembros QA), cálculo automático de notas, generación de reportes versionados, soporte de IA para comentarios cualitativos, auditoría completa y pipeline CI/CD con tests automatizados.
 
 ---
 
 ## Descripción General
 
-Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a equipos de desarrollo (squads) registrar, evaluar y analizar tareas completadas mensualmente. El sistema calcula automáticamente las notas basadas en devoluciones (graves, medias y bajas), genera reportes detallados versionados y utiliza IA para generar comentarios sobre desempeño y comunicación.
+Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a cualquier organización registrar, evaluar y analizar tareas completadas mensualmente por equipo. Los catálogos (tipos de sistema, equipos, categorías, complejidades y miembros QA) son completamente gestionables desde la interfaz, sin necesidad de tocar código. El sistema calcula automáticamente las notas basadas en devoluciones (graves, medias y bajas), genera reportes detallados versionados y utiliza IA para generar comentarios sobre desempeño y comunicación.
 
 ---
 
@@ -19,14 +18,23 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a e
 - **Supabase Auth**: Autenticación delegada, sin manejo directo de credenciales
 - **Row Level Security (RLS)**: Control granular de acceso por usuario y rol
 - **Protección de Rutas**: Middleware de autenticación en rutas protegidas
-- **Manejo de Sesión**: Validación de JWT y timeout automático
-- **Logout Seguro**: Cierre de sesión y limpieza de tokens
+- **Manejo de Sesión**: Validación de JWT y verificación de integridad cada 5 minutos (cubierta por `onAuthStateChange` para cambios en tiempo real)
+- **Login mejorado**: Toggle mostrar/ocultar contraseña + opción "Recuérdame" que persiste el email en `localStorage`
+- **Logout Seguro**: `signOut` con timeout de 3 s para evitar bloqueos por `navigator.lock`; limpieza garantizada de `localStorage` en bloque `finally`; fallback de redirect tras 6 s si `clearSession` se bloquea
 
 ### Resiliencia y Manejo de Errores de Red
 - **Timeout Automático**: 15 segundos por request
 - **Reintentos Inteligentes**: 3 intentos totales con backoff exponencial (1s → 2s → 4s)
 - **Modales Informativos**: NetworkErrorModal, SessionExpirationModal, SessionExpiredModal
 - **Recuperación Automática**: Reintentos sin acción del usuario
+- **SessionLockError**: Hasta 3 reintentos con delay incremental (2 s → 3 s → 4 s) cuando `navigator.lock` de Supabase está ocupado (p.ej. al volver de otra pestaña); ya no fuerza `window.location.reload()` — propaga el error a la UI para mostrar un banner contextual
+- **`warmSession()`**: Pre-calienta el caché de sesión antes de lanzar fetches en paralelo (p.ej. carga de catálogos), evitando que las N peticiones compitan individualmente por el lock
+- **Caché de sesión**: TTL de 5 minutos para reducir llamadas a `getSession` y contención de `navigator.lock` en escenarios multi-pestaña
+- **MutationQueue resiliente**: `HTTP 409` en `POST` se trata como éxito idempotente (el recurso ya existe en el servidor); `SessionLockError` no consume un intento del presupuesto de reintentos — reintenta en 2 s automáticamente
+- **MutationQueueContext**: React context/provider que expone `useMutationQueue()` para que cualquier componente pueda encolar mutaciones, consultar estado (`pending`, `failed`, `processing`) y relanzar fallos (`retryFailed`)
+- **QueueStatusIndicator**: Componente en la Navbar que refleja en tiempo real el estado de la cola — spinner de sincronización en segundo plano, advertencia con botón "Reintentar" si hay fallos permanentes, y aviso de sin conexión cuando `navigator.onLine === false`
+- **BroadcastChannel de sesión**: Cuando el caché de sesión se invalida en una pestaña (p. ej. logout), se propaga inmediatamente al resto de pestañas vía `BroadcastChannel`, evitando que operen con un JWT obsoleto
+- **Adaptive timeouts en escritura**: `useSafeAuthFetch` usa timeouts más cortos para peticiones de lectura y más largos para mutaciones, con backoff automático en reintentos
 
 ### Gestión de Tareas (CRUD)
 - Crear, editar, eliminar y listar tareas con validaciones completas
@@ -38,8 +46,8 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a e
 |-------|-------------|
 | Nombre | Descripción de la tarea |
 | Link | URL o referencia de la tarea |
-| Producto | Core, Platform o Commerce |
-| Squad/Equipo | Dinámico según producto seleccionado |
+| Tipo de sistema | Configurable desde el catálogo de productos |
+| Equipo (squad) | Dinámico según el tipo de sistema seleccionado; definido en catálogo |
 | Estado | Completada, Deprecada o Pendiente |
 | Devoluciones bajas | Enteros positivos (default 0) |
 | Devoluciones medias | Enteros positivos (default 0) |
@@ -74,17 +82,23 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a e
 - **Frontend**: Validación inmediata con feedback visual
 - **Backend**: Validaciones de integridad y seguridad
 - **Campos numéricos**: Solo enteros positivos (sin negativos, decimales ni letras)
-- **Campos obligatorios**: nombre, link, producto, squad, estado
+- **Campos obligatorios**: nombre, link, tipo de sistema, equipo, estado
 - **Reportes**: Excluyen tareas Deprecadas y Pendientes
 - **Año mínimo**: 2026
 
-### Productos y Equipos
+### Catálogos Configurables
 
-| Platform | Core | Commerce |
-|------|-------|-------------|
-| Squad 1 - Alpha | Squad 1 - Delta | Identity & Auth |
-| Squad 2 - Beta | Squad 2 - Epsilon | Payments |
-| Squad 3 - Gamma | Squad 3 - Zeta | Search & Commerce - Nova |
+Todos los valores de dominio son gestionables desde la sección **Configuración** de la aplicación (solo administradores), sin modificar código:
+
+| Catálogo | Descripción |
+|----------|-------------|
+| **Tipos de sistema** | Define los productos o áreas evaluadas (p. ej. Frontend, Backend, QA) |
+| **Equipos (squads)** | Asociados a cada tipo de sistema; cada usuario asigna los suyos |
+| **Categorías** | Clasificación funcional de las tareas |
+| **Complejidades** | Tallas de esfuerzo (XS, S, M, L, XL u otras) |
+| **Miembros QA** | Personas que pueden ser asignadas a una tarea |
+
+Esto permite que distintas organizaciones o equipos usen la misma instancia con su propia estructura, sin hardcodear valores en el código.
 
 ### Sistema de Reportes
 - **Reportes Versionados**: Nueva versión por cada generación (sin sobrescribir)
@@ -103,7 +117,7 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a e
 - Generación batch para múltiples comentarios
 
 ### Búsqueda y Filtros
-- Filtrar por: Mes, Año, Producto, Squad/Equipo, Estado
+- Filtrar por: Mes, Año, Tipo de sistema, Equipo, Estado
 - Búsqueda integrada por nombre de tarea
 
 ### Auditoría y Trazabilidad
@@ -123,6 +137,7 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a e
 - Feedback visual claro (errores, éxito, carga)
 - Skeletons y spinners durante operaciones
 - Sistema de retroalimentación del usuario
+- **Indicador de cola en Navbar**: muestra estado de sincronización en segundo plano, aviso de sin conexión y botón de reintento si hay mutaciones fallidas
 
 ---
 
@@ -388,7 +403,8 @@ app/
 │   │   │
 │   │   ├── api/
 │   │   │   ├── tasks/                 # API CRUD de tareas
-│   │   │   │   ├── route.ts           # GET, POST
+│   │   │   │   ├── route.ts           # GET (visibilidad por RLS), POST
+│   │   │   │   ├── check-link/route.ts # GET pre-flight: verifica link duplicado
 │   │   │   │   └── [id]/route.ts      # GET, PATCH, DELETE
 │   │   │   ├── reports/               # API de reportes
 │   │   │   │   ├── route.ts           # GET, POST
@@ -405,9 +421,11 @@ app/
 │   │   │   └── signup/page.tsx
 │   │   │
 │   │   ├── tasks/page.tsx             # Gestión de tareas
+│   │   ├── timings/page.tsx           # Registro de tiempos por tarea
 │   │   ├── reports/                   # Reportes
 │   │   │   ├── page.tsx
 │   │   │   └── [id]/page.tsx
+│   │   ├── settings/page.tsx          # Catálogos (solo admin)
 │   │   └── audit-trail/page.tsx       # Trazabilidad
 │   │
 │   ├── components/                    # Componentes React
@@ -423,11 +441,13 @@ app/
 │   │   ├── AuditHistory.tsx
 │   │   ├── TourOverlay.tsx
 │   │   ├── FeedbackButton.tsx
+│   │   ├── QueueStatusIndicator.tsx   # Indicador de cola de mutaciones en Navbar
 │   │   ├── Skeleton.tsx
 │   │   └── ui/button.tsx
 │   │
 │   ├── contexts/
 │   │   ├── AuthContext.tsx
+│   │   ├── MutationQueueContext.tsx   # Provider + hook useMutationQueue()
 │   │   ├── authStorage.ts
 │   │   └── TourContext.tsx
 │   │
@@ -438,6 +458,8 @@ app/
 │   │   ├── useFeedback.ts
 │   │   ├── useFilterParams.ts
 │   │   ├── useDebounce.ts
+│   │   ├── useCachedFetch.ts
+│   │   ├── useCatalogData.ts
 │   │   └── useSafeAuthFetch.ts
 │   │
 │   └── lib/
@@ -445,9 +467,10 @@ app/
 │       ├── utils.ts
 │       ├── supabase.ts                # Cliente Supabase
 │       ├── auth.ts
-│       ├── fetchAuth.ts
+│       ├── fetchAuth.ts               # SessionManager Singleton (Promise Coalescing) + warmSession() + BroadcastChannel
 │       ├── scoreCalculator.ts         # Lógica de cálculo de notas
 │       ├── reportUtils.ts
+│       ├── mutationQueue.ts           # Cola de mutaciones offline-resiliente
 │       ├── validateJWT.ts
 │       ├── tourConfig.ts
 │       ├── cache/rolesCache.ts
@@ -455,51 +478,22 @@ app/
 │           ├── authService.ts
 │           ├── taskService.ts
 │           ├── reportService.ts
+│           ├── timingService.ts
 │           ├── auditService.ts
 │           ├── feedbackService.ts
 │           └── userProfileService.ts
 │
-├── scripts/
-│   └── seed-random-data.ts            # Script de seed semanal
+├── supabase/
+│   └── migrations/                    # Migraciones SQL versionadas
+│       └── 20260508000000_baseline_indexes.sql  # Índices de rendimiento
+│
+├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright
 ├── jest.config.js                     # Configuración Jest
 ├── next.config.ts
 ├── tsconfig.json
 ├── package.json
 └── .env.local                         # Variables de entorno (no versionado)
-```
-
----
-
-## Tareas Programadas (Scheduled Jobs)
-
-### Seed de Datos Aleatorios — `seed-data.yml`
-
-Previene que el proyecto Supabase sea pausado por inactividad generando registros aleatorios de forma periódica.
-
-| Parámetro | Valor |
-|-----------|-------|
-| Workflow | `.github/workflows/seed-data.yml` |
-| Frecuencia | **Cada sábado a las 10:00 AM COT** (15:00 UTC) |
-| Cron expression | `0 15 * * 6` |
-| Trigger manual | `workflow_dispatch` en GitHub Actions |
-| Records generados | 1–10 tareas aleatorias + 0–2 reportes |
-
-**Cómo funciona:**
-1. Obtiene el UUID del usuario vía `auth.admin.getUserByEmail(E2E_USER_EMAIL)`
-2. Descarga el catálogo activo (productos, squads, complejidades, categorías) desde la BD
-3. Genera entre 1 y 10 tareas con datos coherentes y datos de `task_squad`
-4. Opcionalmente genera 0–2 reportes para el mes anterior
-5. Imprime un resumen de lo creado
-
-**Secrets requeridos** (ya configurados para CI):
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `E2E_USER_EMAIL`
-
-**Ejecución manual:**
-```
-GitHub → Actions → "Seed Random Data" → Run workflow
 ```
 
 ---
@@ -515,10 +509,11 @@ GitHub → Actions → "Seed Random Data" → Run workflow
 
 ### Flujo de Creación de Tarea
 1. Usuario navega a `/tasks` → "+ Nueva Tarea"
-2. Completa formulario con validaciones en tiempo real
+2. Completa formulario con validaciones en tiempo real (incluye validación de URL)
 3. Nota se calcula automáticamente según devoluciones
-4. POST a `/api/tasks` → validación backend + almacenamiento
-5. Auditoría registra la operación
+4. Pre-flight check: `GET /api/tasks/check-link` verifica que el link no esté duplicado antes de enviar
+5. POST a `/api/tasks` → validación backend + almacenamiento
+6. Auditoría se registra de forma asíncrona (no bloquea la respuesta)
 
 ### Flujo de Generación de Reportes
 1. Usuario navega a `/reports`

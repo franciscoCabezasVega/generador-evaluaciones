@@ -1,37 +1,96 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ============================================================================
-// Caché global en memoria — sobrevive mount/unmount de componentes
+// CacheStore — Singleton que centraliza caché + suscriptores
 // ============================================================================
 
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
-  filterKey: string;
 }
 
-const globalCache = new Map<string, CacheEntry<unknown>>();
+class CacheStore {
+  private static instance: CacheStore;
 
-// Tiempo de vida del caché: 5 minutos
+  private cache = new Map<string, CacheEntry<unknown>>();
+  private subscribers = new Map<string, Set<() => void>>();
+
+  private constructor() {}
+
+  static getInstance(): CacheStore {
+    if (!CacheStore.instance) {
+      CacheStore.instance = new CacheStore();
+    }
+    return CacheStore.instance;
+  }
+
+  // ── Caché ──────────────────────────────────────────────────────────────────
+
+  get<T>(key: string): CacheEntry<T> | undefined {
+    return this.cache.get(key) as CacheEntry<T> | undefined;
+  }
+
+  set<T>(key: string, data: T): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  delete(key: string): void {
+    this.cache.delete(key);
+  }
+
+  deleteByPrefix(prefix: string): void {
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) this.cache.delete(key);
+    }
+  }
+
+  isFresh(key: string, staleTime: number): boolean {
+    const entry = this.cache.get(key);
+    return entry != null && Date.now() - entry.timestamp < staleTime;
+  }
+
+  // ── Suscriptores ───────────────────────────────────────────────────────────
+
+  subscribe(cacheKey: string, cb: () => void): () => void {
+    if (!this.subscribers.has(cacheKey)) {
+      this.subscribers.set(cacheKey, new Set());
+    }
+    this.subscribers.get(cacheKey)!.add(cb);
+    return () => this.subscribers.get(cacheKey)?.delete(cb);
+  }
+
+  notify(cacheKey: string): void {
+    this.subscribers.get(cacheKey)?.forEach((cb) => cb());
+  }
+
+  // ── Invalidación completa (borra caché + notifica suscriptores) ────────────
+
+  invalidate(cacheKey: string): void {
+    this.deleteByPrefix(`${cacheKey}:`);
+    this.notify(cacheKey);
+  }
+}
+
+/** Instancia global compartida por toda la aplicación. */
+const cacheStore = CacheStore.getInstance();
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
 const DEFAULT_STALE_TIME = 5 * 60 * 1000;
 
-// Pequeño jitter aleatorio (0-100ms) para evitar thundering herd
-// sin imponer delays artificiales de segundos.
 function getJitterDelay(): number {
   return Math.random() * 100;
 }
 
-/**
- * Genera una clave estable a partir de un objeto de filtros.
- */
 function buildFilterKey(filters: Record<string, unknown>): string {
-  const sorted = Object.keys(filters)
+  return Object.keys(filters)
     .sort()
-    .map((k) => `${k}=${String(filters[k] ?? '')}`)
-    .join('&');
-  return sorted;
+    .map((k) => `${k}=${String(filters[k] ?? "")}`)
+    .join("&");
 }
 
 // ============================================================================
@@ -39,17 +98,11 @@ function buildFilterKey(filters: Record<string, unknown>): string {
 // ============================================================================
 
 interface UseCachedFetchOptions<T> {
-  /** Clave única del recurso (e.g. 'tasks', 'timings', 'reports') */
   cacheKey: string;
-  /** Función que ejecuta el fetch real y devuelve datos */
   fetchFn: (signal: AbortSignal) => Promise<T>;
-  /** Objeto de filtros activos — cambio de filtros = nueva petición */
   filters: Record<string, unknown>;
-  /** Dependencia booleana que bloquea el fetch (e.g. authLoading) */
   enabled?: boolean;
-  /** Tiempo de vida del caché en ms (default: 5 min) */
   staleTime?: number;
-  /** Valor inicial/fallback mientras no hay data */
   initialData?: T;
 }
 
@@ -58,11 +111,8 @@ interface UseCachedFetchReturn<T> {
   loading: boolean;
   error: string | null;
   isRefreshing: boolean;
-  /** Forzar refetch (invalida caché) */
   refresh: () => void;
-  /** Actualizar data localmente sin fetch (optimistic update) */
   setData: (updater: T | ((prev: T) => T)) => void;
-  /** Invalidar caché y refetch en background */
   invalidate: () => void;
 }
 
@@ -74,18 +124,15 @@ export function useCachedFetch<T>({
   staleTime = DEFAULT_STALE_TIME,
   initialData,
 }: UseCachedFetchOptions<T>): UseCachedFetchReturn<T> {
-  const filterKey = buildFilterKey(filters);
-  const fullKey = `${cacheKey}:${filterKey}`;
+  const fullKey = `${cacheKey}:${buildFilterKey(filters)}`;
 
-  // Intentar hidratar desde caché
-  const cached = globalCache.get(fullKey) as CacheEntry<T> | undefined;
-  const hasFreshCache = cached != null && Date.now() - cached.timestamp < staleTime;
+  const cached = cacheStore.get<T>(fullKey);
+  const hasFreshCache =
+    cached != null && cacheStore.isFresh(fullKey, staleTime);
 
   const [data, setDataState] = useState<T>(
-    hasFreshCache ? cached!.data : (initialData as T)
+    hasFreshCache ? cached!.data : (initialData as T),
   );
-  // loading debe ser true siempre que no haya caché fresco, independientemente de initialData
-  // Esto evita mostrar "no hay registros" prematuramente mientras se fetchean los datos
   const [loading, setLoading] = useState(!hasFreshCache);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -93,12 +140,8 @@ export function useCachedFetch<T>({
   const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const fetchIdRef = useRef(0);
-
-  // Mantenernos sincronizados con el fullKey actual
   const fullKeyRef = useRef(fullKey);
   fullKeyRef.current = fullKey;
-
-  // Keep fetchFn ref stable to avoid re-triggering effects
   const fetchFnRef = useRef(fetchFn);
   fetchFnRef.current = fetchFn;
 
@@ -114,10 +157,10 @@ export function useCachedFetch<T>({
       fetchIdRef.current += 1;
       const myId = fetchIdRef.current;
 
-      if (!isBackground) {
-        setLoading(true);
-      } else {
+      if (isBackground) {
         setIsRefreshing(true);
+      } else {
+        setLoading(true);
       }
       setError(null);
 
@@ -125,23 +168,35 @@ export function useCachedFetch<T>({
         const result = await fetchFnRef.current(signal);
 
         if (!isMountedRef.current || signal.aborted) return;
-        // Solo aplicar si somos el fetch más reciente
         if (fetchIdRef.current !== myId) return;
 
         setDataState(result);
-        // Actualizar caché global
-        globalCache.set(fullKeyRef.current, {
-          data: result,
-          timestamp: Date.now(),
-          filterKey: fullKeyRef.current,
-        });
+        cacheStore.set(fullKeyRef.current, result);
       } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (err instanceof Error && err.message?.includes('aborted')) return;
-        if (!isMountedRef.current) return;
-        if (fetchIdRef.current !== myId) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (err instanceof Error && err.message?.includes("aborted")) return;
+        if (!isMountedRef.current || fetchIdRef.current !== myId) return;
+
+        const isLockError =
+          (err instanceof Error && err.name === "SessionLockError") ||
+          (err instanceof Error && err.message.includes("sesión está ocupada"));
+
+        if (isLockError && !isBackground) {
+          console.warn(
+            `[useCachedFetch:${cacheKey}] SessionLock, reintentando en 3s...`,
+          );
+          await new Promise((r) => setTimeout(r, 3000));
+          if (isMountedRef.current && !signal.aborted) {
+            abortRef.current?.abort();
+            const retry = new AbortController();
+            abortRef.current = retry;
+            void doFetch(false, retry.signal);
+          }
+          return;
+        }
+
         console.error(`[useCachedFetch:${cacheKey}]`, err);
-        setError(err instanceof Error ? err.message : 'Error desconocido');
+        setError(err instanceof Error ? err.message : "Error desconocido");
       } finally {
         if (isMountedRef.current && fetchIdRef.current === myId) {
           setLoading(false);
@@ -152,97 +207,77 @@ export function useCachedFetch<T>({
     [cacheKey],
   );
 
-  // === Efecto principal: fetch al montar o cambiar filtros ===
+  // Fetch al montar o cambiar filtros/enabled
   useEffect(() => {
     if (!enabled) return;
 
-    const cachedEntry = globalCache.get(fullKey) as CacheEntry<T> | undefined;
-    const isFresh = cachedEntry != null && Date.now() - cachedEntry.timestamp < staleTime;
-
-    if (isFresh) {
-      // Caché fresco: usar datos del caché, no hacer fetch
-      setDataState(cachedEntry!.data);
+    if (cacheStore.isFresh(fullKey, staleTime)) {
+      const entry = cacheStore.get<T>(fullKey);
+      if (entry) setDataState(entry.data);
       setLoading(false);
       return;
     }
 
-    // No hay caché o está expirado: hacer fetch
     const controller = new AbortController();
     abortRef.current = controller;
+    const hasStaleData = cacheStore.get(fullKey) != null || data != null;
 
-    // Si ya tenemos data (del caché viejo), hacer fetch en background
-    const hasStaleData = cachedEntry != null || data != null;
-
-    // Pequeño jitter para reducir contención en getSession() cuando
-    // múltiples hooks montan simultáneamente.
-    const delay = getJitterDelay();
-    const delayTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (!controller.signal.aborted) {
         doFetch(hasStaleData && data !== initialData, controller.signal);
       }
-    }, delay);
+    }, getJitterDelay());
 
     return () => {
-      clearTimeout(delayTimer);
+      clearTimeout(timer);
       controller.abort();
       abortRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullKey, enabled, staleTime, doFetch]);
 
-  // === Refresh manual: invalida el caché y re-solicita ===
-  const refresh = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
-    globalCache.delete(fullKeyRef.current);
+  // Suscribirse a invalidaciones externas del CacheStore
+  useEffect(() => {
+    if (!enabled) return;
+    return cacheStore.subscribe(cacheKey, () => {
+      if (!isMountedRef.current) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      doFetch(true, controller.signal);
+    });
+  }, [cacheKey, enabled, doFetch]);
 
+  const refresh = useCallback(() => {
+    abortRef.current?.abort();
+    cacheStore.delete(fullKeyRef.current);
     const controller = new AbortController();
     abortRef.current = controller;
     doFetch(true, controller.signal);
   }, [doFetch]);
 
-  // === Invalidate: borra caché + refetch en background ===
   const invalidate = useCallback(() => {
-    // Borrar todas las entradas de este cacheKey (cualquier filtro)
-    for (const key of globalCache.keys()) {
-      if (key.startsWith(`${cacheKey}:`)) {
-        globalCache.delete(key);
-      }
-    }
-    if (!isMountedRef.current) return;
+    cacheStore.invalidate(cacheKey);
+  }, [cacheKey]);
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    doFetch(true, controller.signal);
-  }, [cacheKey, doFetch]);
-
-  // === setData: actualización optimista local + caché ===
-  const setData = useCallback(
-    (updater: T | ((prev: T) => T)) => {
-      setDataState((prev) => {
-        const next = typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater;
-        // Actualizar caché global también
-        globalCache.set(fullKeyRef.current, {
-          data: next,
-          timestamp: Date.now(),
-          filterKey: fullKeyRef.current,
-        });
-        return next;
-      });
-    },
-    [],
-  );
+  const setData = useCallback((updater: T | ((prev: T) => T)) => {
+    setDataState((prev) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (p: T) => T)(prev)
+          : updater;
+      cacheStore.set(fullKeyRef.current, next);
+      return next;
+    });
+  }, []);
 
   return { data, loading, error, isRefreshing, refresh, setData, invalidate };
 }
 
 // ============================================================================
-// Utilidad: invalidar caché externo (para llamar desde handlers de mutación)
+// API pública para invalidar desde fuera del hook (MutationQueueContext, etc.)
 // ============================================================================
 
-export function invalidateCache(cacheKey: string) {
-  for (const key of globalCache.keys()) {
-    if (key.startsWith(`${cacheKey}:`)) {
-      globalCache.delete(key);
-    }
-  }
+/** Invalida el caché de un recurso y notifica a todos los hooks suscritos. */
+export function invalidateCache(cacheKey: string): void {
+  cacheStore.invalidate(cacheKey);
 }

@@ -1,46 +1,95 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import Navbar from '@/components/Navbar';
-import CatalogManager, { CatalogItem, FieldDef } from '@/components/CatalogManager';
-import { CatalogComplexity, CatalogSquad } from '@/lib/types';
-import { authenticatedFetch } from '@/lib/fetchAuth';
-import { invalidateCatalogCache } from '@/hooks/useCatalogData';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import Navbar from "@/components/Navbar";
+import CatalogManager, {
+  CatalogItem,
+  FieldDef,
+} from "@/components/CatalogManager";
+import { CatalogComplexity, CatalogSquad } from "@/lib/types";
+import { authenticatedFetch } from "@/lib/fetchAuth";
+import { invalidateCatalogCache } from "@/hooks/useCatalogData";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 // ─── Tipos de tab ─────────────────────────────────────────────────────────────
-type TabId = 'products' | 'categories' | 'complexities' | 'squads' | 'qa-members';
+type TabId =
+  | "products"
+  | "categories"
+  | "complexities"
+  | "squads"
+  | "qa-members";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'products',     label: 'Productos' },
-  { id: 'categories',   label: 'Categorías' },
-  { id: 'complexities', label: 'Complejidad' },
-  { id: 'squads',       label: 'Squads' },
-  { id: 'qa-members',   label: 'QA Members' },
+  { id: "products", label: "Productos" },
+  { id: "categories", label: "Categorías" },
+  { id: "complexities", label: "Complejidad" },
+  { id: "squads", label: "Squads" },
+  { id: "qa-members", label: "QA Members" },
 ];
 
 // ─── Definición de campos por entidad ────────────────────────────────────────
 
 const PRODUCT_FIELDS: FieldDef[] = [
-  { key: 'name', label: 'Nombre', type: 'text', placeholder: 'Ej: Platform', required: true },
+  {
+    key: "name",
+    label: "Nombre",
+    type: "text",
+    placeholder: "Ej: Platform",
+    required: true,
+  },
 ];
 
 const CATEGORY_FIELDS: FieldDef[] = [
-  { key: 'name', label: 'Nombre', type: 'text', placeholder: 'Ej: Bug fix', required: true },
+  {
+    key: "name",
+    label: "Nombre",
+    type: "text",
+    placeholder: "Ej: Bug fix",
+    required: true,
+  },
 ];
 
 const COMPLEXITY_FIELDS: FieldDef[] = [
-  { key: 'name',          label: 'Nombre',              type: 'text',   placeholder: 'Ej: Estándar', required: true },
-  { key: 'label',         label: 'Etiqueta de horas',   type: 'text',   placeholder: 'Ej: 2 a 3 días (16-24h)', required: true },
-  { key: 'min_hours',     label: 'Horas mínimas',       type: 'number', min: 0, required: true },
-  { key: 'max_hours',     label: 'Horas máximas',       type: 'number', min: 0, required: true },
-  { key: 'display_order', label: 'Orden de visualización', type: 'number', min: 1, description: 'Posición en el selector (1 = primero)' },
+  {
+    key: "name",
+    label: "Nombre",
+    type: "text",
+    placeholder: "Ej: Estándar",
+    required: true,
+  },
+  {
+    key: "min_hours",
+    label: "Horas mínimas",
+    type: "number",
+    min: 0,
+    required: true,
+  },
+  {
+    key: "max_hours",
+    label: "Horas máximas",
+    type: "number",
+    min: 0,
+    required: true,
+  },
+  {
+    key: "display_order",
+    label: "Orden de visualización",
+    type: "number",
+    min: 1,
+    description: "Posición en el selector (1 = primero)",
+  },
 ];
 
 const QA_FIELDS: FieldDef[] = [
-  { key: 'name', label: 'Nombre completo', type: 'text', placeholder: 'Ej: Ana García', required: true },
+  {
+    key: "name",
+    label: "Nombre completo",
+    type: "text",
+    placeholder: "Ej: Ana García",
+    required: true,
+  },
 ];
 
 // ─── Página ───────────────────────────────────────────────────────────────────
@@ -48,7 +97,7 @@ const QA_FIELDS: FieldDef[] = [
 export default function SettingsPage() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>('products');
+  const [activeTab, setActiveTab] = useState<TabId>("products");
 
   // Datos por tab
   const [products, setProducts] = useState<CatalogItem[]>([]);
@@ -62,8 +111,8 @@ export default function SettingsPage() {
 
   // Redirigir si no es admin
   useEffect(() => {
-    if (!authLoading && profile && profile.role !== 'admin') {
-      router.replace('/tasks');
+    if (!authLoading && profile && profile.role !== "admin") {
+      router.replace("/tasks");
     }
   }, [authLoading, profile, router]);
 
@@ -73,30 +122,51 @@ export default function SettingsPage() {
     setLoadingTab(true);
     setTabError(null);
     try {
-      const res = await authenticatedFetch(`/api/settings/${tab}?includeInactive=true`);
+      const res = await authenticatedFetch(
+        `/api/settings/${tab}?includeInactive=true`,
+      );
       const data = await res.json();
       if (!res.ok) {
-        setTabError(data.error ?? 'Error al cargar datos');
+        setTabError(data.error ?? "Error al cargar datos");
         return;
       }
       switch (tab) {
-        case 'products':     setProducts(data);     break;
-        case 'categories':   setCategories(data);   break;
-        case 'complexities': setComplexities(data); break;
-        case 'squads':       setSquads(data);       break;
-        case 'qa-members':   setQaMembers(data);    break;
+        case "products":
+          setProducts(data);
+          break;
+        case "categories":
+          setCategories(data);
+          break;
+        case "complexities":
+          setComplexities(data);
+          break;
+        case "squads":
+          setSquads(data);
+          break;
+        case "qa-members":
+          setQaMembers(data);
+          break;
       }
-    } catch {
-      setTabError('Error de conexión');
+    } catch (err) {
+      // SessionLockError: navigator.lock temporalmente ocupado → reintentar en 2s
+      const isLock =
+        err instanceof Error &&
+        (err.name === "SessionLockError" || err.message.includes("ocupada"));
+      if (isLock) {
+        setTimeout(() => fetchTab(tab), 2000);
+        return; // no mostrar error mientras reintenta
+      }
+      setTabError("Error de conexión");
     } finally {
       setLoadingTab(false);
     }
   };
 
   useEffect(() => {
-    if (!authLoading && profile?.role === 'admin') {
+    if (!authLoading && profile?.role === "admin") {
       fetchTab(activeTab);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, authLoading, profile?.role]);
 
   const handleRefresh = () => {
@@ -106,13 +176,21 @@ export default function SettingsPage() {
 
   // ─── Campos de Squad: necesita opciones de productos ──────────────────────
   const squadFields: FieldDef[] = [
-    { key: 'name',       label: 'Nombre del Squad', type: 'text',   placeholder: 'Ej: Squad 1 - Alpha', required: true },
     {
-      key: 'product_id',
-      label: 'Producto',
-      type: 'select',
+      key: "name",
+      label: "Nombre del Squad",
+      type: "text",
+      placeholder: "Ej: Squad 1 - Alpha",
       required: true,
-      options: products.filter((p) => p.is_active).map((p) => ({ value: p.id, label: p.name })),
+    },
+    {
+      key: "product_id",
+      label: "Producto",
+      type: "select",
+      required: true,
+      options: products
+        .filter((p) => p.is_active)
+        .map((p) => ({ value: p.id, label: p.name })),
     },
   ];
 
@@ -120,29 +198,37 @@ export default function SettingsPage() {
 
   const complexityExtraColumns = [
     {
-      header: 'Horas',
+      header: "Horas",
       render: (item: CatalogItem) => {
         const c = item as unknown as CatalogComplexity;
-        return <span className="text-xs text-gray-500">{c.label}</span>;
+        const hoursLabel =
+          c.min_hours === c.max_hours
+            ? `${c.min_hours}h`
+            : `${c.min_hours}h - ${c.max_hours}h`;
+        return <span className="text-xs text-gray-500">{hoursLabel}</span>;
       },
     },
     {
-      header: 'Orden',
+      header: "Orden",
       render: (item: CatalogItem) => {
         const c = item as unknown as CatalogComplexity;
-        return <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">{c.display_order}</span>;
+        return (
+          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">
+            {c.display_order}
+          </span>
+        );
       },
     },
   ];
 
   const squadExtraColumns = [
     {
-      header: 'Producto',
+      header: "Producto",
       render: (item: CatalogItem) => {
         const s = item as unknown as CatalogSquad;
         return (
           <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
-            {s.product?.name ?? '—'}
+            {s.product?.name ?? "—"}
           </span>
         );
       },
@@ -164,7 +250,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!profile || profile.role !== 'admin') return null;
+  if (!profile || profile.role !== "admin") return null;
 
   return (
     <>
@@ -173,7 +259,9 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Configuración</h1>
-            <p className="text-sm text-gray-500 mt-1">Gestiona los catálogos que se usan en toda la aplicación</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Gestiona los catálogos que se usan en toda la aplicación
+            </p>
           </div>
           <button
             onClick={handleRefresh}
@@ -181,7 +269,7 @@ export default function SettingsPage() {
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
             title="Recargar tab actual"
           >
-            <RefreshCw size={16} className={loadingTab ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={loadingTab ? "animate-spin" : ""} />
             Actualizar
           </button>
         </div>
@@ -198,8 +286,8 @@ export default function SettingsPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
                     activeTab === tab.id
-                      ? 'text-blue-600 border-blue-600 bg-white'
-                      : 'text-gray-500 border-transparent hover:text-gray-800 hover:bg-white/60'
+                      ? "text-blue-600 border-blue-600 bg-white"
+                      : "text-gray-500 border-transparent hover:text-gray-800 hover:bg-white/60"
                   }`}
                 >
                   {tab.label}
@@ -212,7 +300,10 @@ export default function SettingsPage() {
           <div className="p-6">
             {tabError && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+                <AlertCircle
+                  size={16}
+                  className="text-red-500 mt-0.5 flex-shrink-0"
+                />
                 <p className="text-sm text-red-700">{tabError}</p>
               </div>
             )}
@@ -223,7 +314,7 @@ export default function SettingsPage() {
               </div>
             ) : (
               <>
-                {activeTab === 'products' && (
+                {activeTab === "products" && (
                   <CatalogManager
                     title="Productos"
                     apiPath="/api/settings/products"
@@ -233,7 +324,7 @@ export default function SettingsPage() {
                     itemLabel="producto"
                   />
                 )}
-                {activeTab === 'categories' && (
+                {activeTab === "categories" && (
                   <CatalogManager
                     title="Categorías"
                     apiPath="/api/settings/categories"
@@ -243,7 +334,7 @@ export default function SettingsPage() {
                     itemLabel="categoría"
                   />
                 )}
-                {activeTab === 'complexities' && (
+                {activeTab === "complexities" && (
                   <CatalogManager
                     title="Complejidades"
                     apiPath="/api/settings/complexities"
@@ -254,7 +345,7 @@ export default function SettingsPage() {
                     itemLabel="complejidad"
                   />
                 )}
-                {activeTab === 'squads' && (
+                {activeTab === "squads" && (
                   <CatalogManager
                     title="Squads"
                     apiPath="/api/settings/squads"
@@ -265,7 +356,7 @@ export default function SettingsPage() {
                     itemLabel="squad"
                   />
                 )}
-                {activeTab === 'qa-members' && (
+                {activeTab === "qa-members" && (
                   <CatalogManager
                     title="Miembros QA"
                     apiPath="/api/settings/qa-members"

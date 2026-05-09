@@ -20,7 +20,9 @@ let fetchPromise: Promise<Map<number, string>> | null = null;
  * Si no existen o expiraron, hace fetch una sola vez
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SupabaseClient type varies per version
-export async function getRoles(supabaseClient: any): Promise<Map<number, string>> {
+export async function getRoles(
+  supabaseClient: any,
+): Promise<Map<number, string>> {
   const now = Date.now();
 
   // Si hay cache válido, devolverlo inmediatamente
@@ -38,11 +40,11 @@ export async function getRoles(supabaseClient: any): Promise<Map<number, string>
   fetchPromise = (async () => {
     try {
       const { data, error } = await supabaseClient
-        .from('roles')
-        .select('id, name');
+        .from("roles")
+        .select("id, name");
 
       if (error) {
-        console.error('Error fetching roles:', error);
+        console.error("Error fetching roles:", error);
         // Devolver cache viejo si hay error
         return rolesCache || new Map();
       }
@@ -79,7 +81,10 @@ export function invalidateRolesCache() {
  * Obtener el nombre de un rol por su ID desde el cache
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SupabaseClient type varies per version
-export async function getRoleNameById(roleId: number, supabaseClient: any): Promise<string> {
+export async function getRoleNameById(
+  roleId: number,
+  supabaseClient: any,
+): Promise<string> {
   const roles = await getRoles(supabaseClient);
-  return roles.get(roleId) || 'invitado';
+  return roles.get(roleId) || "invitado";
 }

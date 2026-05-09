@@ -1,25 +1,25 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
-import { AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
+      setError("Las contraseñas no coinciden");
       return;
     }
 
@@ -34,8 +34,8 @@ export default function SignupPage() {
       if (error) throw error;
 
       // Esperar a que se confirme
-      alert('Revisa tu correo para confirmar tu cuenta');
-      router.push('/auth/login');
+      alert("Revisa tu correo para confirmar tu cuenta");
+      router.push("/auth/login");
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setError((error as any).message);
@@ -58,7 +58,12 @@ export default function SignupPage() {
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <label htmlFor="signup-email" className="block text-sm font-medium mb-2">Email</label>
+            <label
+              htmlFor="signup-email"
+              className="block text-sm font-medium mb-2"
+            >
+              Email
+            </label>
             <input
               id="signup-email"
               type="email"
@@ -71,7 +76,12 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="signup-password" className="block text-sm font-medium mb-2">Contraseña</label>
+            <label
+              htmlFor="signup-password"
+              className="block text-sm font-medium mb-2"
+            >
+              Contraseña
+            </label>
             <input
               id="signup-password"
               type="password"
@@ -84,7 +94,12 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="signup-confirm-password" className="block text-sm font-medium mb-2">Confirmar Contraseña</label>
+            <label
+              htmlFor="signup-confirm-password"
+              className="block text-sm font-medium mb-2"
+            >
+              Confirmar Contraseña
+            </label>
             <input
               id="signup-confirm-password"
               type="password"
@@ -96,18 +111,17 @@ export default function SignupPage() {
             />
           </div>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full"
-          >
-            {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Creando cuenta..." : "Crear Cuenta"}
           </Button>
         </form>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          ¿Ya tienes cuenta?{' '}
-          <a href="/auth/login" className="font-medium text-blue-600 hover:underline">
+          ¿Ya tienes cuenta?{" "}
+          <a
+            href="/auth/login"
+            className="font-medium text-blue-600 hover:underline"
+          >
             Inicia sesión
           </a>
         </p>

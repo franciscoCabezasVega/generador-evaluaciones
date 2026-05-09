@@ -1,4 +1,4 @@
-import { withTimeout } from './withTimeout';
+import { withTimeout } from "./withTimeout";
 
 export interface RetryConfig {
   maxRetries?: number; // Default: 3
@@ -12,10 +12,10 @@ export class RetryError extends Error {
   constructor(
     message: string,
     public lastError: Error,
-    public attempts: number
+    public attempts: number,
   ) {
     super(message);
-    this.name = 'RetryError';
+    this.name = "RetryError";
   }
 }
 
@@ -24,16 +24,22 @@ export class RetryError extends Error {
  * si el signal se aborta antes. Evita que un reintento se quede esperando
  * innecesariamente cuando el componente ya se desmontó o se canceló la request.
  */
-export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
+export function abortableDelay(
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal?.aborted)
+    return Promise.reject(
+      new DOMException("The operation was aborted.", "AbortError"),
+    );
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, ms);
     if (signal) {
       const onAbort = () => {
         clearTimeout(timer);
-        reject(new DOMException('The operation was aborted.', 'AbortError'));
+        reject(new DOMException("The operation was aborted.", "AbortError"));
       };
-      signal.addEventListener('abort', onAbort, { once: true });
+      signal.addEventListener("abort", onAbort, { once: true });
     }
   });
 }
@@ -41,13 +47,13 @@ export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> 
 /**
  * Ejecutar una función con reintentos automáticos
  * Usa backoff exponencial entre reintentos
- * 
+ *
  * @param fn - Función que retorna una Promise
  * @param config - Configuración de reintentos
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  config: RetryConfig = {}
+  config: RetryConfig = {},
 ): Promise<T> {
   const {
     maxRetries = 3,
@@ -72,12 +78,13 @@ export async function withRetry<T>(
         throw new RetryError(
           `Failed after ${maxRetries} attempts: ${lastError.message}`,
           lastError,
-          maxRetries
+          maxRetries,
         );
       }
 
       // Calcular backoff exponencial
-      const backoffMs = initialBackoffMs * Math.pow(backoffMultiplier, attempt - 1);
+      const backoffMs =
+        initialBackoffMs * Math.pow(backoffMultiplier, attempt - 1);
 
       // Callback para notificar reintento
       if (onRetry) {
@@ -86,21 +93,21 @@ export async function withRetry<T>(
 
       console.warn(
         `Request failed (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`,
-        lastError.message
+        lastError.message,
       );
 
       // Esperar antes de reintentar
-      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
     }
   }
 
   // Este código nunca se alcanza debido a la lógica anterior, pero necesario para TypeScript
-  throw new RetryError('Retry failed', lastError!, maxRetries);
+  throw new RetryError("Retry failed", lastError!, maxRetries);
 }
 
 /**
  * Ejecutar un fetch con reintentos automáticos
- * 
+ *
  * @param url - URL a hacer fetch
  * @param options - Opciones de fetch
  * @param config - Configuración de reintentos y timeout
@@ -108,10 +115,7 @@ export async function withRetry<T>(
 export async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
-  config: RetryConfig = {}
+  config: RetryConfig = {},
 ): Promise<Response> {
-  return withRetry(
-    () => fetch(url, options),
-    config
-  );
+  return withRetry(() => fetch(url, options), config);
 }

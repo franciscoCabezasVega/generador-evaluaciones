@@ -1,8 +1,14 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { authenticatedFetch } from '@/lib/fetchAuth';
-import { CatalogProduct, CatalogCategory, CatalogComplexity, CatalogSquad, CatalogQAMember } from '@/lib/types';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { authenticatedFetch, warmSession } from "@/lib/fetchAuth";
+import {
+  CatalogProduct,
+  CatalogCategory,
+  CatalogComplexity,
+  CatalogSquad,
+  CatalogQAMember,
+} from "@/lib/types";
 
 export interface CatalogData {
   products: CatalogProduct[];
@@ -16,16 +22,26 @@ export interface CatalogData {
 }
 
 // Caché compartida entre instancias del hook (catálogos cambian raramente)
-let cachedData: Omit<CatalogData, 'loading' | 'error' | 'reload'> | null = null;
+let cachedData: Omit<CatalogData, "loading" | "error" | "reload"> | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 export function useCatalogData(): CatalogData {
-  const [products, setProducts] = useState<CatalogProduct[]>(cachedData?.products ?? []);
-  const [categories, setCategories] = useState<CatalogCategory[]>(cachedData?.categories ?? []);
-  const [complexities, setComplexities] = useState<CatalogComplexity[]>(cachedData?.complexities ?? []);
-  const [squads, setSquads] = useState<CatalogSquad[]>(cachedData?.squads ?? []);
-  const [qaMembers, setQaMembers] = useState<CatalogQAMember[]>(cachedData?.qaMembers ?? []);
+  const [products, setProducts] = useState<CatalogProduct[]>(
+    cachedData?.products ?? [],
+  );
+  const [categories, setCategories] = useState<CatalogCategory[]>(
+    cachedData?.categories ?? [],
+  );
+  const [complexities, setComplexities] = useState<CatalogComplexity[]>(
+    cachedData?.complexities ?? [],
+  );
+  const [squads, setSquads] = useState<CatalogSquad[]>(
+    cachedData?.squads ?? [],
+  );
+  const [qaMembers, setQaMembers] = useState<CatalogQAMember[]>(
+    cachedData?.qaMembers ?? [],
+  );
   const [loading, setLoading] = useState(!cachedData);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -50,19 +66,30 @@ export function useCatalogData(): CatalogData {
     setError(null);
 
     try {
-      const [
-        productsRes,
-        categoriesRes,
-        complexitiesRes,
-        squadsRes,
-        qaRes,
-      ] = await Promise.all([
-        authenticatedFetch('/api/settings/products', { signal: controller.signal }),
-        authenticatedFetch('/api/settings/categories', { signal: controller.signal }),
-        authenticatedFetch('/api/settings/complexities', { signal: controller.signal }),
-        authenticatedFetch('/api/settings/squads', { signal: controller.signal }),
-        authenticatedFetch('/api/settings/qa-members', { signal: controller.signal }),
-      ]);
+      // Pre-calentar la sesión UNA SOLA VEZ antes del Promise.all.
+      // Evita que las 5 llamadas paralelas compitan por navigator.lock individualmente:
+      // una vez que warmSession() resuelve, el token queda en caché y todas usan el caché.
+      const sessionOk = await warmSession(controller.signal);
+      if (!sessionOk || controller.signal.aborted) return;
+
+      const [productsRes, categoriesRes, complexitiesRes, squadsRes, qaRes] =
+        await Promise.all([
+          authenticatedFetch("/api/settings/products", {
+            signal: controller.signal,
+          }),
+          authenticatedFetch("/api/settings/categories", {
+            signal: controller.signal,
+          }),
+          authenticatedFetch("/api/settings/complexities", {
+            signal: controller.signal,
+          }),
+          authenticatedFetch("/api/settings/squads", {
+            signal: controller.signal,
+          }),
+          authenticatedFetch("/api/settings/qa-members", {
+            signal: controller.signal,
+          }),
+        ]);
 
       if (controller.signal.aborted) return;
 
@@ -93,9 +120,17 @@ export function useCatalogData(): CatalogData {
       setQaMembers(cachedData.qaMembers);
     } catch (err) {
       if (controller.signal.aborted) return;
-      console.error('Error loading catalog data:', err);
-      setError('Error al cargar los catálogos. Intenta recargar la página.');
+      // SessionLockError residual (warmSession agotó sus propios reintentos) —
+      // ya no reintentamos aquí para no crear loops; simplemente no mostramos error
+      // porque warmSession ya loggeó el problema.
+      if (err instanceof Error && err.name === "SessionLockError") return;
+      // "Session not available": sesión limpiada por logout — ignorar silenciosamente
+      if (err instanceof Error && err.message.includes("Session not available"))
+        return;
+      console.error("Error loading catalog data:", err);
+      setError("Error al cargar los catálogos. Intenta recargar la página.");
     } finally {
+      // Solo apagar loading si no se abortó (evita parpadeo durante reintentos)
       if (!controller.signal.aborted) {
         setLoading(false);
       }
@@ -117,7 +152,16 @@ export function useCatalogData(): CatalogData {
     };
   }, [fetchAll]);
 
-  return { products, categories, complexities, squads, qaMembers, loading, error, reload };
+  return {
+    products,
+    categories,
+    complexities,
+    squads,
+    qaMembers,
+    loading,
+    error,
+    reload,
+  };
 }
 
 /**

@@ -13,9 +13,9 @@ const WORK_DAYS_PER_MONTH = 22; // Días laborales promedio
  * @returns String formateado
  */
 export function formatTime(hours: number): string {
-  if (hours === 0) return '0h';
+  if (hours === 0) return "0h";
 
-  let result = '';
+  let result = "";
   let remaining = hours;
 
   // Meses
@@ -115,7 +115,7 @@ export function calculateTotalHours(
     waiting_development_fixes_hours?: number;
     retest_hours?: number;
     clarification_hours?: number;
-  }>
+  }>,
 ): number {
   return timings.reduce(
     (total, timing) =>
@@ -125,7 +125,7 @@ export function calculateTotalHours(
       (timing.waiting_development_fixes_hours || 0) +
       (timing.retest_hours || 0) +
       (timing.clarification_hours || 0),
-    0
+    0,
   );
 }
 
@@ -141,7 +141,7 @@ export function calculateAveragesByPhase(
     waiting_development_fixes_hours?: number;
     retest_hours?: number;
     clarification_hours?: number;
-  }>
+  }>,
 ) {
   if (timings.length === 0) {
     return {
@@ -154,20 +154,47 @@ export function calculateAveragesByPhase(
     };
   }
 
-  const totalEffectiveTesting = timings.reduce((sum, t) => sum + (t.effective_testing_hours || 0), 0);
-  const totalWaitingEnvironment = timings.reduce((sum, t) => sum + (t.waiting_environment_hours || 0), 0);
-  const totalWaitingDevelopmentFixes = timings.reduce((sum, t) => sum + (t.waiting_development_fixes_hours || 0), 0);
-  const totalRetest = timings.reduce((sum, t) => sum + (t.retest_hours || 0), 0);
-  const totalClarification = timings.reduce((sum, t) => sum + (t.clarification_hours || 0), 0);
+  const totalEffectiveTesting = timings.reduce(
+    (sum, t) => sum + (t.effective_testing_hours || 0),
+    0,
+  );
+  const totalWaitingEnvironment = timings.reduce(
+    (sum, t) => sum + (t.waiting_environment_hours || 0),
+    0,
+  );
+  const totalWaitingDevelopmentFixes = timings.reduce(
+    (sum, t) => sum + (t.waiting_development_fixes_hours || 0),
+    0,
+  );
+  const totalRetest = timings.reduce(
+    (sum, t) => sum + (t.retest_hours || 0),
+    0,
+  );
+  const totalClarification = timings.reduce(
+    (sum, t) => sum + (t.clarification_hours || 0),
+    0,
+  );
 
   const count = timings.length;
 
   return {
-    avg_effective_testing: Math.round((totalEffectiveTesting / count) * 100) / 100,
-    avg_waiting_environment: Math.round((totalWaitingEnvironment / count) * 100) / 100,
-    avg_waiting_development_fixes: Math.round((totalWaitingDevelopmentFixes / count) * 100) / 100,
+    avg_effective_testing:
+      Math.round((totalEffectiveTesting / count) * 100) / 100,
+    avg_waiting_environment:
+      Math.round((totalWaitingEnvironment / count) * 100) / 100,
+    avg_waiting_development_fixes:
+      Math.round((totalWaitingDevelopmentFixes / count) * 100) / 100,
     avg_retest: Math.round((totalRetest / count) * 100) / 100,
     avg_clarification: Math.round((totalClarification / count) * 100) / 100,
-    avg_total: Math.round(((totalEffectiveTesting + totalWaitingEnvironment + totalWaitingDevelopmentFixes + totalRetest + totalClarification) / count) * 100) / 100,
+    avg_total:
+      Math.round(
+        ((totalEffectiveTesting +
+          totalWaitingEnvironment +
+          totalWaitingDevelopmentFixes +
+          totalRetest +
+          totalClarification) /
+          count) *
+          100,
+      ) / 100,
   };
 }
