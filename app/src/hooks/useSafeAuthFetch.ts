@@ -167,12 +167,13 @@ export function useSafeAuthFetch() {
           );
         }
 
-        // Errores transitorios de lock de sesión — 1 reintento y luego refresh automático
-        // Con el caché de 40s + SessionChecker inteligente, esto debería ser muy raro
+        // Errores transitorios de lock de sesión — hasta 3 reintentos con delay incremental
+        // Ocurre al volver de otra pestaña: Supabase auto-refresh mantiene el lock
         if (error instanceof Error && error.name === 'SessionLockError') {
-          const SESSION_LOCK_MAX_RETRIES = 1; // 2 intentos totales (inicial + 1 reintento)
+          const SESSION_LOCK_MAX_RETRIES = 3;
           if (retryCount < SESSION_LOCK_MAX_RETRIES) {
-            const delay = 2000; // 2 segundos
+            // Delay incremental: 2s, 3s, 4s — da tiempo al auto-refresh de terminar
+            const delay = 2000 + retryCount * 1000;
             console.warn(
               `Session lock busy (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`
             );
@@ -183,17 +184,12 @@ export function useSafeAuthFetch() {
             }
             return safeFetch(url, options, retryCount + 1, effectiveTimeout);
           }
-          
-          // Todos los reintentos agotados — recargar automáticamente
+
+          // Todos los reintentos agotados — dejar que la UI muestre un banner de error
           console.error(
-            '🔄 SessionLockError persistente después de 2 intentos. Ejecutando window.location.reload()...'
+            'SessionLockError persistente después de 4 intentos. Propagando error para que la UI lo maneje.'
           );
-          
-          // Recargar página completa para liberar todos los locks
-          window.location.reload();
-          
-          // Este código nunca se ejecutará porque reload interrumpe la ejecución
-          throw new Error('Recargando página...');
+          throw new Error('La sesión está ocupada. Espera unos segundos e intenta de nuevo.');
         }
 
         // Sesión no disponible temporalmente — intentar refresh

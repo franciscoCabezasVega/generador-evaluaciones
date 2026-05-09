@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { authenticatedFetch } from '@/lib/fetchAuth';
+import { authenticatedFetch, warmSession } from '@/lib/fetchAuth';
 import { CatalogProduct, CatalogCategory, CatalogComplexity, CatalogSquad, CatalogQAMember } from '@/lib/types';
 
 export interface CatalogData {
@@ -50,6 +50,12 @@ export function useCatalogData(): CatalogData {
     setError(null);
 
     try {
+      // Pre-calentar la sesión UNA SOLA VEZ antes del Promise.all.
+      // Evita que las 5 llamadas paralelas compitan por navigator.lock individualmente:
+      // una vez que warmSession() resuelve, el token queda en caché y todas usan el caché.
+      const sessionOk = await warmSession(controller.signal);
+      if (!sessionOk || controller.signal.aborted) return;
+
       const [
         productsRes,
         categoriesRes,
@@ -93,9 +99,16 @@ export function useCatalogData(): CatalogData {
       setQaMembers(cachedData.qaMembers);
     } catch (err) {
       if (controller.signal.aborted) return;
+      // SessionLockError residual (warmSession agotó sus propios reintentos) —
+      // ya no reintentamos aquí para no crear loops; simplemente no mostramos error
+      // porque warmSession ya loggeó el problema.
+      if (err instanceof Error && err.name === 'SessionLockError') return;
+      // "Session not available": sesión limpiada por logout — ignorar silenciosamente
+      if (err instanceof Error && err.message.includes('Session not available')) return;
       console.error('Error loading catalog data:', err);
       setError('Error al cargar los catálogos. Intenta recargar la página.');
     } finally {
+      // Solo apagar loading si no se abortó (evita parpadeo durante reintentos)
       if (!controller.signal.aborted) {
         setLoading(false);
       }

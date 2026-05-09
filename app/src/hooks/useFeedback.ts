@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FeedbackType, EvidenceItem } from '@/lib/types';
-import { authenticatedFetch } from '@/lib/fetchAuth';
+import { authenticatedFetch, warmSession } from '@/lib/fetchAuth';
 
 interface UseFeedbackOptions {
   onSuccess?: () => void;
@@ -94,6 +94,9 @@ export function useFeedback(options?: UseFeedbackOptions): UseFeedbackReturn {
           requestBody.evidence_url = linkEvidence.value;
         }
       }
+
+      // Pre-calentar sesión para evitar contención de navigator.lock al hacer el POST
+      await warmSession();
 
       // Submit to API (con autenticación)
       const response = await authenticatedFetch('/api/feedback', {
