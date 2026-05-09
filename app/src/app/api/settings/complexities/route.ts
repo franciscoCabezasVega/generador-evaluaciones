@@ -39,9 +39,6 @@ export async function POST(request: NextRequest) {
   if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
     return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 });
   }
-  if (!body.label || typeof body.label !== 'string' || !body.label.trim()) {
-    return NextResponse.json({ error: 'La etiqueta de horas es requerida' }, { status: 400 });
-  }
   if (typeof body.display_order !== 'number') {
     return NextResponse.json({ error: 'El orden de visualización es requerido' }, { status: 400 });
   }
@@ -61,7 +58,7 @@ export async function POST(request: NextRequest) {
     .from('complexities')
     .insert({
       name,
-      label: body.label.trim(),
+      label: body.label?.trim() ?? '',
       min_hours: body.min_hours ?? 0,
       max_hours: body.max_hours ?? 0,
       display_order: body.display_order,

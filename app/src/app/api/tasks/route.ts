@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { CreateTaskInput } from '@/lib/types';
 import { calculateTaskScore, validateReturns } from '@/lib/scoreCalculator';
@@ -176,25 +177,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Register audit log
+    // Register audit log async (no bloquea la respuesta al usuario)
     const userEmail = user.email || 'unknown';
-    
-    try {
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: user.id,
-          user_email: userEmail,
-          action: 'CREATE',
-          entity_type: 'TASK',
-          entity_id: task.id,
-          entity_name: task.name,
-          new_values: { ...task, squads: taskSquadRecords },
-          timestamp: new Date().toISOString(),
-        });
-    } catch (auditError) {
-      console.error('Error logging audit action:', auditError);
-    }
+    const auditPayload = {
+      user_id: user.id,
+      user_email: userEmail,
+      action: 'CREATE',
+      entity_type: 'TASK',
+      entity_id: task.id,
+      entity_name: task.name,
+      new_values: { ...task, squads: taskSquadRecords },
+      timestamp: new Date().toISOString(),
+    };
+    after(async () => {
+      try {
+        await supabase.from('audit_logs').insert(auditPayload);
+      } catch (auditError) {
+        console.error('Error logging audit action:', auditError);
+      }
+    });
 
     return NextResponse.json({ ...task, squads: taskSquadRecords }, { status: 201 });
   } catch (error) {
@@ -220,12 +221,14 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year');
     const productType = searchParams.get('product_type');
     const status = searchParams.get('status');
+    const squad = searchParams.get('squad');
 
-    // Obtener tareas del usuario
+    // Obtener tareas — la visibilidad la controla la política RLS (select_tasks_by_role):
+    // admin/gestor/viewer ven todas; roles inferiores solo las propias.
+    // No aplicar filtro user_id en código: RLS ya lo hace de forma segura en BD.
     let tasksQuery = supabase
       .from('tasks')
-      .select('*')
-      .eq('user_id', user.id);
+      .select('*');
 
     if (month) {
       tasksQuery = tasksQuery.eq('month', parseInt(month));
@@ -238,6 +241,28 @@ export async function GET(request: NextRequest) {
     }
     if (status) {
       tasksQuery = tasksQuery.eq('status', status);
+    }
+
+    // El filtro de squad requiere una subconsulta en task_squad,
+    // ya que el squad no está en la tabla tasks sino en task_squad.
+    if (squad) {
+      const { data: squadTaskIds, error: squadError } = await supabase
+        .from('task_squad')
+        .select('task_id')
+        .eq('squad', squad);
+
+      if (squadError) {
+        console.error('Error fetching squad filter:', squadError);
+        return NextResponse.json({ error: 'Error al filtrar por squad' }, { status: 400 });
+      }
+
+      const ids = (squadTaskIds ?? []).map((r) => r.task_id);
+      if (ids.length === 0) {
+        // Ninguna tarea tiene ese squad — responder vacío directamente
+        return NextResponse.json([]);
+      }
+
+      tasksQuery = tasksQuery.in('id', ids);
     }
 
     const { data: tasks, error: tasksError } = await tasksQuery.order('created_at', {

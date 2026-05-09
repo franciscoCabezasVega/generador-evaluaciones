@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     // Build query
     let query = supabase
       .from('audit_logs')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'planned' });
 
     // Admins can see all audit logs, others can only see their own
     if (userRole !== 'admin') {

@@ -36,13 +36,6 @@ export async function PATCH(
     updates.name = name;
   }
 
-  if (body.label !== undefined) {
-    if (typeof body.label !== 'string' || !body.label.trim()) {
-      return NextResponse.json({ error: 'La etiqueta no puede estar vacía' }, { status: 400 });
-    }
-    updates.label = body.label.trim();
-  }
-
   if (body.min_hours !== undefined) updates.min_hours = Number(body.min_hours);
   if (body.max_hours !== undefined) updates.max_hours = Number(body.max_hours);
   if (body.display_order !== undefined) updates.display_order = Number(body.display_order);

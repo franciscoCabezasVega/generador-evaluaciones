@@ -20,7 +20,6 @@ export async function GET(
       .from('tasks')
       .select('*')
       .eq('id', id)
-      .eq('user_id', user.id)
       .single();
 
     if (taskError) {
@@ -76,15 +75,15 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Validar que el usuario es propietario
+    // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
     const { data: existingTask, error: getError } = await supabase
       .from('tasks')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (getError || existingTask.user_id !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (getError || !existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
     // Separar squads de los datos de la tarea
@@ -359,15 +358,15 @@ export async function DELETE(
       );
     }
 
-    // Validar que el usuario es propietario
+    // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
     const { data: existingTask, error: getError } = await supabase
       .from('tasks')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (getError || existingTask.user_id !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (getError || !existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
     // Obtener squads ANTES de eliminar (para audit log)
