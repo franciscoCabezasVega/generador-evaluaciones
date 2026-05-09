@@ -5,26 +5,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { invalidateSessionCache } from '@/lib/fetchAuth';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, AlertTriangle, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Eye, EyeOff, X } from 'lucide-react';
 
 type SessionExpiredReason = 'timeout' | 'inactive' | 'error' | 'unknown';
 
-const TEST_ACCOUNTS = [
-  { email: 'admin@evaluaciones.test',     password: 'Admin@2026Test!',     role: 'Admin' },
-  { email: 'gestor@evaluaciones.test',    password: 'Gestor@2026Test!',    role: 'Gestor' },
-  { email: 'reportero@evaluaciones.test', password: 'Reportero@2026Test!', role: 'Reportero' },
-  { email: 'invitado@evaluaciones.test',  password: 'Invitado@2026Test!',  role: 'Invitado' },
-];
+const REMEMBER_ME_KEY = 'login_remembered_email';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showExpiredBanner, setShowExpiredBanner] = useState(false);
   const [expiredReason, setExpiredReason] = useState<SessionExpiredReason>('unknown');
+
+  // Pre-rellenar email si el usuario marcó "Recuérdame" anteriormente
+  useEffect(() => {
+    const savedEmail = localStorage.getItem(REMEMBER_ME_KEY);
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   // Detectar si la sesión expiró
   useEffect(() => {
@@ -38,11 +44,6 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  const fillCredentials = (userEmail: string, userPassword: string) => {
-    setEmail(userEmail);
-    setPassword(userPassword);
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -54,6 +55,13 @@ export default function LoginPage() {
 
       if (error) throw error;
       if (!data.session) throw new Error('No se pudo establecer la sesión');
+
+      // Gestionar "Recuérdame"
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_ME_KEY, email);
+      } else {
+        localStorage.removeItem(REMEMBER_ME_KEY);
+      }
 
       invalidateSessionCache();
 
@@ -210,17 +218,42 @@ export default function LoginPage() {
               <label htmlFor="login-password" className="block text-xs font-semibold uppercase tracking-widest text-gray-600 mb-2">
                 Contraseña
               </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full border rounded-lg px-4 py-2.5 text-sm"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2.5 text-sm pr-10"
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
+
+            {/* Recuérdame */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none group w-fit">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer"
+              />
+              <span className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">
+                Recuérdame
+              </span>
+            </label>
+
             <Button type="submit" disabled={loading} className="w-full" size="lg">
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -230,33 +263,6 @@ export default function LoginPage() {
               ) : 'Iniciar sesión'}
             </Button>
           </form>
-
-          {/* Test accounts */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-200 bg-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                Cuentas de prueba — click para rellenar
-              </p>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {TEST_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => fillCredentials(acc.email, acc.password)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-200 transition-colors text-left group"
-                >
-                  <div>
-                    <p className="text-xs font-medium text-gray-800">{acc.email}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 mt-0.5">{acc.role}</p>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500 bg-gray-200 group-hover:bg-gray-300 px-2 py-1 rounded transition-colors">
-                    {acc.password}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
 
         </div>
       </div>

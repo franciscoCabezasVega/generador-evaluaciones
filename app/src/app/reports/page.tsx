@@ -219,7 +219,8 @@ export default function ReportsPage() {
           }
 
           // Usar la nota calculada que está en task_squad
-          const score = (squadData?.calculated_score as number) || 10;
+          // Usar ?? en lugar de || para evitar que 0 sea reemplazado por 10 (0 es falsy en JS)
+          const score = (squadData?.calculated_score as number) ?? 10;
 
           return {
             ...task,

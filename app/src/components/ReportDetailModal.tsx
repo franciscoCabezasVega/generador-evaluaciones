@@ -179,7 +179,7 @@ export default function ReportDetailModal({ isOpen, reportId, onClose }: ReportD
                         <div className="text-xl font-bold text-blue-600">
                           Nota Final:{' '}
                           {(squadScore).toLocaleString('es-ES', {
-                            minimumFractionDigits: 1,
+                            minimumFractionDigits: 0,
                             maximumFractionDigits: 1,
                           })}
                           /10
@@ -228,7 +228,7 @@ export default function ReportDetailModal({ isOpen, reportId, onClose }: ReportD
                                   <td className="px-3 py-2 text-center">{task.high_returns || 0}</td>
                                   <td className="px-3 py-2 text-center font-semibold">
                                     {(task.calculated_score).toLocaleString('es-ES', {
-                                      minimumFractionDigits: 1,
+                                      minimumFractionDigits: 0,
                                       maximumFractionDigits: 1,
                                     })}
                                     /10

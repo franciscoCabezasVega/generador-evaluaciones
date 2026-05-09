@@ -139,7 +139,7 @@ export default function ReportDetailPage() {
                     <div className="flex justify-between items-center mb-4 pb-4 border-b">
                       <h3 className="text-lg font-semibold text-gray-800">{squad}</h3>
                       <div className="text-2xl font-bold text-blue-600">
-                        Nota Final: {(squadScore).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/10
+                        Nota Final: {(squadScore).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}/10
                       </div>
                     </div>
 
@@ -183,7 +183,7 @@ export default function ReportDetailPage() {
                                 <td className="px-3 py-2 text-center">{task.low_returns || 0}</td>
                                 <td className="px-3 py-2 text-center">{task.medium_returns || 0}</td>
                                 <td className="px-3 py-2 text-center">{task.high_returns || 0}</td>
-                                <td className="px-3 py-2 text-center font-semibold">{(task.calculated_score).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/10</td>
+                                <td className="px-3 py-2 text-center font-semibold">{(task.calculated_score).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}/10</td>
                               </tr>
                             ))}
                           </tbody>

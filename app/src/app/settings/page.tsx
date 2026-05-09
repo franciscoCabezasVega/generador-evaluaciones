@@ -33,7 +33,6 @@ const CATEGORY_FIELDS: FieldDef[] = [
 
 const COMPLEXITY_FIELDS: FieldDef[] = [
   { key: 'name',          label: 'Nombre',              type: 'text',   placeholder: 'Ej: Estándar', required: true },
-  { key: 'label',         label: 'Etiqueta de horas',   type: 'text',   placeholder: 'Ej: 2 a 3 días (16-24h)', required: true },
   { key: 'min_hours',     label: 'Horas mínimas',       type: 'number', min: 0, required: true },
   { key: 'max_hours',     label: 'Horas máximas',       type: 'number', min: 0, required: true },
   { key: 'display_order', label: 'Orden de visualización', type: 'number', min: 1, description: 'Posición en el selector (1 = primero)' },
@@ -86,7 +85,15 @@ export default function SettingsPage() {
         case 'squads':       setSquads(data);       break;
         case 'qa-members':   setQaMembers(data);    break;
       }
-    } catch {
+    } catch (err) {
+      // SessionLockError: navigator.lock temporalmente ocupado → reintentar en 2s
+      const isLock =
+        err instanceof Error &&
+        (err.name === 'SessionLockError' || err.message.includes('ocupada'));
+      if (isLock) {
+        setTimeout(() => fetchTab(tab), 2000);
+        return; // no mostrar error mientras reintenta
+      }
       setTabError('Error de conexión');
     } finally {
       setLoadingTab(false);
@@ -123,7 +130,11 @@ export default function SettingsPage() {
       header: 'Horas',
       render: (item: CatalogItem) => {
         const c = item as unknown as CatalogComplexity;
-        return <span className="text-xs text-gray-500">{c.label}</span>;
+        const hoursLabel =
+          c.min_hours === c.max_hours
+            ? `${c.min_hours}h`
+            : `${c.min_hours}h - ${c.max_hours}h`;
+        return <span className="text-xs text-gray-500">{hoursLabel}</span>;
       },
     },
     {

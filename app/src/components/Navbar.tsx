@@ -93,7 +93,9 @@ function Navbar() {
             <QueueStatusIndicator />
             {/* User info */}
             <div className="flex flex-col items-end hidden sm:flex">
-              <span className="text-xs text-gray-600 leading-tight">{user.email}</span>
+              <span className="text-xs text-gray-600 leading-tight">
+                {profile?.name ? `${profile.name}${profile.lastname ? ' ' + profile.lastname : ''}` : user.email}
+              </span>
               {profile && (
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-blue-600 leading-tight mt-0.5">
                   {profile.role}

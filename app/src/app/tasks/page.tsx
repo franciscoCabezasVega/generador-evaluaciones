@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch } from '@/hooks/useCachedFetch';
+import { formatScore } from '@/lib/scoreCalculator';
 import Navbar from '@/components/Navbar';
 import TaskForm from '@/components/TaskForm';
 import CacheWarningBanner from '@/components/CacheWarningBanner';
@@ -127,6 +128,17 @@ export default function TasksPage() {
   };
 
   const handleSubmit = async (data: CreateTaskInput) => {
+    // ── Pre-flight: verificar link duplicado ANTES del optimistic update ──────
+    // Si falla, lanza un error para que TaskForm lo muestre sin cerrar el form.
+    const checkRes = await safeFetch(
+      `/api/tasks/check-link?link=${encodeURIComponent(data.task_link)}${editingTask ? `&excludeId=${editingTask.id}` : ''}`,
+      { method: 'GET' }
+    );
+    if (checkRes.status === 409) {
+      const body = await checkRes.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Este link ya está en uso por otra tarea. Usa un link diferente.');
+    }
+
     if (editingTask) {
       // ── EDICIÓN: actualización optimista inmediata ──────────────────────────
       const originalTask = editingTask;
@@ -478,8 +490,8 @@ export default function TasksPage() {
                   .map((task, index) => {
                     const squads = task.squads || [];
                     const avgScore = squads.length > 0 
-                      ? (squads.reduce((sum: number, sq) => sum + (sq.calculated_score || 0), 0) / squads.length).toFixed(2)
-                      : '0.00';
+                      ? formatScore(squads.reduce((sum: number, sq) => sum + (sq.calculated_score || 0), 0) / squads.length)
+                      : '0.0';
                     const isExpanded = expandedTaskId === task.id;
 
                     return (
@@ -491,7 +503,6 @@ export default function TasksPage() {
                         >
                           <td className="px-2 py-3 text-center">
                             <button
-                              onClick={(e) => e.stopPropagation()}
                               className="text-gray-600 hover:text-gray-800 p-1"
                               data-tour="task-row-expand-btn"
                             >
@@ -633,8 +644,8 @@ export default function TasksPage() {
                                             <td className="px-3 py-2 text-gray-700">{squad.high_returns}</td>
                                             <td className="px-3 py-2 text-right font-semibold text-gray-900">
                                               {typeof squad.calculated_score === 'number' 
-                                                ? squad.calculated_score.toFixed(2)
-                                                : squad.calculated_score || '0.00'
+                                                ? formatScore(squad.calculated_score)
+                                                : squad.calculated_score || '0.0'
                                               }/10
                                             </td>
                                           </tr>

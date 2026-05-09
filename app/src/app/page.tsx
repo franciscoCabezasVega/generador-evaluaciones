@@ -85,7 +85,7 @@ export default function Home() {
             </span>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2">
-            Bienvenido{profile?.role ? <span className="text-blue-600">,{' '}{profile.role}</span> : ''}
+            Bienvenido{profile?.name ? <span className="text-blue-600">,{' '}{profile.name}</span> : profile?.role ? <span className="text-blue-600">,{' '}{profile.role}</span> : ''}
           </h1>
           <p className="text-gray-600 text-lg max-w-xl">
             Gestiona las evaluaciones mensuales de calidad para los equipos de fábrica.

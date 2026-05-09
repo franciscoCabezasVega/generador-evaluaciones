@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { AuditLog, TaskSquad, AuditLogValues } from '@/lib/types';
 import { detectSquadChanges, SquadChange } from '@/lib/squadChangeUtils';
+import { formatScore } from '@/lib/scoreCalculator';
 import Modal from './Modal';
 
 interface AuditHistoryProps {
@@ -100,7 +101,7 @@ const SquadChangesTable = ({ changes }: { changes: SquadChange[] }) => {
                 <div className="flex flex-col items-center">
                   <div className="text-xs text-gray-600 mb-1">Anterior</div>
                   <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
-                    {change.score.old.toFixed(2)}
+                    {formatScore(change.score.old)}
                   </div>
                 </div>
                 <div className="flex items-center justify-center gap-3">
@@ -108,7 +109,7 @@ const SquadChangesTable = ({ changes }: { changes: SquadChange[] }) => {
                   <div className="flex flex-col items-center flex-1">
                     <div className="text-xs text-gray-600 mb-1">Nuevo</div>
                     <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded font-semibold text-sm w-full text-center">
-                      {change.score.new.toFixed(2)}
+                      {formatScore(change.score.new)}
                     </div>
                   </div>
                 </div>
@@ -312,7 +313,7 @@ export default function AuditHistory({ logs, isLoading = false }: AuditHistoryPr
                             </div>
                             <div>
                               <span className="font-semibold text-gray-600">Nota:</span>
-                              <div className="font-bold text-blue-700">{squad.calculated_score?.toFixed(2) || '0.00'}/10</div>
+                              <div className="font-bold text-blue-700">{formatScore(squad.calculated_score ?? 0)}/10</div>
                             </div>
                           </div>
                           {squad.additional_notes && (
@@ -396,7 +397,7 @@ export default function AuditHistory({ logs, isLoading = false }: AuditHistoryPr
                             </div>
                             <div>
                               <span className="font-semibold text-gray-600">Nota:</span>
-                              <div className="font-bold text-red-700">{squad.calculated_score?.toFixed(2) || '0.00'}/10</div>
+                              <div className="font-bold text-red-700">{formatScore(squad.calculated_score ?? 0)}/10</div>
                             </div>
                           </div>
                           {squad.additional_notes && (

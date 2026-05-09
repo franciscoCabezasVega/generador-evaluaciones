@@ -3,7 +3,7 @@
 import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from 'react';
 import { CreateTaskInput, SquadData, ProductType, TshirtSize, TaskCategory } from '@/lib/types';
 import { useCatalogData } from '@/hooks/useCatalogData';
-import { calculateTaskScore } from '@/lib/scoreCalculator';
+import { calculateTaskScore, formatScore } from '@/lib/scoreCalculator';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Plus, Minus, X, ChevronDown, Check, Users, Calendar, Ruler, Tag } from 'lucide-react';
 
@@ -103,6 +103,17 @@ function TaskFormComponent(
   // Solo ejecutar cuando los productos se carguen por primera vez
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
+
+  // Sincronizar tshirt_size con la primera complejidad disponible si el valor no existe en la BD
+  useEffect(() => {
+    if (complexities.length > 0) {
+      const currentExists = complexities.some(c => c.name === formData.tshirt_size);
+      if (!currentExists) {
+        setFormData(prev => ({ ...prev, tshirt_size: complexities[0].name as TshirtSize }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexities]);
 
   // Squads activos del producto seleccionado, filtrando los ya agregados
   const productObj = products.find((p) => p.name === formData.product_type);
@@ -330,6 +341,8 @@ function TaskFormComponent(
     }
     if (!formData.task_link.trim()) {
       newErrors.task_link = 'El link es requerido';
+    } else if (!isValidUrl(formData.task_link)) {
+      newErrors.task_link = 'El link debe ser una URL válida';
     }
     if (formData.squads.length === 0) {
       newErrors.squads = 'Debes agregar al menos un squad';
@@ -401,7 +414,7 @@ function TaskFormComponent(
             onChange={handleInputChange}
             onBlur={() => handleBlur('name')}
             className={`w-full border rounded-lg px-4 py-2 ${
-              touched.name && errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+              touched.name && errors.name ? 'border-red-500 bg-red-950/40' : 'border-gray-300'
             }`}
             placeholder="Nombre de la tarea"
           />
@@ -422,7 +435,7 @@ function TaskFormComponent(
             onChange={handleInputChange}
             onBlur={() => handleBlur('task_link')}
             className={`w-full border rounded-lg px-4 py-2 ${
-              touched.task_link && errors.task_link ? 'border-red-500 bg-red-50' : 'border-gray-300'
+              touched.task_link && errors.task_link ? 'border-red-500 bg-red-950/40' : 'border-gray-300'
             }`}
             placeholder="https://..."
           />
@@ -462,7 +475,7 @@ function TaskFormComponent(
               name="category"
               value={formData.category}
               onChange={handleInputChange}
-              className={`w-full border rounded-lg px-4 py-2 ${errors.category ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full border rounded-lg px-4 py-2 ${errors.category ? 'border-red-500 bg-red-950/40' : 'border-gray-300'}`}
             >
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.name}>{cat.name}</option>
@@ -481,10 +494,10 @@ function TaskFormComponent(
               name="tshirt_size"
               value={formData.tshirt_size}
               onChange={handleInputChange}
-              className={`w-full border rounded-lg px-4 py-2 ${errors.tshirt_size ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full border rounded-lg px-4 py-2 ${errors.tshirt_size ? 'border-red-500 bg-red-950/40' : 'border-gray-300'}`}
             >
               {complexities.map((c) => (
-                <option key={c.id} value={c.name}>{c.name} — {c.label}</option>
+                <option key={c.id} value={c.name}>{c.name}</option>
               ))}
             </select>
             {errors.tshirt_size && <p className="text-red-600 text-sm mt-1">{errors.tshirt_size}</p>}
@@ -536,7 +549,7 @@ function TaskFormComponent(
               name="effort_score_date"
               value={formData.effort_score_date}
               onChange={handleInputChange}
-              className={`w-full border rounded-lg px-4 py-2 ${errors.effort_score_date ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full border rounded-lg px-4 py-2 ${errors.effort_score_date ? 'border-red-500 bg-red-950/40' : 'border-gray-300'}`}
             />
             {errors.effort_score_date && <p className="text-red-600 text-sm mt-1">{errors.effort_score_date}</p>}
           </div>
@@ -708,11 +721,11 @@ function TaskFormComponent(
                 {/* Score para este squad */}
                 <div className="p-3 bg-blue-50 rounded border border-blue-200" data-tour="task-calculated-score">
                   <p className="text-sm text-gray-600">
-                    Nota calculada: <span className="font-bold text-lg">{calculateTaskScore({
+                    Nota calculada: <span className="font-bold text-lg">{formatScore(calculateTaskScore({
                       lowReturns: squadData.low_returns,
                       mediumReturns: squadData.medium_returns,
                       highReturns: squadData.high_returns,
-                    }).toFixed(2)}/10</span>
+                    }))}/10</span>
                   </p>
                 </div>
 

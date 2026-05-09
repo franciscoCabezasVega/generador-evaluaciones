@@ -1120,7 +1120,7 @@ export function TshirtSizeComparison({ timings, tasks, loading = false }: Tshirt
 
   // Derivar equivalente dinámico de TSHIRT_SIZE_HOURS y TSHIRT_SIZES desde el catálogo
   const sizeHoursMap = Object.fromEntries(
-    complexities.map(c => [c.name, { min: c.min_hours, max: c.max_hours, label: c.label }])
+    complexities.map(c => [c.name, { min: c.min_hours, max: c.max_hours }])
   );
   const sizeOrder = complexities
     .slice()

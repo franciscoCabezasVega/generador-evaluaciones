@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSafeAuthFetch } from '@/hooks/useSafeAuthFetch';
 import { useCachedFetch } from '@/hooks/useCachedFetch';
 import { AuditLog, TaskSquad } from '@/lib/types';
-import { calculateTaskScore } from '@/lib/scoreCalculator';
+import { calculateTaskScore, formatScore } from '@/lib/scoreCalculator';
 import { detectSquadChanges } from '@/lib/squadChangeUtils';
 import Navbar from '@/components/Navbar';
 import CacheWarningBanner from '@/components/CacheWarningBanner';
@@ -332,7 +332,7 @@ export default function AuditTrailPage() {
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-gray-600 mb-1">Anterior</div>
                     <div className="bg-red-950/60 border border-red-800/50 text-red-400 px-3 py-2 rounded font-semibold text-sm w-full text-center num">
-                      {change.score.old.toFixed(2)}
+                      {formatScore(change.score.old)}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-3">
@@ -340,7 +340,7 @@ export default function AuditTrailPage() {
                     <div className="flex flex-col items-center flex-1">
                       <div className="text-xs text-gray-600 mb-1">Nuevo</div>
                       <div className="bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 px-3 py-2 rounded font-semibold text-sm w-full text-center num">
-                        {change.score.new.toFixed(2)}
+                        {formatScore(change.score.new)}
                       </div>
                     </div>
                   </div>
@@ -419,7 +419,7 @@ export default function AuditTrailPage() {
                   {/* Fila de Nota */}
                   <div className="px-4 py-3 bg-blue-50 text-center">
                     <span className="text-sm font-bold text-blue-800">
-                      Nota: <span className="font-bold text-lg">{score.toFixed(2)}/10</span>
+                      Nota: <span className="font-bold text-lg">{formatScore(score)}/10</span>
                     </span>
                   </div>
 
@@ -440,7 +440,7 @@ export default function AuditTrailPage() {
                   {/* Fila de Nota */}
                   <div className="px-4 py-3 bg-blue-50 text-center">
                     <span className="text-sm font-bold text-blue-800">
-                      Nota: <span className="font-bold text-lg">{score.toFixed(2)}/10</span>
+                      Nota: <span className="font-bold text-lg">{formatScore(score)}/10</span>
                     </span>
                   </div>
 
