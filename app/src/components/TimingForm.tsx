@@ -405,31 +405,31 @@ function TimingFormComponent(
       key: "effective_testing_hours",
       label: "Testing efectivo",
       color: "bg-blue-100",
-      textColor: "text-blue-700",
+      textColor: "text-blue-600",
     },
     {
       key: "waiting_environment_hours",
       label: "Espera ambiente",
-      color: "bg-purple-100",
-      textColor: "text-purple-700",
+      color: "bg-purple-500/15",
+      textColor: "text-purple-300",
     },
     {
       key: "waiting_development_fixes_hours",
       label: "Espera fixes",
-      color: "bg-orange-100",
-      textColor: "text-orange-700",
+      color: "bg-orange-500/15",
+      textColor: "text-orange-300",
     },
     {
       key: "retest_hours",
       label: "Re-test",
-      color: "bg-red-100",
-      textColor: "text-red-700",
+      color: "bg-red-500/15",
+      textColor: "text-red-300",
     },
     {
       key: "clarification_hours",
       label: "Clarificaciones",
-      color: "bg-yellow-100",
-      textColor: "text-yellow-700",
+      color: "bg-yellow-500/15",
+      textColor: "text-yellow-300",
     },
   ];
 
@@ -438,12 +438,12 @@ function TimingFormComponent(
   // Color palette for QA members
   const QA_COLORS = [
     "border-blue-400 bg-blue-50",
-    "border-emerald-400 bg-emerald-50",
-    "border-purple-400 bg-purple-50",
-    "border-amber-400 bg-amber-50",
-    "border-pink-400 bg-pink-50",
-    "border-cyan-400 bg-cyan-50",
-    "border-rose-400 bg-rose-50",
+    "border-emerald-400 bg-emerald-500/10",
+    "border-purple-400 bg-purple-500/10",
+    "border-amber-400 bg-amber-500/10",
+    "border-pink-400 bg-pink-500/10",
+    "border-cyan-400 bg-cyan-500/10",
+    "border-rose-400 bg-rose-500/10",
   ];
 
   return (
@@ -632,7 +632,7 @@ function TimingFormComponent(
                   Tarea asociada
                 </span>
                 <a
-                  href={`/tasks?edit=${linkedTask.id}`}
+                  href={`/tasks?edit=${linkedTask.id}&month=${linkedTask.month}&year=${linkedTask.year}`}
                   className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Ir a tarea <ExternalLink size={12} />
@@ -726,7 +726,7 @@ function TimingFormComponent(
                 <button
                   type="button"
                   onClick={() => toggleQAExpanded(entry.qa_name)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/10 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <Users size={16} />
@@ -790,7 +790,7 @@ function TimingFormComponent(
                                   updateQAHours(entry.qa_name, key, "0");
                                 }
                               }}
-                              className="w-16 rounded border border-gray-300 bg-white px-2 py-0.5 text-center text-sm"
+                              className="w-16 rounded border border-white/20 bg-white/10 px-2 py-0.5 text-center text-sm"
                               disabled={isLoading}
                               placeholder="0"
                               aria-label={`${label} para ${entry.qa_name}`}
@@ -805,7 +805,7 @@ function TimingFormComponent(
                       </div>
                     ))}
                     {/* QA Subtotal */}
-                    <div className="rounded-lg bg-white/70 p-2 flex justify-between border border-gray-200">
+                    <div className="rounded-lg bg-white/5 p-2 flex justify-between border border-white/10">
                       <span className="text-xs font-medium text-gray-600">
                         Subtotal {entry.qa_name}:
                       </span>

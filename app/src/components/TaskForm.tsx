@@ -18,6 +18,7 @@ import {
 import { useCatalogData } from "@/hooks/useCatalogData";
 import { calculateTaskScore, formatScore } from "@/lib/scoreCalculator";
 import { Button } from "@/components/ui/button";
+import DatePicker from "@/components/DatePicker";
 import {
   AlertCircle,
   Plus,
@@ -703,13 +704,13 @@ function TaskFormComponent(
               <Calendar size={14} className="text-green-600" />
               Fecha Esfuerzo *
             </label>
-            <input
+            <DatePicker
               id="task-effort-date"
-              type="date"
-              name="effort_score_date"
               value={formData.effort_score_date}
-              onChange={handleInputChange}
-              className={`w-full border rounded-lg px-4 py-2 ${errors.effort_score_date ? "border-red-500 bg-red-950/40" : "border-gray-300"}`}
+              onChange={(isoDate) =>
+                setFormData((prev) => ({ ...prev, effort_score_date: isoDate }))
+              }
+              hasError={!!errors.effort_score_date}
             />
             {errors.effort_score_date && (
               <p className="text-red-600 text-sm mt-1">

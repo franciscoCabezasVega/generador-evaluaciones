@@ -111,7 +111,7 @@ export default function TimingsList({
                   )}
                   {entry.effort_score_date && (
                     <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
-                      {entry.effort_score_date}
+                      {entry.effort_score_date.split('-').reverse().join('/')}
                     </span>
                   )}
                 </div>

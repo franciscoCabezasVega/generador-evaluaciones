@@ -760,7 +760,7 @@ export default function TasksPage() {
                                         Fecha Esfuerzo:
                                       </span>
                                       <span className="text-emerald-300 num">
-                                        {task.effort_score_date}
+                                        {task.effort_score_date.split('-').reverse().join('/')}
                                       </span>
                                     </span>
                                   )}

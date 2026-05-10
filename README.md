@@ -157,7 +157,8 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 | Forms | React Hook Form + Zod |
 | IA | OpenAI (GPT) |
 | Estado | React Context + TanStack Query |
-| UI | Lucide React Icons |
+| UI | Lucide React Icons, Radix UI |
+| Date Picker | react-day-picker + Radix UI Popover |
 | Utilidades | date-fns, jose (JWT), dotenv |
 | CI/CD | GitHub Actions + Vercel |
 
