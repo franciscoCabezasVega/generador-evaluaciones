@@ -84,23 +84,27 @@ export default function DatePicker({
   }, [value]);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [inputText, setInputText] = useState(
-    selectedDate ? format(selectedDate, "dd/MM/yyyy") : "",
-  );
+  // isEditing: true while the user is actively typing in the text field.
+  // While editing, inputText holds the raw text; when not editing, the display
+  // value is derived directly from the `value` prop — avoiding duplicated state
+  // and the need for any useEffect/setState-during-render sync.
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputText, setInputText] = useState("");
   const [inputError, setInputError] = useState(false);
   const [viewDate, setViewDate] = useState<Date>(selectedDate ?? new Date());
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Derived state pattern: sync inputText/viewDate when value prop changes from outside.
-  // Calling setState during render (when triggered by a prop change) is the React-approved
-  // alternative to useEffect for derived state — avoids cascading renders.
-  const [lastSyncedValue, setLastSyncedValue] = useState(value);
-  if (lastSyncedValue !== value) {
-    setLastSyncedValue(value);
-    setInputText(selectedDate ? format(selectedDate, "dd/MM/yyyy") : "");
+  // Derived display: when not editing, compute directly from the prop.
+  const displayText = isEditing
+    ? inputText
+    : selectedDate ? format(selectedDate, "dd/MM/yyyy") : "";
+
+  // Snap viewDate to selectedDate when the calendar is opened.
+  const openCalendar = () => {
     if (selectedDate) setViewDate(selectedDate);
-  }
+    setIsOpen(true);
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -122,6 +126,7 @@ export default function DatePicker({
     (day: Date) => {
       onChange(format(day, "yyyy-MM-dd"));
       setIsOpen(false);
+      setIsEditing(false);
       setInputError(false);
     },
     [onChange],
@@ -148,22 +153,23 @@ export default function DatePicker({
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const text = e.target.value;
-    setInputText(text);
-    // Auto-format: insert slashes while typing DD/MM/YYYY
+    setInputText(e.target.value);
     setInputError(false);
   };
 
   const handleInputBlur = () => {
+    setIsEditing(false);
     commitInputText(inputText);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
+      setIsEditing(false);
       commitInputText(inputText);
       setIsOpen(false);
     }
     if (e.key === "Escape") {
+      setIsEditing(false);
       setIsOpen(false);
     }
   };
@@ -190,12 +196,17 @@ export default function DatePicker({
         <button
           type="button"
           onClick={() => {
-            setIsOpen((o) => !o);
-            if (!isOpen) setTimeout(() => inputRef.current?.focus(), 50);
+            if (isOpen) {
+              setIsOpen(false);
+            } else {
+              openCalendar();
+              setTimeout(() => inputRef.current?.focus(), 50);
+            }
           }}
           className="flex-shrink-0 text-gray-300 hover:text-blue-400 transition-colors"
-          tabIndex={-1}
-          aria-label="Abrir calendario"
+          aria-label="Abrir o cerrar calendario"
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
         >
           <Calendar size={14} />
         </button>
@@ -203,11 +214,15 @@ export default function DatePicker({
           ref={inputRef}
           id={id}
           type="text"
-          value={inputText}
+          value={displayText}
           onChange={handleInputChange}
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setIsEditing(true);
+            setInputText(displayText);
+            openCalendar();
+          }}
           placeholder="DD/MM/AAAA"
           className={`flex-1 bg-transparent outline-none min-w-0 placeholder-gray-400
             ${hasError || inputError ? "text-red-300" : ""}

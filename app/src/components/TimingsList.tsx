@@ -2,6 +2,7 @@
 
 import { Task, TaskTiming, TaskWithTiming } from "@/lib/types";
 import { Edit2, Trash2, AlertCircle, Users, Clock, Plus } from "lucide-react";
+import { parseISO, format, isValid } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/timingUtils";
 
@@ -109,11 +110,14 @@ export default function TimingsList({
                       {entry.project_type}
                     </span>
                   )}
-                  {entry.effort_score_date && (
-                    <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
-                      {entry.effort_score_date.split('-').reverse().join('/')}
-                    </span>
-                  )}
+                  {entry.effort_score_date && (() => {
+                    const d = parseISO(entry.effort_score_date);
+                    return (
+                      <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
+                        {isValid(d) ? format(d, "dd/MM/yyyy") : entry.effort_score_date}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* QA Asignados (de la tarea) */}
