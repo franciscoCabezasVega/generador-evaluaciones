@@ -74,6 +74,7 @@ export function useCatalogData(): CatalogData {
       setQaMembers(
         Array.isArray(cachedData.qaMembers) ? cachedData.qaMembers : [],
       );
+      setError(null);
       setLoading(false);
       return;
     }

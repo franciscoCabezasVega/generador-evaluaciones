@@ -9,4 +9,5 @@ ALTER TABLE categories RENAME TO project_types;
 ALTER TABLE tasks RENAME COLUMN category TO project_type;
 
 -- Renombrar el índice para coherencia con el nuevo nombre de columna
-ALTER INDEX idx_tasks_category RENAME TO idx_tasks_project_type;
+-- IF EXISTS evita fallo si el índice no existe en el entorno destino
+ALTER INDEX IF EXISTS idx_tasks_category RENAME TO idx_tasks_project_type;

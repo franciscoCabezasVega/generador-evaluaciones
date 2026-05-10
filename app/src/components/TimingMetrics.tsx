@@ -1618,7 +1618,7 @@ export function TshirtSizeComparison({
 
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
 
-  // Build groups by (tshirtSize, category) — all timings across all periods
+  // Build groups by (tshirtSize, project_type) — all timings across all periods
   const groupMap = new Map<string, SizeGroupData>();
 
   for (const timing of timings) {
