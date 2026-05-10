@@ -92,11 +92,15 @@ export default function DatePicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync inputText when value changes from outside (e.g. calendar pick)
-  useEffect(() => {
+  // Derived state pattern: sync inputText/viewDate when value prop changes from outside.
+  // Calling setState during render (when triggered by a prop change) is the React-approved
+  // alternative to useEffect for derived state — avoids cascading renders.
+  const [lastSyncedValue, setLastSyncedValue] = useState(value);
+  if (lastSyncedValue !== value) {
+    setLastSyncedValue(value);
     setInputText(selectedDate ? format(selectedDate, "dd/MM/yyyy") : "");
     if (selectedDate) setViewDate(selectedDate);
-  }, [selectedDate]);
+  }
 
   // Close on outside click
   useEffect(() => {
