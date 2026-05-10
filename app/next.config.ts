@@ -1,11 +1,7 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  // Alinea outputFileTracingRoot con turbopack.root (ambos apuntan al directorio app/)
-  // para eliminar el warning "Both outputFileTracingRoot and turbopack.root are set
-  // but they must have the same value" que aparece en Vercel/Turbopack.
-  outputFileTracingRoot: path.resolve(__dirname),
+  /* config options here */
   async headers() {
     return [
       {
