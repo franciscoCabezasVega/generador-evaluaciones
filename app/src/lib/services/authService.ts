@@ -171,10 +171,29 @@ export const authService = {
   /**
    * Refrescar token de forma silenciosa sin mostrar errores
    * Usado internamente para mantener la sesión activa
+   *
+   * Incluye un timeout de 10s para evitar que navigator.lock (Supabase internamente)
+   * bloquee indefinidamente después de inactividad prolongada.
    */
   async silentRefreshToken() {
+    const REFRESH_TIMEOUT_MS = 10_000;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("silentRefreshToken timeout")),
+          REFRESH_TIMEOUT_MS,
+        );
+      });
+
+      const { data, error } = await Promise.race([
+        supabase.auth.refreshSession(),
+        timeoutPromise,
+      ]);
+
+      // Siempre limpiar el timer para no dejar referencias colgadas
+      clearTimeout(timeoutId);
 
       if (error?.message?.includes("Refresh Token")) {
         console.warn("Silent refresh failed: session expired");
@@ -191,6 +210,7 @@ export const authService = {
 
       return null;
     } catch (error) {
+      clearTimeout(timeoutId);
       // Log silencioso para no alertar al usuario
       // eslint-disable-next-line no-console
       console.debug("Silent token refresh error:", error);

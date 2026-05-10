@@ -86,14 +86,40 @@ class SessionManager {
 
     // Nivel 2 + 3: una sola llamada en vuelo
     if (!this._inflight) {
-      this._inflight = supabase.auth
-        .getSession()
-        .then((result) => {
-          if (!result.error && result.data.session) {
-            this._cache = { session: result.data.session, at: Date.now() };
-          }
-          return result;
-        })
+      // Timeout de seguridad: si supabase.auth.getSession() se bloquea
+      // esperando navigator.lock (auto-refresh de Supabase tras inactividad),
+      // la promesa nunca resuelve. Sin este timeout, todos los reintentos de
+      // safeFetch comparten la misma _inflight colgada y el spinner dura ~51s.
+      // Con 8s, _inflight se cancela, se pone a null, y el siguiente reintento
+      // inicia un getSession() fresco (con el lock probablemente ya libre).
+      let inflightTimeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        inflightTimeoutId = setTimeout(
+          () =>
+            reject(
+              new DOMException(
+                "getSession timed out waiting for lock",
+                "AbortError",
+              ),
+            ),
+          8_000,
+        );
+      });
+
+      this._inflight = Promise.race([supabase.auth.getSession(), timeoutPromise])
+        .then(
+          (result) => {
+            clearTimeout(inflightTimeoutId);
+            if (!result.error && result.data.session) {
+              this._cache = { session: result.data.session, at: Date.now() };
+            }
+            return result;
+          },
+          (err) => {
+            clearTimeout(inflightTimeoutId);
+            throw err;
+          },
+        )
         .finally(() => {
           this._inflight = null;
         });

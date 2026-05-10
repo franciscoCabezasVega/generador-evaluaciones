@@ -121,10 +121,14 @@ export default function SettingsPage() {
   const fetchTab = async (tab: TabId) => {
     setLoadingTab(true);
     setTabError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
       const res = await authenticatedFetch(
         `/api/settings/${tab}?includeInactive=true`,
+        { signal: controller.signal },
       );
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) {
         setTabError(data.error ?? "Error al cargar datos");
@@ -148,11 +152,13 @@ export default function SettingsPage() {
           break;
       }
     } catch (err) {
-      // SessionLockError: navigator.lock temporalmente ocupado → reintentar en 2s
+      clearTimeout(timeoutId);
+      // Timeout o lock de sesión: reintentar una vez después de 2s
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
       const isLock =
         err instanceof Error &&
         (err.name === "SessionLockError" || err.message.includes("ocupada"));
-      if (isLock) {
+      if (isAbort || isLock) {
         setTimeout(() => fetchTab(tab), 2000);
         return; // no mostrar error mientras reintenta
       }
