@@ -168,9 +168,27 @@ export default function DatePicker({
       commitInputText(inputText);
       setIsOpen(false);
     }
-    if (e.key === "Escape") {
-      setIsEditing(false);
+    // Escape is handled at container level (handleContainerKeyDown) to cover
+    // all focusable children (calendar day buttons, etc.).
+  };
+
+  // Close when focus leaves the entire container (handles Tab navigation).
+  const handleContainerBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (
+      containerRef.current &&
+      !containerRef.current.contains(e.relatedTarget as Node | null)
+    ) {
       setIsOpen(false);
+      setIsEditing(false);
+    }
+  };
+
+  // Close on Escape from any element inside the container (e.g. calendar buttons).
+  const handleContainerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      setIsOpen(false);
+      setIsEditing(false);
+      inputRef.current?.focus();
     }
   };
 
@@ -185,7 +203,12 @@ export default function DatePicker({
       : "border-gray-300";
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative ${className}`}
+      onBlur={handleContainerBlur}
+      onKeyDown={handleContainerKeyDown}
+    >
       {/* Input + calendar icon */}
       <div
         className={`flex items-center gap-2 w-full rounded-lg border px-3 py-2 text-sm transition-colors
