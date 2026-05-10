@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatScore } from "@/lib/scoreCalculator";
+import { parseISO, format as formatDate, isValid } from "date-fns";
 import Navbar from "@/components/Navbar";
 import TaskForm from "@/components/TaskForm";
 import CacheWarningBanner from "@/components/CacheWarningBanner";
@@ -760,7 +761,7 @@ export default function TasksPage() {
                                         Fecha Esfuerzo:
                                       </span>
                                       <span className="text-emerald-300 num">
-                                        {task.effort_score_date}
+                                        {(() => { const d = parseISO(task.effort_score_date); return isValid(d) ? formatDate(d, "dd/MM/yyyy") : task.effort_score_date; })()}
                                       </span>
                                     </span>
                                   )}

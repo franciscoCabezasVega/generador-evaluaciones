@@ -158,6 +158,7 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 | IA | OpenAI (GPT) |
 | Estado | React Context + TanStack Query |
 | UI | Lucide React Icons |
+| Date Picker | Componente custom (date-fns + calendario propio) |
 | Utilidades | date-fns, jose (JWT), dotenv |
 | CI/CD | GitHub Actions + Vercel |
 
