@@ -94,6 +94,12 @@ export default function DatePicker({
   const [viewDate, setViewDate] = useState<Date>(selectedDate ?? new Date());
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Ref to always have a fresh inputText value in async/event callbacks,
+  // avoiding stale closure reads (e.g. React batching on blur).
+  const inputTextRef = useRef(inputText);
+  useEffect(() => {
+    inputTextRef.current = inputText;
+  });
 
   // Derived display: when not editing, compute directly from the prop.
   const displayText = isEditing
@@ -157,22 +163,24 @@ export default function DatePicker({
     setInputError(false);
   };
 
+  // Only mark editing as done — the actual commit happens in handleContainerBlur
+  // so we don't accidentally commit when focus moves to a calendar day button.
   const handleInputBlur = () => {
     setIsEditing(false);
-    commitInputText(inputText);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       setIsEditing(false);
-      commitInputText(inputText);
+      commitInputText(inputTextRef.current);
       setIsOpen(false);
     }
     // Escape is handled at container level (handleContainerKeyDown) to cover
     // all focusable children (calendar day buttons, etc.).
   };
 
-  // Close when focus leaves the entire container (handles Tab navigation).
+  // Commit and close when focus leaves the entire container (Tab or external click).
+  // Uses inputTextRef to get the fresh value without relying on stale state.
   const handleContainerBlur = (e: React.FocusEvent<HTMLDivElement>) => {
     if (
       containerRef.current &&
@@ -180,6 +188,7 @@ export default function DatePicker({
     ) {
       setIsOpen(false);
       setIsEditing(false);
+      commitInputText(inputTextRef.current);
     }
   };
 
