@@ -178,7 +178,7 @@ export default function AuditTrailPage() {
       squad_name: "Nombre del Squad",
       team_score: "Nota del Equipo",
       // QA y métricas
-      category: "Categoría",
+      project_type: "Tipo Proyecto",
       assigned_qa: "QA Asignados",
       tshirt_size: "Complejidad",
       effort_score_date: "Fecha Esfuerzo",

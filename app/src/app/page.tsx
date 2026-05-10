@@ -162,7 +162,7 @@ export default function Home() {
                   Configuración del sistema
                 </p>
                 <p className="text-xs text-gray-600">
-                  Gestiona productos, squads, categorías y miembros QA.
+                  Gestiona productos, squads, tipos de proyecto y miembros QA.
                 </p>
               </div>
             </div>

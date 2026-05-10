@@ -220,11 +220,21 @@ export function useCachedFetch<T>({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const hasStaleData = cacheStore.get(fullKey) != null || data != null;
+    // Sólo hay "datos anteriores útiles" si la caché del nuevo key tiene algo.
+    // Usar `data` (del estado React) llevaría a mostrar datos de una clave
+    // distinta como si fueran relevantes (el bug al cambiar rango de fechas).
+    const hasStaleCache = cacheStore.get(fullKey) != null;
+
+    if (!hasStaleCache) {
+      // Sin caché para la nueva clave: reset a initialData + activar loading
+      // para que la UI no muestre resultados de filtros anteriores.
+      setDataState(initialData as T);
+      setLoading(true);
+    }
 
     const timer = setTimeout(() => {
       if (!controller.signal.aborted) {
-        doFetch(hasStaleData && data !== initialData, controller.signal);
+        doFetch(hasStaleCache, controller.signal);
       }
     }, getJitterDelay());
 

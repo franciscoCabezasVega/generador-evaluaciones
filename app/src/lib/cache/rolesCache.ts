@@ -9,6 +9,14 @@ interface RoleData {
   name: string;
 }
 
+interface SupabaseClientLike {
+  from: (table: string) => {
+    select: (
+      columns: string,
+    ) => PromiseLike<{ data: RoleData[] | null; error: unknown }>;
+  };
+}
+
 let rolesCache: Map<number, string> | null = null;
 let lastFetchTime: number = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
@@ -19,9 +27,8 @@ let fetchPromise: Promise<Map<number, string>> | null = null;
  * Obtener los roles cacheados
  * Si no existen o expiraron, hace fetch una sola vez
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SupabaseClient type varies per version
 export async function getRoles(
-  supabaseClient: any,
+  supabaseClient: SupabaseClientLike,
 ): Promise<Map<number, string>> {
   const now = Date.now();
 
@@ -80,10 +87,9 @@ export function invalidateRolesCache() {
 /**
  * Obtener el nombre de un rol por su ID desde el cache
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SupabaseClient type varies per version
 export async function getRoleNameById(
   roleId: number,
-  supabaseClient: any,
+  supabaseClient: SupabaseClientLike,
 ): Promise<string> {
   const roles = await getRoles(supabaseClient);
   return roles.get(roleId) || "invitado";

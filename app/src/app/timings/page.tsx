@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
@@ -26,6 +32,7 @@ import {
 import {
   Task,
   TaskTiming,
+  TaskWithTiming,
   CreateTaskTimingInput,
   UpdateTaskTimingInput,
   SquadTimingMetrics,
@@ -33,13 +40,14 @@ import {
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw, BarChart3, List, Users } from "lucide-react";
+import { RefreshCw, BarChart3, List, Users } from "lucide-react";
 
 export default function TimingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const { products } = useCatalogData();
   const [showForm, setShowForm] = useState(false);
   const [editingTiming, setEditingTiming] = useState<TaskTiming | null>(null);
+  const [registeringTask, setRegisteringTask] = useState<Task | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const formRef = useRef<{ handleCancelWithConfirm: () => void }>(null);
 
@@ -85,34 +93,22 @@ export default function TimingsPage() {
     dateRange: `${apiStartDate}_${apiEndDate}`,
   };
 
-  // ===== Tasks (para selección y resolución de nombres) =====
-  const { data: tasks } = useCachedFetch<Task[]>({
+  // ===== Tasks (vista virtual: filtradas por effort_score_date en rango) =====
+  const { data: tasks, loading: tasksLoading } = useCachedFetch<Task[]>({
     cacheKey: "timings-tasks",
     fetchFn: useCallback(
       async (signal: AbortSignal) => {
-        const urlFiltered = filters.productType
-          ? `/api/tasks?product_type=${filters.productType}`
-          : "/api/tasks";
-
-        if (filters.productType) {
-          const [filteredRes, allRes] = await Promise.all([
-            safeFetch(urlFiltered, { signal }),
-            safeFetch("/api/tasks", { signal }),
-          ]);
-          const filteredData: Task[] = filteredRes.ok
-            ? await filteredRes.json()
-            : [];
-          const allData: Task[] = allRes.ok ? await allRes.json() : [];
-          const mergedMap = new Map<string, Task>();
-          for (const t of allData) mergedMap.set(t.id, t);
-          for (const t of filteredData) mergedMap.set(t.id, t);
-          return Array.from(mergedMap.values());
-        }
-
-        const res = await safeFetch(urlFiltered, { signal });
+        const params = new URLSearchParams();
+        params.append("start_date", apiStartDate);
+        params.append("end_date", apiEndDate);
+        if (filters.productType)
+          params.append("product_type", filters.productType);
+        const res = await safeFetch(`/api/tasks?${params.toString()}`, {
+          signal,
+        });
         return res.ok ? await res.json() : [];
       },
-      [filters.productType, safeFetch],
+      [apiStartDate, apiEndDate, filters.productType, safeFetch],
     ),
     filters: taskFilters,
     enabled: isEnabled,
@@ -273,6 +269,7 @@ export default function TimingsPage() {
           prev.map((t) => (t.id === editingTiming.id ? updatedTiming : t)),
         );
       } else {
+        // Crear nuevo timing (desde flujo normal o desde vista virtual)
         const response = await safeFetch("/api/timings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -290,6 +287,7 @@ export default function TimingsPage() {
 
       setShowForm(false);
       setEditingTiming(null);
+      setRegisteringTask(null);
       // Invalidar métricas en background
       invalidateCache("timings-metrics");
       invalidateCache("timings-qa-metrics");
@@ -335,6 +333,14 @@ export default function TimingsPage() {
   // Handle editar timing
   const handleEdit = (timing: TaskTiming) => {
     setEditingTiming(timing);
+    setRegisteringTask(null);
+    setShowForm(true);
+  };
+
+  // Handle registrar tiempo desde la vista virtual
+  const handleRegisterTime = (task: Task) => {
+    setRegisteringTask(task);
+    setEditingTiming(null);
     setShowForm(true);
   };
 
@@ -342,6 +348,7 @@ export default function TimingsPage() {
   const handleCancelForm = () => {
     setShowForm(false);
     setEditingTiming(null);
+    setRegisteringTask(null);
   };
 
   // Handle cancelar form con confirmación (para header close)
@@ -349,22 +356,17 @@ export default function TimingsPage() {
     formRef.current?.handleCancelWithConfirm();
   };
 
-  // Mapear nombres y links de tareas
-  const taskNames = Object.fromEntries(tasks.map((t) => [t.id, t.name]));
-  const taskLinks = Object.fromEntries(
-    tasks.filter((t) => t.task_link).map((t) => [t.id, t.task_link]),
-  );
-  const taskTshirtSizes = Object.fromEntries(
-    tasks.filter((t) => t.tshirt_size).map((t) => [t.id, t.tshirt_size]),
-  );
-  const taskCategories = Object.fromEntries(
-    tasks.filter((t) => t.category).map((t) => [t.id, t.category]),
-  );
-  const taskEffortDates = Object.fromEntries(
-    tasks
-      .filter((t) => t.effort_score_date)
-      .map((t) => [t.id, t.effort_score_date]),
-  );
+  // Vista virtual: merge de tasks y timings
+  const entries = useMemo((): TaskWithTiming[] => {
+    const timingsByTaskId = new Map<string, (typeof timings)[number]>();
+    for (const t of timings) {
+      timingsByTaskId.set(t.task_id, t);
+    }
+    return tasks.map((task) => ({
+      ...task,
+      timing: timingsByTaskId.get(task.id),
+    }));
+  }, [tasks, timings]);
 
   if (authLoading || !user) {
     return <SkeletonTable />;
@@ -388,17 +390,7 @@ export default function TimingsPage() {
         </div>
 
         {/* Controles */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600"
-            >
-              <Plus size={20} />
-              Nuevo Timing
-            </Button>
-          </div>
-
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
           {/* Ver modo */}
           <div className="flex gap-2">
             <Button
@@ -504,11 +496,11 @@ export default function TimingsPage() {
           <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">
-                Tiempos Registrados
+                Tareas del período
               </h2>
               <button
                 onClick={handleRefreshAll}
-                disabled={loading || isRefreshing}
+                disabled={loading || tasksLoading || isRefreshing}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Actualizar tiempos"
               >
@@ -520,15 +512,11 @@ export default function TimingsPage() {
               </button>
             </div>
             <TimingsList
-              timings={timings}
-              loading={loading}
+              entries={entries}
+              loading={loading || tasksLoading}
               onEdit={handleEdit}
               onDelete={(id) => setDeleteConfirm(id)}
-              taskNames={taskNames}
-              taskLinks={taskLinks}
-              taskTshirtSizes={taskTshirtSizes}
-              taskCategories={taskCategories}
-              taskEffortDates={taskEffortDates}
+              onRegister={handleRegisterTime}
             />
           </div>
         ) : viewMode === "metrics" ? (
@@ -588,7 +576,7 @@ export default function TimingsPage() {
               </div>
             )}
 
-            {/* Comparativa por Complejidad y Categoría */}
+            {/* Comparativa por Complejidad y Tipo Proyecto */}
             <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
               <TshirtSizeComparison
                 timings={allTimings}
@@ -606,7 +594,9 @@ export default function TimingsPage() {
         title={
           editingTiming
             ? `Actualizar Timing - ${tasks.find((t) => t.id === editingTiming?.task_id)?.name || "Tarea"}`
-            : "Crear Nuevo Timing"
+            : registeringTask
+              ? `Registrar Tiempo - ${registeringTask.name}`
+              : "Nuevo Timing"
         }
         onClose={handleCancelForm}
         onHeaderClose={handleCancelFormWithConfirm}
@@ -623,6 +613,7 @@ export default function TimingsPage() {
             .filter((t) => t.id !== editingTiming?.id)
             .map((t) => t.task_id)}
           safeFetch={safeFetch}
+          lockedTask={registeringTask ?? undefined}
         />
       </Modal>
 

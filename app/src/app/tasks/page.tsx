@@ -184,7 +184,7 @@ export default function TasksPage() {
         assigned_qa: data.assigned_qa,
         effort_score_date: data.effort_score_date,
         tshirt_size: data.tshirt_size,
-        category: data.category,
+        project_type: data.project_type,
         squads: data.squads.map((sq) => ({
           squad: sq.squad,
           low_returns: sq.low_returns,
@@ -235,7 +235,7 @@ export default function TasksPage() {
         assigned_qa: data.assigned_qa,
         effort_score_date: data.effort_score_date,
         tshirt_size: data.tshirt_size,
-        category: data.category,
+        project_type: data.project_type,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         squads: data.squads.map((sq) => ({
@@ -577,7 +577,7 @@ export default function TasksPage() {
                     Complejidad
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">
-                    Categoría
+                    Tipo Proyecto
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">
                     Estado
@@ -667,7 +667,7 @@ export default function TasksPage() {
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span className="inline-flex items-center rounded-full badge-purple px-2 py-0.5 text-xs font-medium whitespace-nowrap">
-                              {task.category || "—"}
+                              {task.project_type || "—"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm">

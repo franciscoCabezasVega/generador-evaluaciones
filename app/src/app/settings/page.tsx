@@ -16,14 +16,14 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 // ─── Tipos de tab ─────────────────────────────────────────────────────────────
 type TabId =
   | "products"
-  | "categories"
+  | "project-types"
   | "complexities"
   | "squads"
   | "qa-members";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "products", label: "Productos" },
-  { id: "categories", label: "Categorías" },
+  { id: "project-types", label: "Tipos de Proyecto" },
   { id: "complexities", label: "Complejidad" },
   { id: "squads", label: "Squads" },
   { id: "qa-members", label: "QA Members" },
@@ -41,7 +41,7 @@ const PRODUCT_FIELDS: FieldDef[] = [
   },
 ];
 
-const CATEGORY_FIELDS: FieldDef[] = [
+const PROJECT_TYPE_FIELDS: FieldDef[] = [
   {
     key: "name",
     label: "Nombre",
@@ -101,7 +101,7 @@ export default function SettingsPage() {
 
   // Datos por tab
   const [products, setProducts] = useState<CatalogItem[]>([]);
-  const [categories, setCategories] = useState<CatalogItem[]>([]);
+  const [projectTypes, setProjectTypes] = useState<CatalogItem[]>([]);
   const [complexities, setComplexities] = useState<CatalogComplexity[]>([]);
   const [squads, setSquads] = useState<CatalogSquad[]>([]);
   const [qaMembers, setQaMembers] = useState<CatalogItem[]>([]);
@@ -134,8 +134,8 @@ export default function SettingsPage() {
         case "products":
           setProducts(data);
           break;
-        case "categories":
-          setCategories(data);
+        case "project-types":
+          setProjectTypes(data);
           break;
         case "complexities":
           setComplexities(data);
@@ -324,14 +324,14 @@ export default function SettingsPage() {
                     itemLabel="producto"
                   />
                 )}
-                {activeTab === "categories" && (
+                {activeTab === "project-types" && (
                   <CatalogManager
-                    title="Categorías"
-                    apiPath="/api/settings/categories"
-                    items={categories}
-                    fields={CATEGORY_FIELDS}
+                    title="Tipos de Proyecto"
+                    apiPath="/api/settings/project-types"
+                    items={projectTypes}
+                    fields={PROJECT_TYPE_FIELDS}
                     onRefresh={handleRefresh}
-                    itemLabel="categoría"
+                    itemLabel="tipo de proyecto"
                   />
                 )}
                 {activeTab === "complexities" && (

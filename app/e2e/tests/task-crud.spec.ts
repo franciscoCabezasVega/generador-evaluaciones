@@ -53,7 +53,7 @@ test.describe('Task CRUD with Audit', () => {
           productType: taskData.productType,
           squads: squadPayloads,
           status: taskData.status,
-          category: taskData.category,
+          projectType: taskData.projectType,
           tshirtSize: taskData.tshirtSize,
           effortScoreDate: taskData.effortScoreDate,
         });

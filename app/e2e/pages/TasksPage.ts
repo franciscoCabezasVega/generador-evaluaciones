@@ -141,7 +141,7 @@ export class TasksPage {
     status?: 'Pendiente' | 'Completada' | 'Deprecada';
     month?: number;
     year?: number;
-    category?: string;
+    projectType?: string;
     tshirtSize?: string;
     effortScoreDate?: string;
   }) {
@@ -198,9 +198,9 @@ export class TasksPage {
       await this.page.getByLabel('Año *').selectOption(String(data.year));
     }
 
-    // Category
-    if (data.category) {
-      await this.page.getByLabel('Categoría *').selectOption(data.category);
+    // Project Type
+    if (data.projectType) {
+      await this.page.getByLabel('Tipo Proyecto').selectOption(data.projectType);
     }
 
     // T-shirt Size

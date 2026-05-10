@@ -86,7 +86,7 @@ export async function createTaskViaAPI(
       year: new Date().getFullYear(),
       effort_score_date: task.effortScoreDate,
       tshirt_size: task.tshirtSize,
-      category: task.category,
+      project_type: task.projectType,
     },
   });
 

@@ -36,7 +36,7 @@ export const QA_MEMBERS = [
 export const TSHIRT_SIZES = ['Mínima', 'Menor', 'Estándar', 'Mayor', 'Máxima'] as const;
 export type TshirtSize = (typeof TSHIRT_SIZES)[number];
 
-export const TASK_CATEGORIES = [
+export const TASK_PROJECT_TYPES = [
   'Integración',
   'Bug fix',
   'Migración',
@@ -45,7 +45,7 @@ export const TASK_CATEGORIES = [
   'Refactorización',
   'Seguridad',
 ] as const;
-export type TaskCategory = (typeof TASK_CATEGORIES)[number];
+export type TaskProjectType = (typeof TASK_PROJECT_TYPES)[number];
 
 // ── Generators ────────────────────────────────────────────────
 
@@ -99,9 +99,9 @@ export function randomTshirtSize(): TshirtSize {
   return faker.helpers.arrayElement([...TSHIRT_SIZES]);
 }
 
-/** Pick a random task category */
-export function randomCategory(): TaskCategory {
-  return faker.helpers.arrayElement([...TASK_CATEGORIES]);
+/** Pick a random task project type */
+export function randomProjectType(): TaskProjectType {
+  return faker.helpers.arrayElement([...TASK_PROJECT_TYPES]);
 }
 
 /** Generate a random effort score date (within current month) */
@@ -125,7 +125,7 @@ export interface RandomTaskData {
   notes: string;
   qaMembers: string[];
   tshirtSize: TshirtSize;
-  category: TaskCategory;
+  projectType: TaskProjectType;
   effortScoreDate: string;
 }
 
@@ -145,7 +145,7 @@ export function generateRandomTask(overrides?: Partial<RandomTaskData>): RandomT
     notes: overrides?.notes ?? randomNotes(),
     qaMembers: overrides?.qaMembers ?? faker.helpers.arrayElements([...QA_MEMBERS], faker.number.int({ min: 1, max: 3 })),
     tshirtSize: overrides?.tshirtSize ?? randomTshirtSize(),
-    category: overrides?.category ?? randomCategory(),
+    projectType: overrides?.projectType ?? randomProjectType(),
     effortScoreDate: overrides?.effortScoreDate ?? randomEffortScoreDate(),
   };
 }
