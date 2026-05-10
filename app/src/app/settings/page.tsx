@@ -118,7 +118,7 @@ export default function SettingsPage() {
 
   // ─── Fetch para el tab activo ──────────────────────────────────────────────
 
-  const fetchTab = async (tab: TabId) => {
+  const fetchTab = async (tab: TabId, retryCount = 0) => {
     setLoadingTab(true);
     setTabError(null);
     const controller = new AbortController();
@@ -153,16 +153,17 @@ export default function SettingsPage() {
       }
     } catch (err) {
       clearTimeout(timeoutId);
-      // Timeout o lock de sesión: reintentar una vez después de 2s
       const isAbort = err instanceof DOMException && err.name === "AbortError";
       const isLock =
         err instanceof Error &&
         (err.name === "SessionLockError" || err.message.includes("ocupada"));
-      if (isAbort || isLock) {
-        setTimeout(() => fetchTab(tab), 2000);
-        return; // no mostrar error mientras reintenta
+      // Un solo reintento para errores transitorios (timeout o lock).
+      // Sin límite habría un loop infinito si el backend no responde.
+      if ((isAbort || isLock) && retryCount === 0) {
+        setTimeout(() => fetchTab(tab, 1), 2000);
+        return;
       }
-      setTabError("Error de conexión");
+      setTabError("Error de conexión. Intenta de nuevo.");
     } finally {
       setLoadingTab(false);
     }

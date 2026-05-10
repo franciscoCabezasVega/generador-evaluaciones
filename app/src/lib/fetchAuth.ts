@@ -47,6 +47,28 @@ class SessionManager {
         }
       };
     }
+
+    // Suscribirse a cambios de estado de auth de Supabase.
+    //
+    // Supabase refresca el token ~60s antes de que expire (auto-refresh).
+    // Sin esta suscripción, cuando el usuario vuelve tras inactividad y llama
+    // a getSession(), la promesa compite por navigator.lock con el refresh
+    // que Supabase ya está haciendo en background → bloqueo.
+    //
+    // Con esta suscripción: TOKEN_REFRESHED actualiza el caché directamente
+    // desde el evento (sin llamar a getSession()). Cuando el usuario hace clic
+    // en "Actualizar", el caché ya está fresco → retorno inmediato, sin lock.
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+        if (session) {
+          this._cache = { session, at: Date.now() };
+          this._inflight = null;
+        }
+      } else if (event === "SIGNED_OUT") {
+        this._cache = null;
+        this._inflight = null;
+      }
+    });
   }
 
   static getInstance(): SessionManager {
