@@ -1,7 +1,7 @@
 export type ProductType = string;
 export type TaskStatus = "Completada" | "Deprecada" | "Pendiente";
 export type TshirtSize = string;
-export type TaskCategory = string;
+export type TaskProjectType = string;
 export type UserRole = "admin" | "gestor" | "reportero" | "invitado";
 
 // ─── Interfaces de catálogos dinámicos ───────────────────────────────────────
@@ -13,7 +13,7 @@ export interface CatalogProduct {
   updated_at: string;
 }
 
-export interface CatalogCategory {
+export interface CatalogProjectType {
   id: string;
   name: string;
   is_active: boolean;
@@ -93,7 +93,7 @@ export interface Task {
   assigned_qa: string[];
   effort_score_date: string;
   tshirt_size: TshirtSize;
-  category: TaskCategory;
+  project_type: TaskProjectType;
   created_at: string;
   updated_at: string;
 }
@@ -109,7 +109,7 @@ export interface CreateTaskInput {
   assigned_qa: string[];
   effort_score_date: string;
   tshirt_size: TshirtSize;
-  category: TaskCategory;
+  project_type: TaskProjectType;
 }
 
 export interface TaskSquadReportEntry {
@@ -321,6 +321,9 @@ export interface CreateTaskTimingInput {
 export interface UpdateTaskTimingInput {
   qa_entries: CreateTimingQAEntryInput[]; // Reemplaza todas las entradas QA
 }
+
+// Vista virtual: tarea con su timing opcional (para la lista de Tiempos)
+export type TaskWithTiming = Task & { timing?: TaskTiming };
 
 // Tiempo formateado para visualización
 export interface FormattedTime {

@@ -31,14 +31,14 @@ export async function PATCH(
     }
     const name = body.name.trim();
     const { data: existing } = await supabase
-      .from("categories")
+      .from("project_types")
       .select("id")
       .ilike("name", name)
       .neq("id", id)
       .single();
     if (existing) {
       return NextResponse.json(
-        { error: "Ya existe una categoría con ese nombre" },
+        { error: "Ya existe un tipo de proyecto con ese nombre" },
         { status: 409 },
       );
     }
@@ -57,16 +57,16 @@ export async function PATCH(
   }
 
   const { data, error } = await supabase
-    .from("categories")
+    .from("project_types")
     .update(updates)
     .eq("id", id)
     .select()
     .single();
 
   if (error) {
-    console.error("Error updating category:", error);
+    console.error("Error updating project type:", error);
     return NextResponse.json(
-      { error: "Error al actualizar categoría" },
+      { error: "Error al actualizar tipo de proyecto" },
       { status: 500 },
     );
   }
@@ -92,15 +92,15 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const { data: category } = await supabase
-    .from("categories")
+  const { data: projectType } = await supabase
+    .from("project_types")
     .select("name")
     .eq("id", id)
     .single();
 
-  if (!category) {
+  if (!projectType) {
     return NextResponse.json(
-      { error: "Categoría no encontrada" },
+      { error: "Tipo de proyecto no encontrado" },
       { status: 404 },
     );
   }
@@ -108,22 +108,22 @@ export async function DELETE(
   const { count } = await supabase
     .from("tasks")
     .select("id", { count: "exact", head: true })
-    .eq("category", category.name);
+    .eq("project_type", projectType.name);
 
   if (count && count > 0) {
     return NextResponse.json(
       {
-        error: `No se puede eliminar: hay ${count} tarea(s) que usan la categoría "${category.name}". Desactívala en su lugar.`,
+        error: `No se puede eliminar: hay ${count} tarea(s) que usan el tipo de proyecto "${projectType.name}". Desactívalo en su lugar.`,
       },
       { status: 409 },
     );
   }
 
-  const { error } = await supabase.from("categories").delete().eq("id", id);
+  const { error } = await supabase.from("project_types").delete().eq("id", id);
   if (error) {
-    console.error("Error deleting category:", error);
+    console.error("Error deleting project type:", error);
     return NextResponse.json(
-      { error: "Error al eliminar categoría" },
+      { error: "Error al eliminar tipo de proyecto" },
       { status: 500 },
     );
   }

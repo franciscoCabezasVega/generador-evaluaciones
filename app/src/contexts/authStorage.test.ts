@@ -13,6 +13,8 @@ import type { UserProfile } from "@/lib/types";
 const mockProfile: UserProfile = {
   id: "user-123",
   email: "user@test.com",
+  name: "Usuario",
+  lastname: "Test",
   role: "gestor",
   role_id: 2,
   created_at: "2026-01-01T00:00:00Z",

@@ -91,8 +91,8 @@ export async function PATCH(
       taskUpdateData.assigned_qa = assigned_qa;
     }
 
-    // Validar complejidad y categoría en paralelo (solo si se proporcionan)
-    if (taskUpdateData.tshirt_size || taskUpdateData.category) {
+    // Validar complejidad y tipo de proyecto en paralelo (solo si se proporcionan)
+    if (taskUpdateData.tshirt_size || taskUpdateData.project_type) {
       const [complexityResult, categoryResult] = await Promise.all([
         taskUpdateData.tshirt_size
           ? supabase
@@ -102,11 +102,11 @@ export async function PATCH(
               .eq("is_active", true)
               .maybeSingle()
           : Promise.resolve({ data: true }),
-        taskUpdateData.category
+        taskUpdateData.project_type
           ? supabase
-              .from("categories")
+              .from("project_types")
               .select("id")
-              .eq("name", taskUpdateData.category)
+              .eq("name", taskUpdateData.project_type)
               .eq("is_active", true)
               .maybeSingle()
           : Promise.resolve({ data: true }),
@@ -119,9 +119,9 @@ export async function PATCH(
         );
       }
 
-      if (taskUpdateData.category && !categoryResult.data) {
+      if (taskUpdateData.project_type && !categoryResult.data) {
         return NextResponse.json(
-          { error: "Categoría inválida" },
+          { error: "Tipo de proyecto inválido" },
           { status: 400 },
         );
       }

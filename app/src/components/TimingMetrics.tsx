@@ -1050,7 +1050,7 @@ export function QAEfficiencyChart({
       taskName: string;
       taskLink: string;
       tshirtSize: string;
-      category: string;
+      project_type: string;
       effectiveTesting: number;
       waitingEnvironment: number;
       waitingDevFixes: number;
@@ -1070,7 +1070,7 @@ export function QAEfficiencyChart({
         taskName: task?.name || "Tarea desconocida",
         taskLink: task?.task_link || "",
         tshirtSize: task?.tshirt_size || "",
-        category: task?.category || "",
+        project_type: task?.project_type || "",
         effectiveTesting: qaEntry.effective_testing_hours,
         waitingEnvironment: qaEntry.waiting_environment_hours,
         waitingDevFixes: qaEntry.waiting_development_fixes_hours,
@@ -1245,7 +1245,7 @@ export function QAEfficiencyChart({
                                     className="text-center py-2 px-3 font-semibold text-slate-600"
                                     title="Clasificación de la tarea (Nueva funcionalidad, Bug fix, etc.)"
                                   >
-                                    Categoría
+                                    Tipo Proyecto
                                   </th>
                                   <th
                                     className="text-center py-2 px-3 font-semibold text-slate-600"
@@ -1321,9 +1321,9 @@ export function QAEfficiencyChart({
                                       )}
                                     </td>
                                     <td className="py-2 px-3 text-center">
-                                      {detail.category && (
+                                      {detail.project_type && (
                                         <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700">
-                                          {detail.category}
+                                          {detail.project_type}
                                         </span>
                                       )}
                                     </td>
@@ -1496,7 +1496,7 @@ export function QASummaryCards({
 }
 
 // ============================================================================
-// Comparativa de QA por Complejidad y Categoría
+// Comparativa de QA por Complejidad y Tipo Proyecto
 // ============================================================================
 
 interface TshirtSizeComparisonProps {
@@ -1517,7 +1517,7 @@ interface QATaskEntry {
 
 interface SizeGroupData {
   tshirtSize: TshirtSize;
-  category: string;
+  project_type: string;
   expectedMin: number;
   expectedMax: number;
   entries: QATaskEntry[];
@@ -1624,16 +1624,16 @@ export function TshirtSizeComparison({
   for (const timing of timings) {
     if (!timing.qa_entries) continue;
     const task = taskMap.get(timing.task_id);
-    if (!task || !task.tshirt_size || !task.category) continue;
+    if (!task || !task.tshirt_size || !task.project_type) continue;
 
-    const key = `${task.tshirt_size}|${task.category}`;
+    const key = `${task.tshirt_size}|${task.project_type}`;
     const expected = sizeHoursMap[task.tshirt_size];
     if (!expected) continue;
 
     if (!groupMap.has(key)) {
       groupMap.set(key, {
         tshirtSize: task.tshirt_size as TshirtSize,
-        category: task.category,
+        project_type: task.project_type,
         expectedMin: expected.min,
         expectedMax: expected.max,
         entries: [],
@@ -1673,7 +1673,7 @@ export function TshirtSizeComparison({
       const sizeIndexDiff =
         sizeOrder.indexOf(a.tshirtSize) - sizeOrder.indexOf(b.tshirtSize);
       if (sizeIndexDiff !== 0) return sizeIndexDiff;
-      return a.category.localeCompare(b.category);
+      return a.project_type.localeCompare(b.project_type);
     });
 
   if (groups.length === 0) return null;
@@ -1696,12 +1696,12 @@ export function TshirtSizeComparison({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-bold text-gray-900 mb-2">
-          Comparativa por Complejidad y Categoría
+          Comparativa por Complejidad y Tipo Proyecto
         </h3>
         <p className="text-sm text-gray-600 mb-4">
           Análisis de los tiempos de QA comparados con las horas esperadas según
-          la complejidad de la tarea, agrupados por complejidad y categoría sin
-          importar el periodo.
+          la complejidad de la tarea, agrupados por complejidad y tipo de
+          proyecto sin importar el periodo.
         </p>
       </div>
 
@@ -1804,9 +1804,9 @@ export function TshirtSizeComparison({
         </div>
       </div>
 
-      {/* Grupos por complejidad + categoría */}
+      {/* Grupos por complejidad + Tipo Proyecto */}
       {groups.map((group) => {
-        const groupKey = `${group.tshirtSize}|${group.category}`;
+        const groupKey = `${group.tshirtSize}|${group.project_type}`;
         const isExpanded = expandedGroup === groupKey;
         const groupDevLevel = getDeviationLevel(
           group.avgHours,
@@ -1859,7 +1859,7 @@ export function TshirtSizeComparison({
                   {group.tshirtSize}
                 </span>
                 <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-sm font-medium text-purple-700">
-                  {group.category}
+                  {group.project_type}
                 </span>
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${groupBadge.cls}`}
@@ -1976,17 +1976,18 @@ export function TshirtSizeComparison({
                     {group.entries.length === 1 ? (
                       <p>
                         Solo hay 1 registro para tareas{" "}
-                        <strong>{group.tshirtSize}</strong> de categoría{" "}
-                        <strong>{group.category}</strong>. Se necesitan más
+                        <strong>{group.tshirtSize}</strong> de tipo de proyecto{" "}
+                        <strong>{group.project_type}</strong>. Se necesitan más
                         datos para una comparación significativa.
                       </p>
                     ) : (
                       <>
                         <p>
                           En tareas de complejidad{" "}
-                          <strong>{group.tshirtSize}</strong> y categoría{" "}
-                          <strong>{group.category}</strong>, el promedio general
-                          es <strong>{group.avgHours.toFixed(1)}h</strong>{" "}
+                          <strong>{group.tshirtSize}</strong> y tipo de proyecto{" "}
+                          <strong>{group.project_type}</strong>, el promedio
+                          general es{" "}
+                          <strong>{group.avgHours.toFixed(1)}h</strong>{" "}
                           (esperado: {group.expectedMin}-{group.expectedMax}h).
                         </p>
                         {hasSignificantSpread ? (

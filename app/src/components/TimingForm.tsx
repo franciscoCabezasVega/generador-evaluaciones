@@ -35,6 +35,9 @@ interface TimingFormProps {
   availableTasks?: Task[];
   selectedTaskIds?: string[];
   safeFetch?: (url: string, options?: RequestInit) => Promise<Response>;
+  /** Cuando se pasa, la tarea queda bloqueada (no se muestran los selectores).
+   *  Se usa desde la vista virtual de Tiempos al hacer "Registrar tiempo". */
+  lockedTask?: Task;
 }
 
 interface QAFormData {
@@ -65,12 +68,36 @@ function TimingFormComponent(
     availableTasks = [],
     selectedTaskIds = [],
     safeFetch,
+    lockedTask,
   }: TimingFormProps,
   ref: React.Ref<{ handleCancelWithConfirm: () => void }>,
 ) {
   const processInitialData = (
     data: Record<string, unknown> | null | undefined,
   ): FormDataState => {
+    // Modo creación con tarea bloqueada (vista virtual de Tiempos)
+    if (!data && lockedTask) {
+      const assignedQAs: string[] = Array.isArray(lockedTask.assigned_qa)
+        ? lockedTask.assigned_qa
+        : [];
+      const qaEntries: QAFormData[] = assignedQAs.map((qaName) => ({
+        qa_name: qaName,
+        effective_testing_hours: 0,
+        waiting_environment_hours: 0,
+        waiting_development_fixes_hours: 0,
+        retest_hours: 0,
+        clarification_hours: 0,
+        isExpanded: true,
+      }));
+      return {
+        task_id: lockedTask.id,
+        product_type: lockedTask.product_type,
+        month: lockedTask.month,
+        year: lockedTask.year,
+        qa_entries: qaEntries,
+      };
+    }
+
     if (!data) {
       return {
         task_id: "",
@@ -308,13 +335,22 @@ function TimingFormComponent(
     e.preventDefault();
 
     // Validaciones finales
-    if (!isEditing) {
+    if (!isEditing && !lockedTask) {
       if (!formData.task_id) {
         setErrors({
           task_id: "La tarea es requerida",
         });
         return;
       }
+    }
+
+    // Bloquear submit si la tarea bloqueada no tiene QAs
+    if (lockedTask && formData.qa_entries.length === 0) {
+      setErrors({
+        qa_entries:
+          "La tarea no tiene QA asignados. Edita la tarea para asignar QA.",
+      });
+      return;
     }
 
     if (formData.qa_entries.length === 0) {
@@ -449,8 +485,8 @@ function TimingFormComponent(
         </div>
       </Modal>
 
-      {/* Año y Mes - solo en modo creación */}
-      {!isEditing && (
+      {/* Año y Mes - solo en modo creación sin tarea bloqueada */}
+      {!isEditing && !lockedTask && (
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="year" className="block text-sm font-medium">
@@ -494,8 +530,8 @@ function TimingFormComponent(
         </div>
       )}
 
-      {/* Producto - solo en modo creación */}
-      {!isEditing && (
+      {/* Producto - solo en modo creación sin tarea bloqueada */}
+      {!isEditing && !lockedTask && (
         <div>
           <label htmlFor="product_type" className="block text-sm font-medium">
             Producto
@@ -518,8 +554,8 @@ function TimingFormComponent(
         </div>
       )}
 
-      {/* Tarea - solo en modo creación */}
-      {!isEditing && (
+      {/* Tarea - solo en modo creación sin tarea bloqueada */}
+      {!isEditing && !lockedTask && (
         <div>
           <label htmlFor="task_id" className="block text-sm font-medium">
             Tarea
@@ -583,12 +619,11 @@ function TimingFormComponent(
         </div>
       )}
 
-      {/* Info de tarea asociada — modo edición */}
-      {isEditing &&
+      {/* Info de tarea asociada — modo edición o tarea bloqueada */}
+      {(isEditing || lockedTask) &&
         (() => {
-          const linkedTask = availableTasks.find(
-            (t) => t.id === formData.task_id,
-          );
+          const linkedTask =
+            lockedTask ?? availableTasks.find((t) => t.id === formData.task_id);
           if (!linkedTask) return null;
           return (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">

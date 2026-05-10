@@ -2,13 +2,13 @@
 
 # Generador de Evaluaciones
 
-Sistema integral y configurable de gestión y evaluación de tareas mensuales por equipo, con catálogos completamente personalizables (tipos de sistema, equipos, categorías, complejidades y miembros QA), cálculo automático de notas, generación de reportes versionados, soporte de IA para comentarios cualitativos, auditoría completa y pipeline CI/CD con tests automatizados.
+Sistema integral y configurable de gestión y evaluación de tareas mensuales por equipo, con catálogos completamente personalizables (tipos de sistema, equipos, tipos de proyecto, complejidades y miembros QA), cálculo automático de notas, generación de reportes versionados, soporte de IA para comentarios cualitativos, auditoría completa y pipeline CI/CD con tests automatizados.
 
 ---
 
 ## Descripción General
 
-Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a cualquier organización registrar, evaluar y analizar tareas completadas mensualmente por equipo. Los catálogos (tipos de sistema, equipos, categorías, complejidades y miembros QA) son completamente gestionables desde la interfaz, sin necesidad de tocar código. El sistema calcula automáticamente las notas basadas en devoluciones (graves, medias y bajas), genera reportes detallados versionados y utiliza IA para generar comentarios sobre desempeño y comunicación.
+Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a cualquier organización registrar, evaluar y analizar tareas completadas mensualmente por equipo. Los catálogos (tipos de sistema, equipos, tipos de proyecto, complejidades y miembros QA) son completamente gestionables desde la interfaz, sin necesidad de tocar código. El sistema calcula automáticamente las notas basadas en devoluciones (graves, medias y bajas), genera reportes detallados versionados y utiliza IA para generar comentarios sobre desempeño y comunicación.
 
 ---
 
@@ -94,7 +94,7 @@ Todos los valores de dominio son gestionables desde la sección **Configuración
 |----------|-------------|
 | **Tipos de sistema** | Define los productos o áreas evaluadas (p. ej. Frontend, Backend, QA) |
 | **Equipos (squads)** | Asociados a cada tipo de sistema; cada usuario asigna los suyos |
-| **Categorías** | Clasificación funcional de las tareas |
+| **Tipos de Proyecto** | Clasificación funcional de las tareas (tabla `project_types`) |
 | **Complejidades** | Tallas de esfuerzo (XS, S, M, L, XL u otras) |
 | **Miembros QA** | Personas que pueden ser asignadas a una tarea |
 
@@ -406,6 +406,12 @@ app/
 │   │   │   │   ├── route.ts           # GET (visibilidad por RLS), POST
 │   │   │   │   ├── check-link/route.ts # GET pre-flight: verifica link duplicado
 │   │   │   │   └── [id]/route.ts      # GET, PATCH, DELETE
+│   │   │   ├── settings/              # Catálogos configurables
+│   │   │   │   ├── products/          # Tipos de sistema
+│   │   │   │   ├── project-types/     # Tipos de proyecto (tabla: project_types)
+│   │   │   │   ├── squads/            # Equipos
+│   │   │   │   ├── complexities/      # Complejidades
+│   │   │   │   └── qa-members/        # Miembros QA
 │   │   │   ├── reports/               # API de reportes
 │   │   │   │   ├── route.ts           # GET, POST
 │   │   │   │   └── [id]/route.ts      # GET
@@ -485,7 +491,8 @@ app/
 │
 ├── supabase/
 │   └── migrations/                    # Migraciones SQL versionadas
-│       └── 20260508000000_baseline_indexes.sql  # Índices de rendimiento
+│       ├── 20260508000000_baseline_indexes.sql           # Índices de rendimiento
+│       └── 20260509000000_rename_category_to_project_type.sql  # categories → project_types
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright

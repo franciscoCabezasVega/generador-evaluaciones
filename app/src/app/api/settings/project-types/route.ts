@@ -11,16 +11,16 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const includeInactive = searchParams.get("includeInactive") === "true";
 
-  let query = supabase.from("categories").select("*").order("name");
+  let query = supabase.from("project_types").select("*").order("name");
   if (!includeInactive) {
     query = query.eq("is_active", true);
   }
 
   const { data, error } = await query;
   if (error) {
-    console.error("Error fetching categories:", error);
+    console.error("Error fetching project types:", error);
     return NextResponse.json(
-      { error: "Error al obtener categorías" },
+      { error: "Error al obtener tipos de proyecto" },
       { status: 500 },
     );
   }
@@ -51,28 +51,28 @@ export async function POST(request: NextRequest) {
   const name = body.name.trim();
 
   const { data: existing } = await supabase
-    .from("categories")
+    .from("project_types")
     .select("id")
     .ilike("name", name)
     .single();
 
   if (existing) {
     return NextResponse.json(
-      { error: "Ya existe una categoría con ese nombre" },
+      { error: "Ya existe un tipo de proyecto con ese nombre" },
       { status: 409 },
     );
   }
 
   const { data, error } = await supabase
-    .from("categories")
+    .from("project_types")
     .insert({ name })
     .select()
     .single();
 
   if (error) {
-    console.error("Error creating category:", error);
+    console.error("Error creating project type:", error);
     return NextResponse.json(
-      { error: "Error al crear categoría" },
+      { error: "Error al crear tipo de proyecto" },
       { status: 500 },
     );
   }

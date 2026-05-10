@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar complejidad y categoría en paralelo
+    // Validar complejidad y tipo de proyecto en paralelo
     const [{ data: complexityExists }, { data: categoryExists }] =
       await Promise.all([
         supabase
@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
           .eq("is_active", true)
           .maybeSingle(),
         supabase
-          .from("categories")
+          .from("project_types")
           .select("id")
-          .eq("name", body.category)
+          .eq("name", body.project_type)
           .eq("is_active", true)
           .maybeSingle(),
       ]);
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     if (!categoryExists) {
       return NextResponse.json(
-        { error: "Categoría inválida" },
+        { error: "Tipo de proyecto inválido" },
         { status: 400 },
       );
     }
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         assigned_qa: Array.isArray(body.assigned_qa) ? body.assigned_qa : [],
         effort_score_date: body.effort_score_date,
         tshirt_size: body.tshirt_size,
-        category: body.category,
+        project_type: body.project_type,
       })
       .select()
       .single();
@@ -241,6 +241,8 @@ export async function GET(request: NextRequest) {
     const productType = searchParams.get("product_type");
     const status = searchParams.get("status");
     const squad = searchParams.get("squad");
+    const startDate = searchParams.get("start_date");
+    const endDate = searchParams.get("end_date");
 
     // Obtener tareas — la visibilidad la controla la política RLS (select_tasks_by_role):
     // admin/gestor/viewer ven todas; roles inferiores solo las propias.
@@ -258,6 +260,13 @@ export async function GET(request: NextRequest) {
     }
     if (status) {
       tasksQuery = tasksQuery.eq("status", status);
+    }
+    // Filtrar por rango de effort_score_date (usado en la vista virtual de Tiempos)
+    if (startDate) {
+      tasksQuery = tasksQuery.gte("effort_score_date", startDate);
+    }
+    if (endDate) {
+      tasksQuery = tasksQuery.lte("effort_score_date", endDate);
     }
 
     // El filtro de squad requiere una subconsulta en task_squad,

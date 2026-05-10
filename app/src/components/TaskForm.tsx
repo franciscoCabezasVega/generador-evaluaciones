@@ -13,7 +13,7 @@ import {
   SquadData,
   ProductType,
   TshirtSize,
-  TaskCategory,
+  TaskProjectType,
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
 import { calculateTaskScore, formatScore } from "@/lib/scoreCalculator";
@@ -53,7 +53,7 @@ interface FormDataState {
   year: number;
   effort_score_date: string;
   tshirt_size: TshirtSize;
-  category: TaskCategory;
+  project_type: TaskProjectType;
 }
 
 function TaskFormComponent(
@@ -76,7 +76,7 @@ function TaskFormComponent(
         year: CURRENT_YEAR,
         effort_score_date: new Date().toISOString().split("T")[0],
         tshirt_size: "Estándar",
-        category: "Nueva funcionalidad",
+        project_type: "Nueva funcionalidad",
       };
     }
 
@@ -88,7 +88,7 @@ function TaskFormComponent(
       effort_score_date:
         parsed.effort_score_date || new Date().toISOString().split("T")[0],
       tshirt_size: parsed.tshirt_size || "Estándar",
-      category: parsed.category || "Nueva funcionalidad",
+      project_type: parsed.project_type || "Nueva funcionalidad",
     };
   };
 
@@ -114,7 +114,7 @@ function TaskFormComponent(
 
   const {
     products,
-    categories,
+    projectTypes,
     complexities,
     squads: allSquads,
     qaMembers,
@@ -403,7 +403,7 @@ function TaskFormComponent(
       formData.assigned_qa.length > 0 &&
       formData.effort_score_date !== "" &&
       !!formData.tshirt_size &&
-      !!formData.category &&
+      !!formData.project_type &&
       hasNoErrors
     );
   };
@@ -434,8 +434,8 @@ function TaskFormComponent(
       if (!formData.tshirt_size) {
         newErrors.tshirt_size = "La complejidad es requerida";
       }
-      if (!formData.category) {
-        newErrors.category = "La categoría es requerida";
+      if (!formData.project_type) {
+        newErrors.project_type = "El tipo de proyecto es requerido";
       }
 
       if (Object.keys(newErrors).length > 0) {
@@ -546,7 +546,7 @@ function TaskFormComponent(
         </div>
       </fieldset>
 
-      {/* Sección 2: Clasificación (Producto, Categoría, Complejidad) */}
+      {/* Sección 2: Clasificación (Producto, Tipo Proyecto, Complejidad) */}
       <fieldset className="space-y-4">
         <legend className="text-sm font-semibold text-gray-700 border-b pb-2 w-full">
           Clasificación
@@ -577,27 +577,27 @@ function TaskFormComponent(
 
           <div>
             <label
-              htmlFor="task-category"
+              htmlFor="task-project-type"
               className="block text-sm font-medium mb-2 flex items-center gap-1.5"
             >
               <Tag size={14} className="text-purple-600" />
-              Categoría *
+              Tipo Proyecto *
             </label>
             <select
-              id="task-category"
-              name="category"
-              value={formData.category}
+              id="task-project-type"
+              name="project_type"
+              value={formData.project_type}
               onChange={handleInputChange}
-              className={`w-full border rounded-lg px-4 py-2 ${errors.category ? "border-red-500 bg-red-950/40" : "border-gray-300"}`}
+              className={`w-full border rounded-lg px-4 py-2 ${errors.project_type ? "border-red-500 bg-red-950/40" : "border-gray-300"}`}
             >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>
-                  {cat.name}
+              {projectTypes.map((pt) => (
+                <option key={pt.id} value={pt.name}>
+                  {pt.name}
                 </option>
               ))}
             </select>
-            {errors.category && (
-              <p className="text-red-600 text-sm mt-1">{errors.category}</p>
+            {errors.project_type && (
+              <p className="text-red-600 text-sm mt-1">{errors.project_type}</p>
             )}
           </div>
 
