@@ -598,7 +598,7 @@ export default function TimingsPage() {
               ? `Registrar Tiempo - ${registeringTask.name}`
               : "Nuevo Timing"
         }
-        onClose={handleCancelForm}
+        onClose={handleCancelFormWithConfirm}
         onHeaderClose={handleCancelFormWithConfirm}
       >
         <TimingForm

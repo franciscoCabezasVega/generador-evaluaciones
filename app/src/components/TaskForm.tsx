@@ -127,11 +127,20 @@ function TaskFormComponent(
         (p) => p.name === formData.product_type,
       );
       if (!currentProductExists) {
+        const newProductType = products[0].name as ProductType;
         setFormData((prev) => ({
           ...prev,
-          product_type: products[0].name as ProductType,
+          product_type: newProductType,
           squads: [],
         }));
+        // El auto-ajuste del catálogo no debe contar como cambio del usuario
+        if (initialDataRef.current) {
+          initialDataRef.current = {
+            ...initialDataRef.current,
+            product_type: newProductType,
+            squads: [],
+          };
+        }
       }
     }
     // Solo ejecutar cuando los productos se carguen por primera vez
@@ -145,10 +154,18 @@ function TaskFormComponent(
         (c) => c.name === formData.tshirt_size,
       );
       if (!currentExists) {
+        const newSize = complexities[0].name as TshirtSize;
         setFormData((prev) => ({
           ...prev,
-          tshirt_size: complexities[0].name as TshirtSize,
+          tshirt_size: newSize,
         }));
+        // El auto-ajuste del catálogo no debe contar como cambio del usuario
+        if (initialDataRef.current) {
+          initialDataRef.current = {
+            ...initialDataRef.current,
+            tshirt_size: newSize,
+          };
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -118,13 +118,17 @@ export default function SettingsPage() {
 
   // ─── Fetch para el tab activo ──────────────────────────────────────────────
 
-  const fetchTab = async (tab: TabId) => {
+  const fetchTab = async (tab: TabId, retryCount = 0) => {
     setLoadingTab(true);
     setTabError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
       const res = await authenticatedFetch(
         `/api/settings/${tab}?includeInactive=true`,
+        { signal: controller.signal },
       );
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) {
         setTabError(data.error ?? "Error al cargar datos");
@@ -148,15 +152,18 @@ export default function SettingsPage() {
           break;
       }
     } catch (err) {
-      // SessionLockError: navigator.lock temporalmente ocupado → reintentar en 2s
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
       const isLock =
         err instanceof Error &&
         (err.name === "SessionLockError" || err.message.includes("ocupada"));
-      if (isLock) {
-        setTimeout(() => fetchTab(tab), 2000);
-        return; // no mostrar error mientras reintenta
+      // Un solo reintento para errores transitorios (timeout o lock).
+      // Sin límite habría un loop infinito si el backend no responde.
+      if ((isAbort || isLock) && retryCount === 0) {
+        setTimeout(() => fetchTab(tab, 1), 2000);
+        return;
       }
-      setTabError("Error de conexión");
+      setTabError("Error de conexión. Intenta de nuevo.");
     } finally {
       setLoadingTab(false);
     }

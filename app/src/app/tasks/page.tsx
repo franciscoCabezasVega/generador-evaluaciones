@@ -864,10 +864,7 @@ export default function TasksPage() {
           <Modal
             isOpen={showForm}
             title={editingTask ? "Editar Tarea" : "Nueva Tarea"}
-            onClose={() => {
-              setShowForm(false);
-              setEditingTask(null);
-            }}
+            onClose={handleFormHeaderClose}
             onHeaderClose={handleFormHeaderClose}
           >
             <TaskForm
