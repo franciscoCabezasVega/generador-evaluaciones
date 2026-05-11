@@ -1116,7 +1116,7 @@ export function QAEfficiencyChart({
                                     </td>
                                     <td className="py-2 px-3 text-center">
                                       {detail.project_type && (
-                                        <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700">
+                                        <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700 whitespace-nowrap">
                                           {detail.project_type}
                                         </span>
                                       )}
@@ -1176,6 +1176,22 @@ export function QASummaryCards({
 }: QATimingMetricsProps) {
   const { timingCategories } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
+  const [tooltip, setTooltip] = useState<Tooltip>({
+    visible: false,
+    x: 0,
+    y: 0,
+    content: "",
+  });
+  const handleBarTooltipShow = (
+    e: React.MouseEvent<HTMLDivElement>,
+    content: string,
+  ) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
+  };
+  const handleBarTooltipHide = () => {
+    setTooltip((prev) => ({ ...prev, visible: false }));
+  };
 
   if (loading) {
     return (
@@ -1190,6 +1206,7 @@ export function QASummaryCards({
   if (!qaMetrics || qaMetrics.length === 0) return null;
 
   return (
+    <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {qaMetrics
         .sort((a, b) => b.total_hours - a.total_hours)
@@ -1253,15 +1270,27 @@ export function QASummaryCards({
                 {/* Mini stacked bar */}
                 <div className="mt-4">
                   <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-100">
-                    {activeCategories.map((cat) => (
-                      <div
-                        key={cat.id}
-                        style={{
-                          width: `${qa.total_hours > 0 ? ((qa.totals_by_category?.[cat.id] ?? 0) / qa.total_hours) * 100 : 0}%`,
-                          backgroundColor: cat.hex_color,
-                        }}
-                      />
-                    ))}
+                    {activeCategories.map((cat) => {
+                      const hours = qa.totals_by_category?.[cat.id] ?? 0;
+                      const pct = qa.total_hours > 0 ? (hours / qa.total_hours) * 100 : 0;
+                      return (
+                        <div
+                          key={cat.id}
+                          onMouseEnter={(e) =>
+                            handleBarTooltipShow(
+                              e,
+                              `${cat.name}: ${hours.toFixed(1)}h (${pct.toFixed(0)}%)`,
+                            )
+                          }
+                          onMouseLeave={handleBarTooltipHide}
+                          className="h-full cursor-pointer hover:opacity-80 transition-opacity"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: cat.hex_color,
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1269,6 +1298,33 @@ export function QASummaryCards({
           );
         })}
     </div>
+    {/* Tooltip barra mini */}
+    <div
+      className="fixed bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-sm pointer-events-none z-50"
+      style={{
+        left: `${tooltip.x}px`,
+        top: `${tooltip.y}px`,
+        transform: "translate(-50%, -100%)",
+        opacity: tooltip.visible ? 1 : 0,
+        visibility: tooltip.visible ? "visible" : "hidden",
+        transitionProperty: "opacity, visibility",
+        transitionDuration: "100ms",
+        transitionTimingFunction: "ease-in-out",
+        willChange: "opacity, visibility",
+      }}
+    >
+      {tooltip.content}
+      <div
+        className="absolute w-2 h-2 bg-gray-900"
+        style={{
+          left: "50%",
+          top: "100%",
+          transform: "translateX(-50%)",
+          clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+        }}
+      />
+    </div>
+    </>
   );
 }
 
