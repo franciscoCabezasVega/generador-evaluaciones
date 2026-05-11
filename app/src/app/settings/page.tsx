@@ -121,12 +121,7 @@ const TIMING_CATEGORY_FIELDS: FieldDef[] = [
     required: true,
     description: "Posición en formularios (1 = primero)",
   },
-  {
-    key: "is_system",
-    label: "Categoría del sistema",
-    type: "toggle",
-    description: "Las categorías del sistema no pueden eliminarse",
-  },
+  // is_system es solo lectura: el backend lo ignora en PATCH y lo fuerza a false en POST
 ];
 
 // ─── Página ───────────────────────────────────────────────────────────────────

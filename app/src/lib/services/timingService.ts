@@ -68,10 +68,14 @@ async function getClient(token?: string) {
 async function getTimingCategories(
   client: SupabaseClient,
 ): Promise<CatalogTimingCategory[]> {
-  const { data } = await client
+  const { data, error } = await client
     .from("timing_categories")
     .select("*")
     .order("display_order", { ascending: true });
+  if (error) {
+    console.error("Failed to fetch timing_categories:", error);
+    throw error;
+  }
   return (data as CatalogTimingCategory[]) ?? [];
 }
 
@@ -475,7 +479,14 @@ export const timingService = {
         .eq("id", id);
       if (touchError) throw touchError;
 
-      await client.from("timing_qa_entries").delete().eq("timing_id", id);
+      const { error: deleteQaEntriesError } = await client
+        .from("timing_qa_entries")
+        .delete()
+        .eq("timing_id", id);
+      if (deleteQaEntriesError)
+        throw new Error(
+          `Error deleting QA entries: ${deleteQaEntriesError.message}`,
+        );
 
       const { data: taskQAsUpdate, error: tqaUpdateErr } = await client
         .from("task_qa")
@@ -538,8 +549,19 @@ export const timingService = {
         const { error: chErr } = await client
           .from("timing_qa_category_hours")
           .insert(categoryHourUpdates);
-        if (chErr)
+        if (chErr) {
+          // Compensación: eliminar las QA entries recién creadas para no dejar datos inconsistentes
+          const newEntryIds = (
+            updatedEntries as { id: string; task_qa_id: string }[]
+          ).map((e) => e.id);
+          if (newEntryIds.length > 0) {
+            await client
+              .from("timing_qa_entries")
+              .delete()
+              .in("id", newEntryIds);
+          }
           throw new Error(`Error updating category hours: ${chErr.message}`);
+        }
       }
 
       await syncAssignedQA(client, timingData.task_id);

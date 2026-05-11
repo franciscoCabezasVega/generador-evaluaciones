@@ -381,13 +381,13 @@ export default function CatalogManager({
                       className="absolute inset-0 block"
                       style={{
                         backgroundColor: String(
-                          formValues[field.key] ?? "#000000",
+                          formValues[field.key] || "#000000",
                         ),
                       }}
                     />
                     <input
                       type="color"
-                      value={String(formValues[field.key] ?? "#000000")}
+                      value={String(formValues[field.key] || "#000000")}
                       onChange={(e) =>
                         handleFieldChange(field.key, e.target.value)
                       }

@@ -66,6 +66,12 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (body.name.trim().length > 100) {
+    return NextResponse.json(
+      { error: "El nombre no puede superar los 100 caracteres" },
+      { status: 400 },
+    );
+  }
   if (
     typeof body.display_order !== "number" ||
     !Number.isInteger(body.display_order) ||
@@ -109,6 +115,13 @@ export async function POST(request: NextRequest) {
         error:
           "El nombre no produce un identificador válido. Usa letras o números en el nombre.",
       },
+      { status: 400 },
+    );
+  }
+  // slug VARCHAR(50) en BD
+  if (slug.length > 50) {
+    return NextResponse.json(
+      { error: "El nombre es demasiado largo. Usa un nombre más corto." },
       { status: 400 },
     );
   }

@@ -128,9 +128,12 @@ export function useCatalogData(): CatalogData {
         authenticatedFetch("/api/settings/qa-members", {
           signal: controller.signal,
         }),
-        authenticatedFetch("/api/settings/timing-categories", {
-          signal: controller.signal,
-        }),
+        authenticatedFetch(
+          "/api/settings/timing-categories?includeInactive=true",
+          {
+            signal: controller.signal,
+          },
+        ),
       ]);
 
       if (controller.signal.aborted) return;
