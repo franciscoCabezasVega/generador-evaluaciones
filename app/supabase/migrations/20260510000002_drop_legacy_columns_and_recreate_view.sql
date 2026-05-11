@@ -1,6 +1,6 @@
 -- ============================================================
 -- PR5 — Drop columnas legacy + recrear VIEW
--- Esta migración usa DROP IF EXISTS y CREATE OR REPLACE para ser idempotente.
+-- Esta migración usa DROP IF EXISTS y luego CREATE VIEW para recrear la vista de forma segura.
 -- Es seguro ejecutarla en orden automático siempre que las columnas nuevas
 -- (timing_qa_category_hours) existan (migración 20260510000000_create_timing_categories.sql previa).
 -- ============================================================

@@ -82,11 +82,19 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (body.hex_color !== undefined && !HEX_REGEX.test(body.hex_color)) {
-    return NextResponse.json(
-      { error: "hex_color debe tener formato #RRGGBB" },
-      { status: 400 },
-    );
+  if (body.hex_color !== undefined) {
+    if (typeof body.hex_color !== "string") {
+      return NextResponse.json(
+        { error: "hex_color debe ser una cadena de texto" },
+        { status: 400 },
+      );
+    }
+    if (!HEX_REGEX.test(body.hex_color.trim())) {
+      return NextResponse.json(
+        { error: "hex_color debe tener formato #RRGGBB" },
+        { status: 400 },
+      );
+    }
   }
 
   const name = body.name.trim();

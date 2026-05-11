@@ -64,7 +64,13 @@ export async function PATCH(
   }
 
   if (body.hex_color !== undefined) {
-    if (!HEX_REGEX.test(body.hex_color)) {
+    if (typeof body.hex_color !== "string") {
+      return NextResponse.json(
+        { error: "hex_color debe ser una cadena de texto" },
+        { status: 400 },
+      );
+    }
+    if (!HEX_REGEX.test(body.hex_color.trim())) {
       return NextResponse.json(
         { error: "hex_color debe tener formato #RRGGBB" },
         { status: 400 },

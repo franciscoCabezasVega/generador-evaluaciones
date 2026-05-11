@@ -484,11 +484,7 @@ export const timingService = {
       if (touchError) throw touchError;
 
       // Guardar entries existentes (+ sus horas por categoría) antes de borrar
-      const { data: existingEntries } = await client
-        .from("timing_qa_entries")
-        .select("id, task_qa_id")
-        .eq("timing_id", id);
-
+      // Si esta lectura falla, abortamos para no dejar el timing sin posibilidad de rollback
       type ExistingEntry = { id: string; task_qa_id: string };
       type ExistingCatHour = {
         id: string;
@@ -496,15 +492,29 @@ export const timingService = {
         category_id: string;
         hours: number;
       };
+      const { data: existingEntries, error: existingEntriesError } =
+        await client
+          .from("timing_qa_entries")
+          .select("id, task_qa_id")
+          .eq("timing_id", id);
+      if (existingEntriesError)
+        throw new Error(
+          `Error reading existing QA entries: ${existingEntriesError.message}`,
+        );
+
       const savedEntries: ExistingEntry[] =
         (existingEntries as ExistingEntry[] | null) ?? [];
       let savedCategoryHours: ExistingCatHour[] = [];
       if (savedEntries.length > 0) {
         const savedEntryIds = savedEntries.map((e) => e.id);
-        const { data: savedCh } = await client
+        const { data: savedCh, error: savedChError } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", savedEntryIds);
+        if (savedChError)
+          throw new Error(
+            `Error reading existing category hours: ${savedChError.message}`,
+          );
         savedCategoryHours = (savedCh as ExistingCatHour[] | null) ?? [];
       }
 
