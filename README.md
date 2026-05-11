@@ -97,6 +97,7 @@ Todos los valores de dominio son gestionables desde la sección **Configuración
 | **Tipos de Proyecto** | Clasificación funcional de las tareas (tabla `project_types`) |
 | **Complejidades** | Tallas de esfuerzo (XS, S, M, L, XL u otras) |
 | **Miembros QA** | Personas que pueden ser asignadas a una tarea |
+| **Categorías de Timing** | Tipos de tiempo registrados por QA (p. ej. Testing efectivo, Espera de fixes, Re-test) |
 
 Esto permite que distintas organizaciones o equipos usen la misma instancia con su propia estructura, sin hardcodear valores en el código.
 
@@ -412,7 +413,8 @@ app/
 │   │   │   │   ├── project-types/     # Tipos de proyecto (tabla: project_types)
 │   │   │   │   ├── squads/            # Equipos
 │   │   │   │   ├── complexities/      # Complejidades
-│   │   │   │   └── qa-members/        # Miembros QA
+│   │   │   │   ├── qa-members/        # Miembros QA
+│   │   │   │   └── timing-categories/ # Categorías de tiempo para timings
 │   │   │   ├── reports/               # API de reportes
 │   │   │   │   ├── route.ts           # GET, POST
 │   │   │   │   └── [id]/route.ts      # GET
@@ -492,8 +494,11 @@ app/
 │
 ├── supabase/
 │   └── migrations/                    # Migraciones SQL versionadas
-│       ├── 20260508000000_baseline_indexes.sql           # Índices de rendimiento
-│       └── 20260509000000_rename_category_to_project_type.sql  # categories → project_types
+│           ├── 20260508000000_baseline_indexes.sql               # Índices de rendimiento
+│           ├── 20260509000000_rename_category_to_project_type.sql # categories → project_types
+│           ├── 20260510000000_create_timing_categories.sql       # Tabla timing_categories + tabla puente
+│           ├── 20260510000001_migrate_timing_data.sql            # Backfill de horas históricas
+│           └── 20260510000002_drop_legacy_columns_and_recreate_view.sql # Drop columnas legacy + recrear VIEW
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright

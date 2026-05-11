@@ -128,7 +128,10 @@ class SessionManager {
         );
       });
 
-      this._inflight = Promise.race([supabase.auth.getSession(), timeoutPromise])
+      this._inflight = Promise.race([
+        supabase.auth.getSession(),
+        timeoutPromise,
+      ])
         .then(
           (result) => {
             clearTimeout(inflightTimeoutId);

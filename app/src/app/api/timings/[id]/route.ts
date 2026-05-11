@@ -98,23 +98,34 @@ export async function PUT(
         if (!entry.qa_name || entry.qa_name.trim() === "") {
           throw new Error(`QA entry ${i + 1}: qa_name is required`);
         }
-        validateHours(
-          entry.effective_testing_hours,
-          `QA ${entry.qa_name}: effective_testing_hours`,
-        );
-        validateHours(
-          entry.waiting_environment_hours,
-          `QA ${entry.qa_name}: waiting_environment_hours`,
-        );
-        validateHours(
-          entry.waiting_development_fixes_hours,
-          `QA ${entry.qa_name}: waiting_development_fixes_hours`,
-        );
-        validateHours(entry.retest_hours, `QA ${entry.qa_name}: retest_hours`);
-        validateHours(
-          entry.clarification_hours,
-          `QA ${entry.qa_name}: clarification_hours`,
-        );
+
+        if (
+          !entry.hours_by_category ||
+          typeof entry.hours_by_category !== "object" ||
+          Array.isArray(entry.hours_by_category)
+        ) {
+          throw new Error(
+            `QA ${entry.qa_name}: hours_by_category must be an object`,
+          );
+        }
+
+        let entryTotal = 0;
+        for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+          if (!catId || catId.trim() === "") {
+            throw new Error(`QA ${entry.qa_name}: category id cannot be empty`);
+          }
+          validateHours(
+            hours as number,
+            `QA ${entry.qa_name}: category ${catId}`,
+          );
+          entryTotal += hours as number;
+        }
+
+        if (entryTotal === 0) {
+          throw new Error(
+            `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
+          );
+        }
       }
 
       // Check for duplicate QA names

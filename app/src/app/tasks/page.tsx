@@ -761,7 +761,14 @@ export default function TasksPage() {
                                         Fecha Esfuerzo:
                                       </span>
                                       <span className="text-emerald-300 num">
-                                        {(() => { const d = parseISO(task.effort_score_date); return isValid(d) ? formatDate(d, "dd/MM/yyyy") : task.effort_score_date; })()}
+                                        {(() => {
+                                          const d = parseISO(
+                                            task.effort_score_date,
+                                          );
+                                          return isValid(d)
+                                            ? formatDate(d, "dd/MM/yyyy")
+                                            : task.effort_score_date;
+                                        })()}
                                       </span>
                                     </span>
                                   )}

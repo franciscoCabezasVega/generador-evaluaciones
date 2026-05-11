@@ -22,14 +22,6 @@ interface Tooltip {
   content: string;
 }
 
-const COLORS = {
-  effective_testing: "#3B82F6",
-  waiting_environment: "#A855F7",
-  waiting_development_fixes: "#F97316",
-  retest: "#EF4444",
-  clarification: "#EAB308",
-};
-
 // Componente KPI Card
 interface KPICardProps {
   label: string;
@@ -281,6 +273,16 @@ export function TimingMetricsComparisonChart({
   metrics,
   loading = false,
 }: TimingMetricsProps) {
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const slugToId = timingCategories.reduce(
+    (a, c) => {
+      a[c.slug] = c.id;
+      return a;
+    },
+    {} as Record<string, string>,
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-80 bg-gray-50 rounded-lg">
@@ -310,36 +312,15 @@ export function TimingMetricsComparisonChart({
               <th className="text-left py-3 px-4 font-semibold text-gray-800">
                 Producto
               </th>
-              <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
-                title="Horas promedio de testing efectivo (pruebas activas)"
-              >
-                Testing
-              </th>
-              <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
-                title="Horas promedio de espera por disponibilidad de ambiente"
-              >
-                Espera Amb.
-              </th>
-              <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
-                title="Horas promedio de espera por correcciones del desarrollo"
-              >
-                Espera Fix
-              </th>
-              <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
-                title="Horas promedio invertidas en re-verificar correcciones"
-              >
-                Retest
-              </th>
-              <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
-                title="Horas promedio en comunicación y clarificación de requerimientos"
-              >
-                Clarif.
-              </th>
+              {activeCategories.map((cat) => (
+                <th
+                  key={cat.id}
+                  className="text-center py-3 px-4 font-semibold text-gray-700"
+                  title={cat.name}
+                >
+                  {cat.name}
+                </th>
+              ))}
               <th
                 className="text-center py-3 px-4 font-semibold text-gray-700"
                 title="Horas promedio totales por tarea"
@@ -363,90 +344,30 @@ export function TimingMetricsComparisonChart({
                 <td className="py-4 px-4 font-medium text-gray-900">
                   {metric.product_type}
                 </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center justify-center">
-                    <div className="text-right">
-                      <p className="font-semibold text-blue-600">
-                        {metric.avg_effective_testing_hours.toFixed(2)}h
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(
-                          (metric.avg_effective_testing_hours /
-                            metric.avg_total_hours) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center justify-center">
-                    <div className="text-right">
-                      <p className="font-semibold text-purple-600">
-                        {metric.avg_waiting_environment_hours.toFixed(2)}h
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(
-                          (metric.avg_waiting_environment_hours /
-                            metric.avg_total_hours) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center justify-center">
-                    <div className="text-right">
-                      <p className="font-semibold text-orange-600">
-                        {metric.avg_waiting_development_fixes_hours.toFixed(2)}h
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(
-                          (metric.avg_waiting_development_fixes_hours /
-                            metric.avg_total_hours) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center justify-center">
-                    <div className="text-right">
-                      <p className="font-semibold text-red-600">
-                        {metric.avg_retest_hours.toFixed(2)}h
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(
-                          (metric.avg_retest_hours / metric.avg_total_hours) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center justify-center">
-                    <div className="text-right">
-                      <p className="font-semibold text-yellow-600">
-                        {metric.avg_clarification_hours.toFixed(2)}h
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {(
-                          (metric.avg_clarification_hours /
-                            metric.avg_total_hours) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </p>
-                    </div>
-                  </div>
-                </td>
+                {activeCategories.map((cat) => {
+                  const avg = metric.averages_by_category?.[cat.id] ?? 0;
+                  const pct =
+                    metric.avg_total_hours > 0
+                      ? (avg / metric.avg_total_hours) * 100
+                      : 0;
+                  return (
+                    <td key={cat.id} className="py-4 px-4">
+                      <div className="flex items-center justify-center">
+                        <div className="text-right">
+                          <p
+                            className="font-semibold"
+                            style={{ color: cat.hex_color }}
+                          >
+                            {avg.toFixed(2)}h
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {pct.toFixed(0)}%
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                  );
+                })}
                 <td className="py-4 px-4">
                   <div className="flex items-center justify-center">
                     <div className="text-right">
@@ -471,12 +392,24 @@ export function TimingMetricsComparisonChart({
       {/* Insights */}
       <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
         {metrics.map((metric) => {
-          const totalWaiting =
-            metric.avg_waiting_environment_hours +
-            metric.avg_waiting_development_fixes_hours +
-            metric.avg_clarification_hours;
+          const effectiveId = slugToId["qa_testing"];
+          const retestId = slugToId["qa_ready_for_testing"];
+          const avgEffective = effectiveId
+            ? (metric.averages_by_category?.[effectiveId] ?? 0)
+            : 0;
+          const avgRetest = retestId
+            ? (metric.averages_by_category?.[retestId] ?? 0)
+            : 0;
+          const totalWaiting = activeCategories
+            .filter((c) => c.slug !== "qa_testing")
+            .reduce(
+              (s, c) => s + (metric.averages_by_category?.[c.id] ?? 0),
+              0,
+            );
           const efficiency =
-            (metric.avg_effective_testing_hours / metric.avg_total_hours) * 100;
+            metric.avg_total_hours > 0
+              ? (avgEffective / metric.avg_total_hours) * 100
+              : 0;
 
           return (
             <div
@@ -504,9 +437,9 @@ export function TimingMetricsComparisonChart({
                 <div className="flex justify-between">
                   <span>Calidad (retest)</span>
                   <span
-                    className={`font-bold ${metric.avg_retest_hours < 0.5 ? "text-green-600" : metric.avg_retest_hours < 1 ? "text-yellow-600" : "text-red-600"}`}
+                    className={`font-bold ${avgRetest < 0.5 ? "text-green-600" : avgRetest < 1 ? "text-yellow-600" : "text-red-600"}`}
                   >
-                    {metric.avg_retest_hours.toFixed(2)}h
+                    {avgRetest.toFixed(2)}h
                   </span>
                 </div>
               </div>
@@ -523,22 +456,34 @@ export function SquadTimingSummaryCard({
 }: {
   metric: SquadTimingMetrics;
 }) {
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const slugToId = timingCategories.reduce(
+    (a, c) => {
+      a[c.slug] = c.id;
+      return a;
+    },
+    {} as Record<string, string>,
+  );
+
+  const effectiveTestingId = slugToId["qa_testing"];
+  const retestId = slugToId["qa_ready_for_testing"];
+  const totalEffective = effectiveTestingId
+    ? (metric.totals_by_category?.[effectiveTestingId] ?? 0)
+    : 0;
+  const totalRetest = retestId
+    ? (metric.totals_by_category?.[retestId] ?? 0)
+    : 0;
+
   // Calcular métricas derivadas
-  const totalWaitingHours =
-    metric.total_waiting_environment_hours +
-    metric.total_waiting_development_fixes_hours +
-    metric.total_clarification_hours;
+  const totalWaitingHours = activeCategories
+    .filter((c) => c.slug !== "qa_testing")
+    .reduce((s, c) => s + (metric.totals_by_category?.[c.id] ?? 0), 0);
 
   const efficiencyRate =
-    metric.total_hours > 0
-      ? (metric.total_effective_testing_hours / metric.total_hours) * 100
-      : 0;
-
+    metric.total_hours > 0 ? (totalEffective / metric.total_hours) * 100 : 0;
   const retestRate =
-    metric.total_effective_testing_hours > 0
-      ? (metric.total_retest_hours / metric.total_effective_testing_hours) * 100
-      : 0;
-
+    totalEffective > 0 ? (totalRetest / totalEffective) * 100 : 0;
   const qualityScore = Math.max(0, 100 - retestRate);
 
   return (
@@ -606,121 +551,35 @@ export function SquadTimingSummaryCard({
             Distribución de Horas
           </h4>
           <div className="space-y-3">
-            {/* Effective Testing */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700 font-medium">
-                  Testing Efectivo
-                </span>
-                <span
-                  className="font-semibold"
-                  style={{ color: COLORS.effective_testing }}
-                >
-                  {metric.total_effective_testing_hours.toFixed(1)}h
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="rounded-full h-2 transition-all"
-                  style={{
-                    width: `${(metric.total_effective_testing_hours / metric.total_hours) * 100}%`,
-                    backgroundColor: COLORS.effective_testing,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Waiting Environment */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700 font-medium">
-                  Espera Ambiente
-                </span>
-                <span
-                  className="font-semibold"
-                  style={{ color: COLORS.waiting_environment }}
-                >
-                  {metric.total_waiting_environment_hours.toFixed(1)}h
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="rounded-full h-2 transition-all"
-                  style={{
-                    width: `${(metric.total_waiting_environment_hours / metric.total_hours) * 100}%`,
-                    backgroundColor: COLORS.waiting_environment,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Waiting Development */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700 font-medium">Espera Fixes</span>
-                <span
-                  className="font-semibold"
-                  style={{ color: COLORS.waiting_development_fixes }}
-                >
-                  {metric.total_waiting_development_fixes_hours.toFixed(1)}h
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="rounded-full h-2 transition-all"
-                  style={{
-                    width: `${(metric.total_waiting_development_fixes_hours / metric.total_hours) * 100}%`,
-                    backgroundColor: COLORS.waiting_development_fixes,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Retest */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700 font-medium">Retest</span>
-                <span
-                  className="font-semibold"
-                  style={{ color: COLORS.retest }}
-                >
-                  {metric.total_retest_hours.toFixed(1)}h
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="rounded-full h-2 transition-all"
-                  style={{
-                    width: `${(metric.total_retest_hours / metric.total_hours) * 100}%`,
-                    backgroundColor: COLORS.retest,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Clarification */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700 font-medium">
-                  Clarificaciones
-                </span>
-                <span
-                  className="font-semibold"
-                  style={{ color: COLORS.clarification }}
-                >
-                  {metric.total_clarification_hours.toFixed(1)}h
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="rounded-full h-2 transition-all"
-                  style={{
-                    width: `${(metric.total_clarification_hours / metric.total_hours) * 100}%`,
-                    backgroundColor: COLORS.clarification,
-                  }}
-                />
-              </div>
-            </div>
+            {activeCategories.map((cat) => {
+              const hours = metric.totals_by_category?.[cat.id] ?? 0;
+              const pct =
+                metric.total_hours > 0 ? (hours / metric.total_hours) * 100 : 0;
+              return (
+                <div key={cat.id}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-700 font-medium">
+                      {cat.name}
+                    </span>
+                    <span
+                      className="font-semibold"
+                      style={{ color: cat.hex_color }}
+                    >
+                      {hours.toFixed(1)}h
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="rounded-full h-2 transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: cat.hex_color,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -810,6 +669,8 @@ export function QAHoursBarChart({
     y: 0,
     content: "",
   });
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
 
   if (loading) {
     return (
@@ -878,76 +739,26 @@ export function QAHoursBarChart({
 
                 {/* Stacked bar */}
                 <div className="flex h-8 w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                  <div
-                    onMouseEnter={(e) =>
-                      handleBarSectionMouseEnter(
-                        e,
-                        `Testing Efectivo: ${qa.total_effective_testing_hours.toFixed(1)}h`,
-                      )
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                    style={{
-                      width: `${(qa.total_effective_testing_hours / barMaxWidth) * 100}%`,
-                      backgroundColor: COLORS.effective_testing,
-                    }}
-                  />
-                  <div
-                    onMouseEnter={(e) =>
-                      handleBarSectionMouseEnter(
-                        e,
-                        `Espera Ambiente: ${qa.total_waiting_environment_hours.toFixed(1)}h`,
-                      )
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                    style={{
-                      width: `${(qa.total_waiting_environment_hours / barMaxWidth) * 100}%`,
-                      backgroundColor: COLORS.waiting_environment,
-                    }}
-                  />
-                  <div
-                    onMouseEnter={(e) =>
-                      handleBarSectionMouseEnter(
-                        e,
-                        `Espera Fixes: ${qa.total_waiting_development_fixes_hours.toFixed(1)}h`,
-                      )
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                    style={{
-                      width: `${(qa.total_waiting_development_fixes_hours / barMaxWidth) * 100}%`,
-                      backgroundColor: COLORS.waiting_development_fixes,
-                    }}
-                  />
-                  <div
-                    onMouseEnter={(e) =>
-                      handleBarSectionMouseEnter(
-                        e,
-                        `Retest: ${qa.total_retest_hours.toFixed(1)}h`,
-                      )
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                    style={{
-                      width: `${(qa.total_retest_hours / barMaxWidth) * 100}%`,
-                      backgroundColor: COLORS.retest,
-                    }}
-                  />
-                  <div
-                    onMouseEnter={(e) =>
-                      handleBarSectionMouseEnter(
-                        e,
-                        `Clarificaciones: ${qa.total_clarification_hours.toFixed(1)}h`,
-                      )
-                    }
-                    onMouseLeave={handleMouseLeave}
-                    className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                    style={{
-                      width: `${(qa.total_clarification_hours / barMaxWidth) * 100}%`,
-                      backgroundColor: COLORS.clarification,
-                    }}
-                  />
+                  {activeCategories.map((cat) => {
+                    const hours = qa.totals_by_category?.[cat.id] ?? 0;
+                    return (
+                      <div
+                        key={cat.id}
+                        onMouseEnter={(e) =>
+                          handleBarSectionMouseEnter(
+                            e,
+                            `${cat.name}: ${hours.toFixed(1)}h`,
+                          )
+                        }
+                        onMouseLeave={handleMouseLeave}
+                        className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
+                        style={{
+                          width: `${(hours / barMaxWidth) * 100}%`,
+                          backgroundColor: cat.hex_color,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -987,22 +798,13 @@ export function QAHoursBarChart({
           Tipos de Actividades:
         </p>
         <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-          {[
-            { label: "Testing Efectivo", color: COLORS.effective_testing },
-            { label: "Espera por Ambiente", color: COLORS.waiting_environment },
-            {
-              label: "Espera por Fixes",
-              color: COLORS.waiting_development_fixes,
-            },
-            { label: "Retest", color: COLORS.retest },
-            { label: "Clarificaciones", color: COLORS.clarification },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-2">
+          {activeCategories.map((cat) => (
+            <div key={cat.id} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded"
-                style={{ backgroundColor: item.color }}
+                style={{ backgroundColor: cat.hex_color }}
               />
-              <span>{item.label}</span>
+              <span>{cat.name}</span>
             </div>
           ))}
         </div>
@@ -1024,6 +826,15 @@ export function QAEfficiencyChart({
   tasks = [],
 }: QAEfficiencyChartProps) {
   const [expandedQA, setExpandedQA] = useState<Set<string>>(new Set());
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const slugToId = timingCategories.reduce(
+    (a, c) => {
+      a[c.slug] = c.id;
+      return a;
+    },
+    {} as Record<string, string>,
+  );
 
   if (loading || !qaMetrics || qaMetrics.length === 0) {
     return null;
@@ -1051,11 +862,7 @@ export function QAEfficiencyChart({
       taskLink: string;
       tshirtSize: string;
       project_type: string;
-      effectiveTesting: number;
-      waitingEnvironment: number;
-      waitingDevFixes: number;
-      retest: number;
-      clarification: number;
+      hours_by_category: Record<string, number>;
       total: number;
     }[] = [];
 
@@ -1071,11 +878,7 @@ export function QAEfficiencyChart({
         taskLink: task?.task_link || "",
         tshirtSize: task?.tshirt_size || "",
         project_type: task?.project_type || "",
-        effectiveTesting: qaEntry.effective_testing_hours,
-        waitingEnvironment: qaEntry.waiting_environment_hours,
-        waitingDevFixes: qaEntry.waiting_development_fixes_hours,
-        retest: qaEntry.retest_hours,
-        clarification: qaEntry.clarification_hours,
+        hours_by_category: qaEntry.hours_by_category ?? {},
         total: qaEntry.total_hours,
       });
     }
@@ -1086,59 +889,59 @@ export function QAEfficiencyChart({
   const hasExpandableData = timings.length > 0 && tasks.length > 0;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6">
-      <h3 className="mb-6 text-lg font-semibold text-gray-900">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
+      <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-gray-100">
         Eficiencia y Retest por QA
       </h3>
 
       {hasExpandableData && (
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           Haz clic en una fila para ver el detalle de tareas por QA
         </p>
       )}
 
-      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-gray-300">
+            <tr className="border-b-2 border-gray-300 dark:border-gray-600">
               <th
-                className="text-left py-3 px-3 font-semibold text-gray-800"
+                className="text-left py-3 px-3 font-semibold text-gray-800 dark:text-gray-200"
                 title="Nombre del QA"
               >
                 QA
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
                 title="Cantidad de tareas asignadas"
               >
                 Tareas
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
-                title="Horas totales de testing efectivo (pruebas activas)"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                title="Horas totales en estado QA - Testing (pruebas activas)"
               >
-                Testing
+                QA Testing
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
-                title="Horas totales invertidas en re-verificar correcciones del desarrollo"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                title="Horas totales en estado QA - Ready for Testing (re-encoladas para test)"
               >
-                Retest
+                QA Ready
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
                 title="Porcentaje de horas en testing efectivo vs horas totales. Mayor % = mejor aprovechamiento del tiempo"
               >
                 Eficiencia
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
                 title="Porcentaje de horas de retest respecto al testing efectivo. Menor % = mejor calidad del desarrollo"
               >
                 Tasa Retest
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700"
+                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
                 title="Horas promedio invertidas por tarea"
               >
                 Promedio/Tarea
@@ -1157,14 +960,14 @@ export function QAEfficiencyChart({
                 return (
                   <React.Fragment key={qa.qa_name}>
                     <tr
-                      className={`${idx % 2 === 0 ? "bg-gray-50" : "bg-white"} ${hasExpandableData ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""} ${isExpanded ? "bg-blue-50" : ""}`}
+                      className={`${idx % 2 === 0 ? "bg-gray-50 dark:bg-gray-800/50" : "bg-white dark:bg-gray-900"} ${hasExpandableData ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" : ""} ${isExpanded ? "bg-blue-50 dark:bg-blue-900/30" : ""}`}
                       onClick={
                         hasExpandableData
                           ? () => toggleExpand(qa.qa_name)
                           : undefined
                       }
                     >
-                      <td className="py-3 px-3 font-medium text-gray-900">
+                      <td className="py-3 px-3 font-medium text-gray-900 dark:text-gray-100">
                         <div className="flex items-center gap-2">
                           {hasExpandableData && (
                             <span
@@ -1182,10 +985,21 @@ export function QAEfficiencyChart({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-blue-600">
-                        {qa.total_effective_testing_hours.toFixed(1)}h
+                        {(slugToId["qa_testing"]
+                          ? (qa.totals_by_category?.[slugToId["qa_testing"]] ??
+                            0)
+                          : 0
+                        ).toFixed(1)}
+                        h
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-red-600">
-                        {qa.total_retest_hours.toFixed(1)}h
+                        {(slugToId["qa_ready_for_testing"]
+                          ? (qa.totals_by_category?.[
+                              slugToId["qa_ready_for_testing"]
+                            ] ?? 0)
+                          : 0
+                        ).toFixed(1)}
+                        h
                       </td>
                       <td className="py-3 px-3 text-center">
                         <span
@@ -1222,63 +1036,42 @@ export function QAEfficiencyChart({
                     {isExpanded && taskDetails.length > 0 && (
                       <tr>
                         <td colSpan={7} className="p-0">
-                          <div className="bg-slate-50 border-t border-b border-blue-200">
+                          <div className="bg-slate-100 dark:bg-[#0f1829] border-t-2 border-b-2 border-indigo-300 dark:border-indigo-800">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="border-b border-slate-200">
-                                  <th className="text-left py-2 px-3 font-semibold text-slate-600">
+                                <tr className="bg-indigo-50 dark:bg-indigo-950/60 border-b border-indigo-200 dark:border-indigo-800/80">
+                                  <th className="text-left py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300">
                                     #
                                   </th>
                                   <th
-                                    className="text-left py-2 px-3 font-semibold text-slate-600"
+                                    className="text-left py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
                                     title="Nombre de la tarea con enlace al ticket"
                                   >
                                     Tarea
                                   </th>
                                   <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
+                                    className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
                                     title="Complejidad asignada a la tarea"
                                   >
                                     Complejidad
                                   </th>
                                   <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
+                                    className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
                                     title="Clasificación de la tarea (Nueva funcionalidad, Bug fix, etc.)"
                                   >
                                     Tipo Proyecto
                                   </th>
+                                  {activeCategories.map((cat) => (
+                                    <th
+                                      key={cat.id}
+                                      className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
+                                      title={cat.name}
+                                    >
+                                      {cat.name}
+                                    </th>
+                                  ))}
                                   <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
-                                    title="Horas de testing efectivo (pruebas activas)"
-                                  >
-                                    Testing
-                                  </th>
-                                  <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
-                                    title="Horas de espera por disponibilidad de ambiente de pruebas"
-                                  >
-                                    Esp. Ambiente
-                                  </th>
-                                  <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
-                                    title="Horas de espera por correcciones del desarrollo"
-                                  >
-                                    Esp. Corrección
-                                  </th>
-                                  <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
-                                    title="Horas invertidas en re-verificar correcciones"
-                                  >
-                                    Retest
-                                  </th>
-                                  <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
-                                    title="Horas en comunicación y clarificación de requerimientos"
-                                  >
-                                    Aclaración
-                                  </th>
-                                  <th
-                                    className="text-center py-2 px-3 font-semibold text-slate-600"
+                                    className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
                                     title="Total de horas invertidas por el QA en esta tarea"
                                   >
                                     Total
@@ -1290,10 +1083,12 @@ export function QAEfficiencyChart({
                                   <tr
                                     key={detail.taskId}
                                     className={
-                                      taskIdx % 2 === 0 ? "bg-white/50" : ""
+                                      taskIdx % 2 === 0
+                                        ? "bg-white dark:bg-white/[0.04] border-b border-slate-100 dark:border-white/5"
+                                        : "bg-slate-50 dark:bg-transparent border-b border-slate-100 dark:border-white/5"
                                     }
                                   >
-                                    <td className="py-2 px-3 text-slate-500 font-medium">
+                                    <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
                                       {taskIdx + 1}
                                     </td>
                                     <td className="py-2 px-3">
@@ -1308,7 +1103,7 @@ export function QAEfficiencyChart({
                                           {detail.taskName}
                                         </a>
                                       ) : (
-                                        <span className="font-medium text-slate-700">
+                                        <span className="font-medium text-slate-700 dark:text-slate-300">
                                           {detail.taskName}
                                         </span>
                                       )}
@@ -1327,23 +1122,21 @@ export function QAEfficiencyChart({
                                         </span>
                                       )}
                                     </td>
-                                    <td className="py-2 px-3 text-center text-blue-600 font-medium">
-                                      {detail.effectiveTesting}h
-                                    </td>
-                                    <td className="py-2 px-3 text-center text-purple-600 font-medium">
-                                      {detail.waitingEnvironment}h
-                                    </td>
-                                    <td className="py-2 px-3 text-center text-orange-600 font-medium">
-                                      {detail.waitingDevFixes}h
-                                    </td>
-                                    <td className="py-2 px-3 text-center text-red-600 font-medium">
-                                      {detail.retest}h
-                                    </td>
-                                    <td className="py-2 px-3 text-center text-yellow-600 font-medium">
-                                      {detail.clarification}h
-                                    </td>
-                                    <td className="py-2 px-3 text-center font-bold text-slate-800">
-                                      {detail.total}h
+                                    {activeCategories.map((cat) => (
+                                      <td
+                                        key={cat.id}
+                                        className="py-2 px-3 text-center font-medium"
+                                        style={{ color: cat.hex_color }}
+                                      >
+                                        {Number(
+                                          detail.hours_by_category?.[cat.id] ??
+                                            0,
+                                        ).toFixed(2)}
+                                        h
+                                      </td>
+                                    ))}
+                                    <td className="py-2 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                                      {Number(detail.total).toFixed(2)}h
                                     </td>
                                   </tr>
                                 ))}
@@ -1379,6 +1172,9 @@ export function QASummaryCards({
   qaMetrics,
   loading = false,
 }: QATimingMetricsProps) {
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1455,36 +1251,15 @@ export function QASummaryCards({
                 {/* Mini stacked bar */}
                 <div className="mt-4">
                   <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-100">
-                    <div
-                      style={{
-                        width: `${(qa.total_effective_testing_hours / qa.total_hours) * 100}%`,
-                        backgroundColor: COLORS.effective_testing,
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: `${(qa.total_waiting_environment_hours / qa.total_hours) * 100}%`,
-                        backgroundColor: COLORS.waiting_environment,
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: `${(qa.total_waiting_development_fixes_hours / qa.total_hours) * 100}%`,
-                        backgroundColor: COLORS.waiting_development_fixes,
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: `${(qa.total_retest_hours / qa.total_hours) * 100}%`,
-                        backgroundColor: COLORS.retest,
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: `${(qa.total_clarification_hours / qa.total_hours) * 100}%`,
-                        backgroundColor: COLORS.clarification,
-                      }}
-                    />
+                    {activeCategories.map((cat) => (
+                      <div
+                        key={cat.id}
+                        style={{
+                          width: `${qa.total_hours > 0 ? ((qa.totals_by_category?.[cat.id] ?? 0) / qa.total_hours) * 100 : 0}%`,
+                          backgroundColor: cat.hex_color,
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1511,8 +1286,7 @@ interface QATaskEntry {
   taskName: string;
   taskLink: string;
   totalHours: number;
-  effectiveTestingHours: number;
-  retestHours: number;
+  hours_by_category: Record<string, number>;
 }
 
 interface SizeGroupData {
@@ -1574,7 +1348,8 @@ export function TshirtSizeComparison({
     y: 0,
     content: "",
   });
-  const { complexities } = useCatalogData();
+  const { complexities, timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
 
   // Derivar equivalente dinámico de TSHIRT_SIZE_HOURS y TSHIRT_SIZES desde el catálogo
   const sizeHoursMap = Object.fromEntries(
@@ -1653,8 +1428,7 @@ export function TshirtSizeComparison({
         taskName: task.name,
         taskLink: task.task_link || "",
         totalHours: totalH,
-        effectiveTestingHours: Number(qaEntry.effective_testing_hours) || 0,
-        retestHours: Number(qaEntry.retest_hours) || 0,
+        hours_by_category: qaEntry.hours_by_category ?? {},
       });
     }
   }
@@ -2068,18 +1842,15 @@ export function TshirtSizeComparison({
                         >
                           Tarea
                         </th>
-                        <th
-                          className="text-center py-2 px-2 font-semibold text-gray-600"
-                          title="Horas de testing efectivo (pruebas activas)"
-                        >
-                          Testing
-                        </th>
-                        <th
-                          className="text-center py-2 px-2 font-semibold text-gray-600"
-                          title="Horas invertidas en re-verificar correcciones"
-                        >
-                          Retest
-                        </th>
+                        {activeCategories.map((cat) => (
+                          <th
+                            key={cat.id}
+                            className="text-center py-2 px-2 font-semibold text-gray-600"
+                            title={cat.name}
+                          >
+                            {cat.name}
+                          </th>
+                        ))}
                         <th
                           className="text-center py-2 px-2 font-semibold text-gray-600"
                           title="Total de horas invertidas por el QA en esta tarea"
@@ -2134,14 +1905,20 @@ export function TshirtSizeComparison({
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1.5 px-2 text-center text-blue-600 font-medium">
-                                {entry.effectiveTestingHours}h
-                              </td>
-                              <td className="py-1.5 px-2 text-center text-red-600 font-medium">
-                                {entry.retestHours}h
-                              </td>
+                              {activeCategories.map((cat) => (
+                                <td
+                                  key={cat.id}
+                                  className="py-1.5 px-2 text-center font-medium"
+                                  style={{ color: cat.hex_color }}
+                                >
+                                  {Number(
+                                    entry.hours_by_category?.[cat.id] ?? 0,
+                                  ).toFixed(2)}
+                                  h
+                                </td>
+                              ))}
                               <td className="py-1.5 px-2 text-center font-bold text-gray-800">
-                                {entry.totalHours}h
+                                {Number(entry.totalHours).toFixed(2)}h
                               </td>
                               <td className="py-1.5 px-2 text-center">
                                 <span

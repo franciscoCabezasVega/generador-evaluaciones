@@ -5,6 +5,7 @@ import { Edit2, Trash2, AlertCircle, Users, Clock, Plus } from "lucide-react";
 import { parseISO, format, isValid } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/timingUtils";
+import { useCatalogData } from "@/hooks/useCatalogData";
 
 interface TimingsListProps {
   entries: TaskWithTiming[];
@@ -21,6 +22,15 @@ export default function TimingsList({
   onDelete,
   onRegister,
 }: TimingsListProps) {
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
+
+  /** Suma las horas de una categoría a través de todos los QA entries de un timing */
+  const sumCategoryHours = (timing: TaskTiming, categoryId: string) => {
+    return (timing.qa_entries ?? []).reduce((sum, e) => {
+      return sum + (e.hours_by_category?.[categoryId] ?? 0);
+    }, 0);
+  };
   if (loading) {
     return (
       <div className="space-y-2">
@@ -110,25 +120,36 @@ export default function TimingsList({
                       {entry.project_type}
                     </span>
                   )}
-                  {entry.effort_score_date && (() => {
-                    const d = parseISO(entry.effort_score_date);
-                    return (
-                      <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
-                        {isValid(d) ? format(d, "dd/MM/yyyy") : entry.effort_score_date}
-                      </span>
-                    );
-                  })()}
+                  {entry.effort_score_date &&
+                    (() => {
+                      const d = parseISO(entry.effort_score_date);
+                      return (
+                        <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
+                          {isValid(d)
+                            ? format(d, "dd/MM/yyyy")
+                            : entry.effort_score_date}
+                        </span>
+                      );
+                    })()}
                 </div>
 
-                {/* QA Asignados (de la tarea) */}
-                {Array.isArray(entry.assigned_qa) &&
-                  entry.assigned_qa.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      <Users
-                        size={14}
-                        className="text-gray-400 mt-0.5 shrink-0"
-                      />
-                      {entry.assigned_qa.map((name) => (
+                {/* QA — una sola fila: si hay timing, muestra los QA que registraron; si no, los asignados */}
+                {(() => {
+                  const qaNames =
+                    hasRegistered && (timing?.qa_entries ?? []).length > 0
+                      ? [
+                          ...new Set(
+                            (timing!.qa_entries ?? []).map((e) => e.qa_name),
+                          ),
+                        ]
+                      : Array.isArray(entry.assigned_qa)
+                        ? entry.assigned_qa
+                        : [];
+                  if (qaNames.length === 0) return null;
+                  return (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <Users size={13} className="text-gray-400 shrink-0" />
+                      {qaNames.map((name) => (
                         <span
                           key={name}
                           className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-medium text-blue-700"
@@ -137,52 +158,42 @@ export default function TimingsList({
                         </span>
                       ))}
                     </div>
-                  )}
+                  );
+                })()}
 
                 {/* Detalle de horas — solo si hay timing registrado */}
                 {hasRegistered && timing && (
                   <>
-                    {/* QA que registraron horas */}
-                    {(timing.qa_entries ?? []).length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        <Users
-                          size={14}
-                          className="text-gray-500 mt-0.5 shrink-0"
-                        />
-                        {(timing.qa_entries ?? []).map((e) => (
-                          <span
-                            key={e.id}
-                            className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs text-slate-600"
-                          >
-                            {e.qa_name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Mini cards de horas */}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <div className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700">
-                        <span className="font-semibold">Testing:</span>
-                        {formatTime(timing.effective_testing_hours)}
-                      </div>
-                      <div className="flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs text-purple-700">
-                        <span className="font-semibold">Espera Ambiente:</span>
-                        {formatTime(timing.waiting_environment_hours)}
-                      </div>
-                      <div className="flex items-center gap-1 rounded border border-orange-200 bg-orange-50 px-2 py-1 text-xs text-orange-700">
-                        <span className="font-semibold">Espera Fix:</span>
-                        {formatTime(timing.waiting_development_fixes_hours)}
-                      </div>
-                      <div className="flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
-                        <span className="font-semibold">Retest:</span>
-                        {formatTime(timing.retest_hours)}
-                      </div>
-                      <div className="flex items-center gap-1 rounded border border-yellow-200 bg-yellow-50 px-2 py-1 text-xs text-yellow-700">
-                        <span className="font-semibold">Clarificaciones:</span>
-                        {formatTime(timing.clarification_hours)}
-                      </div>
-                    </div>
+                    {/* Mini cards de horas por categoría — solo las que tienen horas */}
+                    {(() => {
+                      const catsWithHours = activeCategories.filter(
+                        (cat) => sumCategoryHours(timing, cat.id) > 0,
+                      );
+                      if (catsWithHours.length === 0) return null;
+                      return (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {catsWithHours.map((cat) => {
+                            const hours = sumCategoryHours(timing, cat.id);
+                            return (
+                              <div
+                                key={cat.id}
+                                className="flex items-center gap-1 rounded border px-2 py-0.5 text-xs"
+                                style={{
+                                  borderColor: `${cat.hex_color}55`,
+                                  backgroundColor: `${cat.hex_color}15`,
+                                  color: cat.hex_color,
+                                }}
+                              >
+                                <span className="font-semibold">
+                                  {cat.name}:
+                                </span>
+                                {formatTime(hours)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
 
                     {/* Breakdown por QA (si hay más de 1) */}
                     {(timing.qa_entries ?? []).length > 1 && (
@@ -194,10 +205,10 @@ export default function TimingsList({
                               key={qae.id}
                               className="flex items-center gap-2 text-xs text-gray-500"
                             >
-                              <span className="font-medium w-28 truncate">
+                              <span className="font-medium w-28 truncate text-gray-600">
                                 {qae.qa_name}
                               </span>
-                              <div className="flex-1 bg-gray-100 rounded-full h-1.5 border border-gray-300">
+                              <div className="flex-1 bg-gray-100 rounded-full h-1.5 border border-gray-200">
                                 <div
                                   className="h-1.5 rounded-full bg-blue-400"
                                   style={{
@@ -205,7 +216,7 @@ export default function TimingsList({
                                   }}
                                 />
                               </div>
-                              <span className="font-semibold">
+                              <span className="font-semibold text-gray-600 tabular-nums">
                                 {formatTime(total)}
                               </span>
                             </div>
@@ -215,8 +226,11 @@ export default function TimingsList({
                     )}
 
                     {/* Total */}
-                    <div className="mt-2 text-sm font-semibold text-gray-700">
-                      Total: {formatTime(timing.total_hours)}
+                    <div className="mt-1.5 text-xs font-semibold text-gray-500">
+                      Total:{" "}
+                      <span className="text-gray-700">
+                        {formatTime(timing.total_hours)}
+                      </span>
                     </div>
                   </>
                 )}
