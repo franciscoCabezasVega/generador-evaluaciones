@@ -51,6 +51,18 @@ export interface CatalogQAMember {
   updated_at: string;
 }
 
+export interface CatalogTimingCategory {
+  id: string;
+  slug: string;
+  name: string;
+  hex_color: string;
+  display_order: number;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   admin: "Administrador - Acceso completo",
   gestor: "Gestor - Gestiona tareas",
@@ -257,52 +269,30 @@ export interface TaskQA {
   updated_at: string;
 }
 
-// Timing QA Entry - Tiempos individuales por QA
+// Timing QA Entry - Tiempos individuales por QA (nueva estructura dinámica)
 export interface TimingQAEntry {
   id: string;
   timing_id: string;
   task_qa_id: string; // FK a task_qa
-  qa_name: string; // Populated via join para convenience (no está en la tabla)
-  effective_testing_hours: number;
-  waiting_environment_hours: number;
-  waiting_development_fixes_hours: number;
-  retest_hours: number;
-  clarification_hours: number;
-  total_hours: number; // Calculado automáticamente (generated column)
+  qa_name: string; // Populated via join para convenience
+  hours_by_category: Record<string, number>; // categoryId → hours
+  total_hours: number; // calculado cliente-side como sum(hours_by_category)
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateTimingQAEntryInput {
   qa_name: string; // Se usa para buscar/crear task_qa_id
-  effective_testing_hours: number;
-  waiting_environment_hours: number;
-  waiting_development_fixes_hours: number;
-  retest_hours: number;
-  clarification_hours: number;
+  hours_by_category: Record<string, number>; // categoryId → hours (solo entradas > 0)
 }
 
-export interface UpdateTimingQAEntryInput {
-  qa_name?: string; // Se usa para buscar/crear task_qa_id
-  effective_testing_hours?: number;
-  waiting_environment_hours?: number;
-  waiting_development_fixes_hours?: number;
-  retest_hours?: number;
-  clarification_hours?: number;
-}
-
-// Timing Types - Tiempos por fase de la tarea
+// Timing Types - Tiempos por tarea
 export interface TaskTiming {
   id: string;
   task_id: string;
   month: number;
   year: number;
-  effective_testing_hours: number;
-  waiting_environment_hours: number;
-  waiting_development_fixes_hours: number;
-  retest_hours: number;
-  clarification_hours: number;
-  total_hours: number; // Calculado automáticamente
+  total_hours: number; // calculado
   user_id: string;
   created_at: string;
   updated_at: string;
@@ -333,40 +323,24 @@ export interface FormattedTime {
   remaining_hours: number;
 }
 
-// Métricas de tiempos por product_type
+// Métricas de tiempos por product_type (estructura dinámica)
 export interface SquadTimingMetrics {
   product_type: string;
-  total_effective_testing_hours: number;
-  total_waiting_environment_hours: number;
-  total_waiting_development_fixes_hours: number;
-  total_retest_hours: number;
-  total_clarification_hours: number;
+  totals_by_category: Record<string, number>; // categoryId → total hours
+  averages_by_category: Record<string, number>; // categoryId → avg hours
   total_hours: number;
-  avg_effective_testing_hours: number;
-  avg_waiting_environment_hours: number;
-  avg_waiting_development_fixes_hours: number;
-  avg_retest_hours: number;
-  avg_clarification_hours: number;
   avg_total_hours: number;
   task_count: number;
 }
 
-// Métricas de tiempos por QA
+// Métricas de tiempos por QA (estructura dinámica)
 export interface QATimingMetrics {
   qa_name: string;
-  total_effective_testing_hours: number;
-  total_waiting_environment_hours: number;
-  total_waiting_development_fixes_hours: number;
-  total_retest_hours: number;
-  total_clarification_hours: number;
+  totals_by_category: Record<string, number>; // categoryId → total hours
+  averages_by_category: Record<string, number>; // categoryId → avg hours
   total_hours: number;
-  avg_effective_testing_hours: number;
-  avg_waiting_environment_hours: number;
-  avg_waiting_development_fixes_hours: number;
-  avg_retest_hours: number;
-  avg_clarification_hours: number;
   avg_total_hours: number;
   task_count: number;
-  efficiency_rate: number; // % testing efectivo vs total
-  retest_rate: number; // % retest vs testing efectivo
+  efficiency_rate: number; // % testing efectivo vs total (calculado por slug)
+  retest_rate: number; // % retest vs testing efectivo (calculado por slug)
 }

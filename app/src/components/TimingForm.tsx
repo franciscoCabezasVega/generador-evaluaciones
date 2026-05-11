@@ -42,11 +42,7 @@ interface TimingFormProps {
 
 interface QAFormData {
   qa_name: string;
-  effective_testing_hours: number;
-  waiting_environment_hours: number;
-  waiting_development_fixes_hours: number;
-  retest_hours: number;
-  clarification_hours: number;
+  hours_by_category: Record<string, number>;
   isExpanded: boolean;
 }
 
@@ -82,11 +78,7 @@ function TimingFormComponent(
         : [];
       const qaEntries: QAFormData[] = assignedQAs.map((qaName) => ({
         qa_name: qaName,
-        effective_testing_hours: 0,
-        waiting_environment_hours: 0,
-        waiting_development_fixes_hours: 0,
-        retest_hours: 0,
-        clarification_hours: 0,
+        hours_by_category: {},
         isExpanded: true,
       }));
       return {
@@ -113,28 +105,13 @@ function TimingFormComponent(
       Array.isArray(data.qa_entries) ? data.qa_entries : []
     ).map((e: Record<string, unknown>) => ({
       qa_name: String(e.qa_name || ""),
-      effective_testing_hours: Number(e.effective_testing_hours) || 0,
-      waiting_environment_hours: Number(e.waiting_environment_hours) || 0,
-      waiting_development_fixes_hours:
-        Number(e.waiting_development_fixes_hours) || 0,
-      retest_hours: Number(e.retest_hours) || 0,
-      clarification_hours: Number(e.clarification_hours) || 0,
+      hours_by_category: (e.hours_by_category &&
+      typeof e.hours_by_category === "object" &&
+      !Array.isArray(e.hours_by_category)
+        ? e.hours_by_category
+        : {}) as Record<string, number>,
       isExpanded: true,
     }));
-
-    // If editing with no QA entries, create one from the parent timing data
-    if (qaEntries.length === 0 && isEditing) {
-      qaEntries.push({
-        qa_name: "No asignado",
-        effective_testing_hours: Number(data.effective_testing_hours) || 0,
-        waiting_environment_hours: Number(data.waiting_environment_hours) || 0,
-        waiting_development_fixes_hours:
-          Number(data.waiting_development_fixes_hours) || 0,
-        retest_hours: Number(data.retest_hours) || 0,
-        clarification_hours: Number(data.clarification_hours) || 0,
-        isExpanded: true,
-      });
-    }
 
     return {
       task_id: String(data.task_id || ""),
@@ -149,7 +126,8 @@ function TimingFormComponent(
   const [formData, setFormData] = useState<FormDataState>(initialFormData);
   const initialDataRef = useRef<FormDataState>(initialFormData);
 
-  const { products } = useCatalogData();
+  const { products, timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter((c) => c.is_active);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [unsavedConfirm, setUnsavedConfirm] = useState(false);
@@ -246,11 +224,7 @@ function TimingFormComponent(
           return (
             existing || {
               qa_name: qaName,
-              effective_testing_hours: 0,
-              waiting_environment_hours: 0,
-              waiting_development_fixes_hours: 0,
-              retest_hours: 0,
-              clarification_hours: 0,
+              hours_by_category: {},
               isExpanded: true,
             }
           );
@@ -281,49 +255,43 @@ function TimingFormComponent(
     }));
   };
 
-  const updateQAHours = (qaName: string, field: string, value: string) => {
-    // Filtrar para permitir solo números enteros positivos (0-9)
-    if (value !== "") {
-      // Solo permitir dígitos
-      const filteredValue = value.replace(/[^0-9]/g, "");
+  const updateQAHours = (qaName: string, categoryId: string, value: string) => {
+    const filteredValue = value.replace(/[^0-9]/g, "");
+    const key = `${qaName}_${categoryId}`;
 
-      const error = validateHours(filteredValue, field);
+    if (filteredValue !== "") {
+      const catLabel =
+        activeCategories.find((c) => c.id === categoryId)?.name ?? "Horas";
+      const error = validateHours(filteredValue, catLabel);
       if (error) {
-        setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: error }));
+        setErrors((prev) => ({ ...prev, [key]: error }));
         return;
       }
-
-      setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: "" }));
-
-      setFormData((prev) => ({
-        ...prev,
-        qa_entries: prev.qa_entries.map((e) =>
-          e.qa_name === qaName
-            ? {
-                ...e,
-                [field]: filteredValue === "" ? 0 : parseInt(filteredValue, 10),
-              }
-            : e,
-        ),
-      }));
-    } else {
-      setErrors((prev) => ({ ...prev, [`${qaName}_${field}`]: "" }));
-      setFormData((prev) => ({
-        ...prev,
-        qa_entries: prev.qa_entries.map((e) =>
-          e.qa_name === qaName ? { ...e, [field]: 0 } : e,
-        ),
-      }));
     }
+
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+    const hours = filteredValue === "" ? 0 : parseInt(filteredValue, 10);
+
+    setFormData((prev) => ({
+      ...prev,
+      qa_entries: prev.qa_entries.map((e) =>
+        e.qa_name === qaName
+          ? {
+              ...e,
+              hours_by_category: {
+                ...e.hours_by_category,
+                [categoryId]: hours,
+              },
+            }
+          : e,
+      ),
+    }));
   };
 
   const getQATotal = (entry: QAFormData) => {
-    return (
-      entry.effective_testing_hours +
-      entry.waiting_environment_hours +
-      entry.waiting_development_fixes_hours +
-      entry.retest_hours +
-      entry.clarification_hours
+    return Object.values(entry.hours_by_category).reduce(
+      (sum, h) => sum + (h || 0),
+      0,
     );
   };
 
@@ -373,11 +341,7 @@ function TimingFormComponent(
       const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map(
         (e) => ({
           qa_name: e.qa_name,
-          effective_testing_hours: e.effective_testing_hours,
-          waiting_environment_hours: e.waiting_environment_hours,
-          waiting_development_fixes_hours: e.waiting_development_fixes_hours,
-          retest_hours: e.retest_hours,
-          clarification_hours: e.clarification_hours,
+          hours_by_category: e.hours_by_category,
         }),
       );
 
@@ -399,39 +363,6 @@ function TimingFormComponent(
   const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
   const CURRENT_YEAR = new Date().getFullYear();
   const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
-
-  const hoursFields = [
-    {
-      key: "effective_testing_hours",
-      label: "Testing efectivo",
-      color: "bg-blue-100",
-      textColor: "text-blue-600",
-    },
-    {
-      key: "waiting_environment_hours",
-      label: "Espera ambiente",
-      color: "bg-purple-500/15",
-      textColor: "text-purple-300",
-    },
-    {
-      key: "waiting_development_fixes_hours",
-      label: "Espera fixes",
-      color: "bg-orange-500/15",
-      textColor: "text-orange-300",
-    },
-    {
-      key: "retest_hours",
-      label: "Re-test",
-      color: "bg-red-500/15",
-      textColor: "text-red-300",
-    },
-    {
-      key: "clarification_hours",
-      label: "Clarificaciones",
-      color: "bg-yellow-500/15",
-      textColor: "text-yellow-300",
-    },
-  ];
 
   const grandTotal = getGrandTotal();
 
@@ -749,61 +680,70 @@ function TimingFormComponent(
                 {/* QA Hours Fields */}
                 {entry.isExpanded && (
                   <div className="px-4 pb-4 space-y-2">
-                    {hoursFields.map(({ key, label, color, textColor }) => (
-                      <div
-                        key={`${entry.qa_name}-${key}`}
-                        className={`rounded-lg ${color} p-3`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor={`${entry.qa_name}-${key}`}
-                            className={`text-xs font-medium ${textColor}`}
-                          >
-                            {label}
-                          </label>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              id={`${entry.qa_name}-${key}`}
-                              name={`${entry.qa_name}-${key}`}
-                              type="text"
-                              inputMode="numeric"
-                              value={
-                                (entry[key as keyof QAFormData] as number) === 0
-                                  ? ""
-                                  : (entry[key as keyof QAFormData] as number)
-                              }
-                              onChange={(ev) =>
-                                updateQAHours(
-                                  entry.qa_name,
-                                  key,
-                                  ev.target.value,
-                                )
-                              }
-                              onKeyPress={(ev) => {
-                                // Solo permitir números (0-9)
-                                if (!/[0-9]/.test(ev.key)) {
-                                  ev.preventDefault();
+                    {activeCategories.length === 0 && (
+                      <p className="text-xs text-yellow-700 bg-yellow-50 rounded p-2">
+                        No hay categorías de tiempo activas. Configúralas en
+                        Ajustes.
+                      </p>
+                    )}
+                    {activeCategories.map((cat) => {
+                      const catHours = entry.hours_by_category[cat.id] ?? 0;
+                      // fieldId: id HTML válido (sin espacios/símbolos del nombre del QA)
+                      const fieldId = `qa_${qaIdx}_${cat.id}`;
+                      // errorKey: clave del mapa de errores, debe coincidir con lo que usa updateQAHours
+                      const errorKey = `${entry.qa_name}_${cat.id}`;
+                      return (
+                        <div
+                          key={`${entry.qa_name}-${cat.id}`}
+                          className="rounded-lg p-3"
+                          style={{ backgroundColor: `${cat.hex_color}22` }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <label
+                              htmlFor={fieldId}
+                              className="text-xs font-medium"
+                              style={{ color: cat.hex_color }}
+                            >
+                              {cat.name}
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                id={fieldId}
+                                name={fieldId}
+                                type="text"
+                                inputMode="numeric"
+                                value={catHours === 0 ? "" : catHours}
+                                onChange={(ev) =>
+                                  updateQAHours(
+                                    entry.qa_name,
+                                    cat.id,
+                                    ev.target.value,
+                                  )
                                 }
-                              }}
-                              onBlur={(ev) => {
-                                if (ev.target.value === "") {
-                                  updateQAHours(entry.qa_name, key, "0");
-                                }
-                              }}
-                              className="w-16 rounded border border-white/20 bg-white/10 px-2 py-0.5 text-center text-sm"
-                              disabled={isLoading}
-                              placeholder="0"
-                              aria-label={`${label} para ${entry.qa_name}`}
-                            />
+                                onKeyPress={(ev) => {
+                                  if (!/[0-9]/.test(ev.key))
+                                    ev.preventDefault();
+                                }}
+                                onBlur={(ev) => {
+                                  if (ev.target.value === "") {
+                                    updateQAHours(entry.qa_name, cat.id, "0");
+                                  }
+                                }}
+                                className="w-16 rounded border border-white/20 bg-white/10 px-2 py-0.5 text-center text-sm"
+                                disabled={isLoading}
+                                placeholder="0"
+                                aria-label={`${cat.name} para ${entry.qa_name}`}
+                              />
+                            </div>
                           </div>
+                          {errors[errorKey] && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {errors[errorKey]}
+                            </p>
+                          )}
                         </div>
-                        {errors[`${entry.qa_name}_${key}`] && (
-                          <p className="mt-1 text-xs text-red-600">
-                            {errors[`${entry.qa_name}_${key}`]}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                     {/* QA Subtotal */}
                     <div className="rounded-lg bg-white/5 p-2 flex justify-between border border-white/10">
                       <span className="text-xs font-medium text-gray-600">
@@ -882,9 +822,17 @@ function TimingFormComponent(
         <Button
           type="submit"
           disabled={
-            isLoading || grandTotal === 0 || formData.qa_entries.length === 0
+            isLoading ||
+            activeCategories.length === 0 ||
+            grandTotal === 0 ||
+            formData.qa_entries.length === 0
           }
           className="flex-1 bg-blue-500 hover:bg-blue-600"
+          title={
+            activeCategories.length === 0
+              ? "No hay categorías de tiempo activas. Configúralas en Ajustes."
+              : undefined
+          }
         >
           {isLoading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
         </Button>

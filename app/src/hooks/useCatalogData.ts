@@ -8,6 +8,7 @@ import {
   CatalogComplexity,
   CatalogSquad,
   CatalogQAMember,
+  CatalogTimingCategory,
 } from "@/lib/types";
 
 export interface CatalogData {
@@ -16,6 +17,7 @@ export interface CatalogData {
   complexities: CatalogComplexity[];
   squads: CatalogSquad[];
   qaMembers: CatalogQAMember[];
+  timingCategories: CatalogTimingCategory[];
   loading: boolean;
   error: string | null;
   reload: () => void;
@@ -29,9 +31,12 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 // Invalidar caché si tiene shape antigua (e.g. tras HMR en desarrollo)
 if (
   cachedData &&
-  !Array.isArray(
+  (!Array.isArray(
     (cachedData as unknown as Record<string, unknown>).projectTypes,
-  )
+  ) ||
+    !Array.isArray(
+      (cachedData as unknown as Record<string, unknown>).timingCategories,
+    ))
 ) {
   cachedData = null;
   cacheTimestamp = 0;
@@ -53,6 +58,9 @@ export function useCatalogData(): CatalogData {
   const [qaMembers, setQaMembers] = useState<CatalogQAMember[]>(
     cachedData?.qaMembers ?? [],
   );
+  const [timingCategories, setTimingCategories] = useState<
+    CatalogTimingCategory[]
+  >(cachedData?.timingCategories ?? []);
   const [loading, setLoading] = useState(!cachedData);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -74,6 +82,11 @@ export function useCatalogData(): CatalogData {
       setQaMembers(
         Array.isArray(cachedData.qaMembers) ? cachedData.qaMembers : [],
       );
+      setTimingCategories(
+        Array.isArray(cachedData.timingCategories)
+          ? cachedData.timingCategories
+          : [],
+      );
       setError(null);
       setLoading(false);
       return;
@@ -92,24 +105,36 @@ export function useCatalogData(): CatalogData {
       const sessionOk = await warmSession(controller.signal);
       if (!sessionOk || controller.signal.aborted) return;
 
-      const [productsRes, projectTypesRes, complexitiesRes, squadsRes, qaRes] =
-        await Promise.all([
-          authenticatedFetch("/api/settings/products", {
+      const [
+        productsRes,
+        projectTypesRes,
+        complexitiesRes,
+        squadsRes,
+        qaRes,
+        timingCatRes,
+      ] = await Promise.all([
+        authenticatedFetch("/api/settings/products", {
+          signal: controller.signal,
+        }),
+        authenticatedFetch("/api/settings/project-types", {
+          signal: controller.signal,
+        }),
+        authenticatedFetch("/api/settings/complexities", {
+          signal: controller.signal,
+        }),
+        authenticatedFetch("/api/settings/squads", {
+          signal: controller.signal,
+        }),
+        authenticatedFetch("/api/settings/qa-members", {
+          signal: controller.signal,
+        }),
+        authenticatedFetch(
+          "/api/settings/timing-categories?includeInactive=true",
+          {
             signal: controller.signal,
-          }),
-          authenticatedFetch("/api/settings/project-types", {
-            signal: controller.signal,
-          }),
-          authenticatedFetch("/api/settings/complexities", {
-            signal: controller.signal,
-          }),
-          authenticatedFetch("/api/settings/squads", {
-            signal: controller.signal,
-          }),
-          authenticatedFetch("/api/settings/qa-members", {
-            signal: controller.signal,
-          }),
-        ]);
+          },
+        ),
+      ]);
 
       if (controller.signal.aborted) return;
 
@@ -120,6 +145,7 @@ export function useCatalogData(): CatalogData {
         complexitiesRes,
         squadsRes,
         qaRes,
+        timingCatRes,
       ].every((r) => r.ok);
       if (!allOk) {
         setError("Error al cargar los catálogos. Intenta recargar la página.");
@@ -127,12 +153,13 @@ export function useCatalogData(): CatalogData {
         return;
       }
 
-      const [p, c, cx, s, q] = await Promise.all([
+      const [p, c, cx, s, q, tc] = await Promise.all([
         productsRes.json(),
         projectTypesRes.json(),
         complexitiesRes.json(),
         squadsRes.json(),
         qaRes.json(),
+        timingCatRes.json(),
       ]);
 
       if (controller.signal.aborted) return;
@@ -144,6 +171,11 @@ export function useCatalogData(): CatalogData {
         complexities: Array.isArray(cx) ? (cx as CatalogComplexity[]) : [],
         squads: Array.isArray(s) ? (s as CatalogSquad[]) : [],
         qaMembers: Array.isArray(q) ? (q as CatalogQAMember[]) : [],
+        timingCategories: Array.isArray(tc)
+          ? (tc as CatalogTimingCategory[]).sort(
+              (a, b) => a.display_order - b.display_order,
+            )
+          : [],
       };
       cacheTimestamp = Date.now();
 
@@ -152,6 +184,7 @@ export function useCatalogData(): CatalogData {
       setComplexities(cachedData.complexities);
       setSquads(cachedData.squads);
       setQaMembers(cachedData.qaMembers);
+      setTimingCategories(cachedData.timingCategories);
     } catch (err) {
       if (controller.signal.aborted) return;
       // SessionLockError residual (warmSession agotó sus propios reintentos) —
@@ -192,6 +225,7 @@ export function useCatalogData(): CatalogData {
     complexities,
     squads,
     qaMembers,
+    timingCategories,
     loading,
     error,
     reload,

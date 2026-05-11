@@ -28,7 +28,7 @@ export interface CatalogItem {
 export interface FieldDef {
   key: string;
   label: string;
-  type: "text" | "number" | "select";
+  type: "text" | "number" | "select" | "color" | "toggle";
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
@@ -49,6 +49,10 @@ interface CatalogManagerProps {
   }[];
   /** Nombre amigable del plural (para mensajes) */
   itemLabel?: string;
+  /** Si retorna true para un item, el botón eliminar queda deshabilitado */
+  isProtected?: (item: CatalogItem) => boolean;
+  /** Tooltip para el botón eliminar cuando el item está protegido */
+  protectedMessage?: string;
 }
 
 type FormValues = Record<string, string | number | boolean>;
@@ -56,7 +60,7 @@ type FormValues = Record<string, string | number | boolean>;
 function buildEmptyForm(fields: FieldDef[]): FormValues {
   const v: FormValues = {};
   for (const f of fields) {
-    v[f.key] = f.type === "number" ? 0 : "";
+    v[f.key] = f.type === "number" ? 0 : f.type === "toggle" ? false : "";
   }
   return v;
 }
@@ -81,6 +85,8 @@ export default function CatalogManager({
   onRefresh,
   extraColumns = [],
   itemLabel = "elemento",
+  isProtected,
+  protectedMessage = "Este elemento del sistema no puede eliminarse",
 }: CatalogManagerProps) {
   const { safeFetch } = useSafeAuthFetch();
 
@@ -120,7 +126,7 @@ export default function CatalogManager({
   }, []);
 
   const handleFieldChange = useCallback(
-    (key: string, value: string | number) => {
+    (key: string, value: string | number | boolean) => {
       setFormValues((prev) => ({ ...prev, [key]: value }));
     },
     [],
@@ -309,8 +315,15 @@ export default function CatalogManager({
                           setDeleteConfirm(item.id);
                           setDeleteError(null);
                         }}
-                        className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
-                        title="Eliminar"
+                        disabled={isProtected?.(item) ?? false}
+                        className={`p-1.5 rounded transition-colors ${
+                          isProtected?.(item)
+                            ? "text-gray-300 cursor-not-allowed"
+                            : "hover:bg-red-50 text-gray-500 hover:text-red-600"
+                        }`}
+                        title={
+                          isProtected?.(item) ? protectedMessage : "Eliminar"
+                        }
                       >
                         <Trash2 size={15} />
                       </button>
@@ -357,6 +370,61 @@ export default function CatalogManager({
                     </option>
                   ))}
                 </select>
+              ) : field.type === "color" ? (
+                <div className="flex items-center gap-2">
+                  {/* Swatch — abre el color picker nativo */}
+                  <label
+                    className="relative flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-shadow"
+                    title="Abrir selector de color"
+                  >
+                    <span
+                      className="absolute inset-0 block"
+                      style={{
+                        backgroundColor: String(
+                          formValues[field.key] || "#000000",
+                        ),
+                      }}
+                    />
+                    <input
+                      type="color"
+                      value={String(formValues[field.key] || "#000000")}
+                      onChange={(e) =>
+                        handleFieldChange(field.key, e.target.value)
+                      }
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                      tabIndex={-1}
+                    />
+                  </label>
+                  {/* Input de texto hex */}
+                  <input
+                    type="text"
+                    value={String(formValues[field.key] ?? "")}
+                    onChange={(e) =>
+                      handleFieldChange(field.key, e.target.value)
+                    }
+                    placeholder="#10B981"
+                    maxLength={7}
+                    spellCheck={false}
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+              ) : field.type === "toggle" ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleFieldChange(field.key, !formValues[field.key])
+                  }
+                  className="flex items-center gap-2 text-sm"
+                >
+                  {formValues[field.key] ? (
+                    <ToggleRight size={28} className="text-blue-500" />
+                  ) : (
+                    <ToggleLeft size={28} className="text-gray-400" />
+                  )}
+                  <span className="text-gray-700">
+                    {formValues[field.key] ? "Sí" : "No"}
+                  </span>
+                </button>
               ) : (
                 <input
                   type={field.type}

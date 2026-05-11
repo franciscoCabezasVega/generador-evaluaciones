@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import {
   TaskTiming,
   CreateTaskTimingInput,
@@ -6,22 +7,35 @@ import {
   SquadTimingMetrics,
   QATimingMetrics,
   TimingQAEntry,
+  CatalogTimingCategory,
 } from "@/lib/types";
 
-// Row shape from `task_timings_with_totals` view
-interface TimingViewRow {
+// Row shapes
+interface TimingParentRow {
   id: string;
   task_id: string;
   month: number;
   year: number;
-  effective_testing_hours: string;
-  waiting_environment_hours: string;
-  waiting_development_fixes_hours: string;
-  retest_hours: string;
-  clarification_hours: string;
-  total_hours: string;
+  user_id: string;
   created_at: string;
+  updated_at: string;
   [key: string]: unknown;
+}
+
+interface QAEntryRow {
+  id: string;
+  timing_id: string;
+  task_qa_id: string;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+interface CategoryHourRow {
+  id: string;
+  timing_qa_entry_id: string;
+  category_id: string;
+  hours: number;
 }
 
 interface TaskIdRow {
@@ -40,7 +54,6 @@ interface TaskInfoRow {
   created_at: string;
 }
 
-// Helper to create authenticated Supabase client
 async function getClient(token?: string) {
   if (!token) return supabase;
   const { createClient } = await import("@supabase/supabase-js");
@@ -52,13 +65,63 @@ async function getClient(token?: string) {
   });
 }
 
-// Name of the VIEW that aggregates hours from timing_qa_entries
-const TIMINGS_VIEW = "task_timings_with_totals";
+async function getTimingCategories(
+  client: SupabaseClient,
+): Promise<CatalogTimingCategory[]> {
+  const { data, error } = await client
+    .from("timing_categories")
+    .select("*")
+    .order("display_order", { ascending: true });
+  if (error) {
+    console.error("Failed to fetch timing_categories:", error);
+    throw error;
+  }
+  return (data as CatalogTimingCategory[]) ?? [];
+}
 
-// Helper: build month/year range filter for Supabase queries
-// Converts startDate/endDate to (year, month) compound OR conditions
+function buildSlugToIdMap(
+  cats: CatalogTimingCategory[],
+): Record<string, string> {
+  return Object.fromEntries(cats.map((c) => [c.slug, c.id]));
+}
+
+function sumHoursBy(hbc: Record<string, number>): number {
+  return Object.values(hbc).reduce((acc, h) => acc + (h || 0), 0);
+}
+
+function flattenQAEntries(
+  qaEntryRows: QAEntryRow[],
+  categoryHourRows: CategoryHourRow[],
+): TimingQAEntry[] {
+  const hoursByEntry: Record<string, Record<string, number>> = {};
+  for (const ch of categoryHourRows) {
+    if (!hoursByEntry[ch.timing_qa_entry_id])
+      hoursByEntry[ch.timing_qa_entry_id] = {};
+    hoursByEntry[ch.timing_qa_entry_id][ch.category_id] = ch.hours;
+  }
+  return qaEntryRows.map((entry) => {
+    const hours_by_category = hoursByEntry[entry.id] ?? {};
+    const total_hours = sumHoursBy(hours_by_category);
+    const rawQA = entry["task_qa"];
+    const qa_name =
+      (Array.isArray(rawQA)
+        ? (rawQA[0] as { qa_name?: string })?.qa_name
+        : (rawQA as { qa_name?: string } | undefined)?.qa_name) ?? "";
+    return {
+      id: entry.id as string,
+      timing_id: entry.timing_id as string,
+      task_qa_id: entry.task_qa_id as string,
+      qa_name,
+      hours_by_category,
+      total_hours,
+      created_at: entry.created_at as string,
+      updated_at: entry.updated_at as string,
+    };
+  });
+}
+
 function buildDateRangeFilter(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder has complex generics
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: any,
   filters: {
     startDate?: string;
@@ -67,135 +130,92 @@ function buildDateRangeFilter(
     year?: number;
   },
 ) {
-  // If legacy month/year provided (backward compat), use them directly
   if (
     filters.month !== undefined &&
     filters.year !== undefined &&
     !filters.startDate
   ) {
-    query = query.eq("month", filters.month).eq("year", filters.year);
-    return query;
+    return query.eq("month", filters.month).eq("year", filters.year);
   }
-
-  // Date range filtering
   if (filters.startDate && filters.endDate) {
-    // Parse ISO dates without timezone ambiguity
-    // Format: "2026-03-01" → extract year, month, day directly
-    const parseISODate = (
-      dateStr: string,
-    ): { year: number; month: number; day: number } => {
-      const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (!match) {
-        throw new Error(`Invalid date format: ${dateStr}. Expected YYYY-MM-DD`);
-      }
-      return {
-        year: parseInt(match[1], 10),
-        month: parseInt(match[2], 10), // Already 1-indexed
-        day: parseInt(match[3], 10),
-      };
+    const parseISO = (s: string) => {
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) throw new Error(`Invalid date: ${s}`);
+      return { year: +m[1], month: +m[2] };
     };
-
-    const startParsed = parseISODate(filters.startDate);
-    const endParsed = parseISODate(filters.endDate);
-
-    if (
-      startParsed.year === endParsed.year &&
-      startParsed.month === endParsed.month
-    ) {
-      // Same month — simple eq
-      query = query.eq("year", startParsed.year).eq("month", startParsed.month);
-    } else if (startParsed.year === endParsed.year) {
-      // Same year, different months
-      query = query
-        .eq("year", startParsed.year)
-        .gte("month", startParsed.month)
-        .lte("month", endParsed.month);
-    } else {
-      // Spans multiple years — compound OR
-      const conditions: string[] = [];
-      for (let y = startParsed.year; y <= endParsed.year; y++) {
-        const minM = y === startParsed.year ? startParsed.month : 1;
-        const maxM = y === endParsed.year ? endParsed.month : 12;
-        if (minM === maxM) {
-          conditions.push(`and(year.eq.${y},month.eq.${minM})`);
-        } else {
-          conditions.push(
-            `and(year.eq.${y},month.gte.${minM},month.lte.${maxM})`,
-          );
-        }
-      }
-      query = query.or(conditions.join(","));
+    const s = parseISO(filters.startDate);
+    const e = parseISO(filters.endDate);
+    if (s.year === e.year && s.month === e.month)
+      return query.eq("year", s.year).eq("month", s.month);
+    if (s.year === e.year)
+      return query
+        .eq("year", s.year)
+        .gte("month", s.month)
+        .lte("month", e.month);
+    const conds: string[] = [];
+    for (let y = s.year; y <= e.year; y++) {
+      const mn = y === s.year ? s.month : 1;
+      const mx = y === e.year ? e.month : 12;
+      conds.push(
+        mn === mx
+          ? `and(year.eq.${y},month.eq.${mn})`
+          : `and(year.eq.${y},month.gte.${mn},month.lte.${mx})`,
+      );
     }
-    return query;
+    return query.or(conds.join(","));
   }
-
-  // Fallback: apply individual filters
   if (filters.month !== undefined) query = query.eq("month", filters.month);
   if (filters.year !== undefined) query = query.eq("year", filters.year);
   return query;
 }
 
-// Helper: get task IDs whose effort_score_date falls within the given date range
 async function getTaskIdsByEffortDate(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client typing
-  client: any,
+  client: SupabaseClient,
   startDate: string,
   endDate: string,
   extraFilters?: { product_type?: string },
-): Promise<string[] | null> {
+): Promise<string[]> {
   let q = client
     .from("tasks")
     .select("id")
     .gte("effort_score_date", startDate)
     .lte("effort_score_date", endDate);
-  if (extraFilters?.product_type) {
+  if (extraFilters?.product_type)
     q = q.eq("product_type", extraFilters.product_type);
-  }
   const { data, error } = await q;
   if (error) throw error;
-  if (!data || data.length === 0) return [];
-  return (data as TaskIdRow[]).map((t) => t.id);
+  return data ? (data as TaskIdRow[]).map((t) => t.id) : [];
 }
 
-// Helper: Sincronizar assigned_qa en tasks desde task_qa
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client typing
-async function syncAssignedQA(client: any, taskId: string): Promise<void> {
+async function syncAssignedQA(
+  client: SupabaseClient,
+  taskId: string,
+): Promise<void> {
   try {
-    // Obtener todos los qa_name únicos de task_qa para esta tarea
     const { data: qaData, error: qaError } = await client
       .from("task_qa")
       .select("qa_name")
       .eq("task_id", taskId);
-
     if (qaError) {
-      console.error("Error fetching task_qa:", qaError);
+      console.error("Error fetching task_qa for sync:", qaError);
       return;
     }
-
-    // Extraer nombres únicos
-    const qaNames = qaData
-      ? Array.from(
-          new Set(qaData.map((item: { qa_name: string }) => item.qa_name)),
-        )
-      : [];
-
-    // Actualizar tasks.assigned_qa
+    const qaNames = [
+      ...new Set(
+        ((qaData ?? []) as { qa_name: string }[]).map((q) => q.qa_name),
+      ),
+    ];
     const { error: updateError } = await client
       .from("tasks")
       .update({ assigned_qa: qaNames })
       .eq("id", taskId);
-
-    if (updateError) {
-      console.error("Error updating assigned_qa:", updateError);
-    }
+    if (updateError) console.error("Error updating assigned_qa:", updateError);
   } catch (error) {
     console.error("Error in syncAssignedQA:", error);
   }
 }
 
 export const timingService = {
-  // Obtener todos los tiempos con filtros (incluye QA entries)
-  // Reads from VIEW for aggregated hours, raw table for QA entries
   async getTimings(
     filters: {
       month?: number;
@@ -209,32 +229,24 @@ export const timingService = {
   ) {
     try {
       const client = await getClient(token);
+      let query = client.from("task_timings").select("*");
 
-      let query = client.from(TIMINGS_VIEW).select("*");
-
-      // When date range is provided, filter by effort_score_date on tasks table
       if (filters.startDate && filters.endDate) {
         const taskIds = await getTaskIdsByEffortDate(
           client,
           filters.startDate,
           filters.endDate,
-          {
-            product_type: filters.product_type,
-          },
+          { product_type: filters.product_type },
         );
-        if (!taskIds || taskIds.length === 0) return [];
+        if (taskIds.length === 0) return [];
         query = query.in("task_id", taskIds);
       } else {
-        // Legacy month/year filtering on timings table
         query = buildDateRangeFilter(query, filters);
-
-        // Filter by product_type separately when no date range
         if (filters.product_type) {
           const { data: matchingTasks } = await client
             .from("tasks")
             .select("id")
             .eq("product_type", filters.product_type);
-
           const matchingTaskIds = (matchingTasks || []).map(
             (t: TaskIdRow) => t.id,
           );
@@ -243,115 +255,123 @@ export const timingService = {
         }
       }
 
-      if (filters.task_id) {
-        query = query.eq("task_id", filters.task_id);
-      }
+      if (filters.task_id) query = query.eq("task_id", filters.task_id);
 
       const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(500);
-
       if (error) throw error;
 
-      const timings = (data as TaskTiming[]) || [];
+      const parentRows = (data as TimingParentRow[]) || [];
+      if (parentRows.length === 0) return [];
 
-      // Load QA entries for each timing
-      if (timings.length > 0) {
-        const timingIds = timings.map((t) => t.id);
-        const { data: qaEntries, error: qaError } = await client
-          .from("timing_qa_entries")
-          .select("*, task_qa!inner(qa_name)")
-          .in("timing_id", timingIds);
+      const timingIds = parentRows.map((t) => t.id);
+      const { data: qaEntryRows, error: qaError } = await client
+        .from("timing_qa_entries")
+        .select(
+          "id, timing_id, task_qa_id, created_at, updated_at, task_qa!inner(qa_name)",
+        )
+        .in("timing_id", timingIds);
 
-        if (!qaError && qaEntries) {
-          const qaByTiming: Record<string, TimingQAEntry[]> = {};
-          for (const entry of qaEntries) {
-            if (!qaByTiming[entry.timing_id]) {
-              qaByTiming[entry.timing_id] = [];
-            }
-            // Flatten task_qa join into qa_name
-            const flatEntry = {
-              ...entry,
-              qa_name:
-                (entry as { task_qa?: { qa_name: string } }).task_qa?.qa_name ||
-                "",
-            };
-            delete (flatEntry as { task_qa?: unknown }).task_qa;
-            qaByTiming[entry.timing_id].push(flatEntry as TimingQAEntry);
-          }
-          for (const timing of timings) {
-            timing.qa_entries = qaByTiming[timing.id] || [];
-            // Sort by qa_name for consistency
-            timing.qa_entries.sort((a, b) =>
-              a.qa_name.localeCompare(b.qa_name),
-            );
-          }
-        }
+      let categoryHoursData: CategoryHourRow[] = [];
+      if (!qaError && qaEntryRows && qaEntryRows.length > 0) {
+        const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
+        const { data: ch, error: categoryHoursError } = await client
+          .from("timing_qa_category_hours")
+          .select("id, timing_qa_entry_id, category_id, hours")
+          .in("timing_qa_entry_id", entryIds);
+        if (categoryHoursError) throw categoryHoursError;
+        categoryHoursData = (ch as CategoryHourRow[]) ?? [];
       }
 
-      return timings;
+      const flatEntries =
+        !qaError && qaEntryRows
+          ? flattenQAEntries(qaEntryRows as QAEntryRow[], categoryHoursData)
+          : [];
+      const qaByTiming: Record<string, TimingQAEntry[]> = {};
+      for (const entry of flatEntries) {
+        if (!qaByTiming[entry.timing_id]) qaByTiming[entry.timing_id] = [];
+        qaByTiming[entry.timing_id].push(entry);
+      }
+
+      return parentRows.map((row) => {
+        const entries = (qaByTiming[row.id] ?? []).sort((a, b) =>
+          a.qa_name.localeCompare(b.qa_name),
+        );
+        return {
+          id: row.id,
+          task_id: row.task_id,
+          month: row.month,
+          year: row.year,
+          user_id: row.user_id,
+          total_hours: entries.reduce((s, e) => s + e.total_hours, 0),
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          qa_entries: entries,
+        };
+      }) as TaskTiming[];
     } catch (error) {
       console.error("Error in getTimings:", error);
       throw error;
     }
   },
 
-  // Obtener un timing por ID (incluye QA entries)
   async getTimingById(id: string, token?: string) {
     try {
       const client = await getClient(token);
-
       const { data, error } = await client
-        .from(TIMINGS_VIEW)
+        .from("task_timings")
         .select("*")
         .eq("id", id)
         .single();
-
       if (error) throw error;
+      const row = data as TimingParentRow;
 
-      const timing = data as TaskTiming;
-
-      // Load QA entries
-      const { data: qaEntries, error: qaError } = await client
+      const { data: qaEntryRows, error: qaError } = await client
         .from("timing_qa_entries")
-        .select("*, task_qa!inner(qa_name)")
+        .select(
+          "id, timing_id, task_qa_id, created_at, updated_at, task_qa!inner(qa_name)",
+        )
         .eq("timing_id", id);
 
-      if (!qaError && qaEntries) {
-        timing.qa_entries = qaEntries.map((entry) => {
-          // Flatten task_qa join into qa_name
-          const flatEntry = {
-            ...entry,
-            qa_name:
-              (entry as { task_qa?: { qa_name: string } }).task_qa?.qa_name ||
-              "",
-          };
-          delete (flatEntry as { task_qa?: unknown }).task_qa;
-          return flatEntry as TimingQAEntry;
-        });
-        // Sort by qa_name for consistency
-        timing.qa_entries.sort((a, b) => a.qa_name.localeCompare(b.qa_name));
+      let qa_entries: TimingQAEntry[] = [];
+      if (!qaError && qaEntryRows && qaEntryRows.length > 0) {
+        const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
+        const { data: catHours, error: catHoursError } = await client
+          .from("timing_qa_category_hours")
+          .select("id, timing_qa_entry_id, category_id, hours")
+          .in("timing_qa_entry_id", entryIds);
+        if (catHoursError) throw catHoursError;
+        qa_entries = flattenQAEntries(
+          qaEntryRows as QAEntryRow[],
+          (catHours as CategoryHourRow[]) ?? [],
+        ).sort((a, b) => a.qa_name.localeCompare(b.qa_name));
       }
 
-      return timing;
+      return {
+        id: row.id,
+        task_id: row.task_id,
+        month: row.month,
+        year: row.year,
+        user_id: row.user_id,
+        total_hours: qa_entries.reduce((s, e) => s + e.total_hours, 0),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        qa_entries,
+      } as TaskTiming;
     } catch (error) {
       console.error("Error in getTimingById:", error);
       throw error;
     }
   },
 
-  // Crear un nuevo timing con QA entries
-  // Parent only stores structural data; hours live in timing_qa_entries
   async createTiming(input: CreateTaskTimingInput, token?: string) {
     try {
       if (!input.user_id) throw new Error("User ID is required");
-      if (!input.qa_entries || input.qa_entries.length === 0) {
+      if (!input.qa_entries || input.qa_entries.length === 0)
         throw new Error("At least one QA entry is required");
-      }
 
       const client = await getClient(token);
-
-      // Insert parent (no hour columns — VIEW provides them)
       const { data, error } = await client
         .from("task_timings")
         .insert({
@@ -362,12 +382,9 @@ export const timingService = {
         })
         .select("id")
         .single();
-
       if (error) throw error;
-
       const parentId = data.id;
 
-      // Bulk upsert task_qa rows (2N+1 → 3 queries fijas)
       const { data: taskQAs, error: tqaErr } = await client
         .from("task_qa")
         .upsert(
@@ -378,7 +395,6 @@ export const timingService = {
           { onConflict: "task_id,qa_name" },
         )
         .select("id, qa_name");
-
       if (tqaErr) {
         await client.from("task_timings").delete().eq("id", parentId);
         throw new Error(`Error upserting task_qa: ${tqaErr.message}`);
@@ -390,71 +406,127 @@ export const timingService = {
           t.id,
         ]),
       );
-
-      const qaInserts = input.qa_entries.map((entry) => ({
-        timing_id: parentId,
-        task_qa_id: idByName.get(entry.qa_name)!,
-        effective_testing_hours: Math.max(0, entry.effective_testing_hours),
-        waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
-        waiting_development_fixes_hours: Math.max(
-          0,
-          entry.waiting_development_fixes_hours,
-        ),
-        retest_hours: Math.max(0, entry.retest_hours),
-        clarification_hours: Math.max(0, entry.clarification_hours),
-      }));
-
-      const { error: qaError } = await client
+      const { data: insertedEntries, error: qaInsertError } = await client
         .from("timing_qa_entries")
-        .insert(qaInserts);
-
-      if (qaError) {
+        .insert(
+          input.qa_entries.map((e) => ({
+            timing_id: parentId,
+            task_qa_id: idByName.get(e.qa_name)!,
+          })),
+        )
+        .select("id, task_qa_id");
+      if (qaInsertError) {
         await client.from("task_timings").delete().eq("id", parentId);
-        throw new Error(`Error creating QA entries: ${qaError.message}`);
+        throw new Error(`Error creating QA entries: ${qaInsertError.message}`);
       }
 
-      // Sincronizar assigned_qa después de crear
-      await syncAssignedQA(client, input.task_id);
+      const entryIdByQaId = new Map(
+        (insertedEntries as { id: string; task_qa_id: string }[]).map((e) => [
+          e.task_qa_id,
+          e.id,
+        ]),
+      );
+      const categoryHourInserts: {
+        timing_qa_entry_id: string;
+        category_id: string;
+        hours: number;
+      }[] = [];
+      for (const entry of input.qa_entries) {
+        const qaId = idByName.get(entry.qa_name);
+        const entryId = qaId ? entryIdByQaId.get(qaId) : undefined;
+        if (!entryId) continue;
+        for (const [categoryId, hours] of Object.entries(
+          entry.hours_by_category,
+        )) {
+          if (hours > 0)
+            categoryHourInserts.push({
+              timing_qa_entry_id: entryId,
+              category_id: categoryId,
+              hours,
+            });
+        }
+      }
+      if (categoryHourInserts.length > 0) {
+        const { error: chError } = await client
+          .from("timing_qa_category_hours")
+          .insert(categoryHourInserts);
+        if (chError) {
+          await client.from("task_timings").delete().eq("id", parentId);
+          throw new Error(`Error creating category hours: ${chError.message}`);
+        }
+      }
 
-      // Read back from VIEW to get computed totals
-      const created = await this.getTimingById(parentId, token);
-      return created;
+      await syncAssignedQA(client, input.task_id);
+      return await this.getTimingById(parentId, token);
     } catch (error) {
       console.error("Error in createTiming:", error);
       throw error;
     }
   },
 
-  // Actualizar un timing reemplazando sus QA entries
   async updateTiming(id: string, input: UpdateTaskTimingInput, token?: string) {
     try {
-      if (!input.qa_entries || input.qa_entries.length === 0) {
+      if (!input.qa_entries || input.qa_entries.length === 0)
         throw new Error("At least one QA entry is required");
-      }
 
       const client = await getClient(token);
-
-      // Get task_id from timing to resolve task_qa_id
       const { data: timingData, error: timingError } = await client
         .from("task_timings")
         .select("task_id")
         .eq("id", id)
         .single();
-
       if (timingError || !timingData) throw new Error("Timing not found");
 
-      // Touch updated_at on parent
       const { error: touchError } = await client
         .from("task_timings")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", id);
-
       if (touchError) throw touchError;
 
-      // Replace all QA entries: delete old, insert new
-      await client.from("timing_qa_entries").delete().eq("timing_id", id);
+      // Guardar entries existentes (+ sus horas por categoría) antes de borrar
+      // Si esta lectura falla, abortamos para no dejar el timing sin posibilidad de rollback
+      type ExistingEntry = { id: string; task_qa_id: string };
+      type ExistingCatHour = {
+        id: string;
+        timing_qa_entry_id: string;
+        category_id: string;
+        hours: number;
+      };
+      const { data: existingEntries, error: existingEntriesError } =
+        await client
+          .from("timing_qa_entries")
+          .select("id, task_qa_id")
+          .eq("timing_id", id);
+      if (existingEntriesError)
+        throw new Error(
+          `Error reading existing QA entries: ${existingEntriesError.message}`,
+        );
 
-      // Bulk upsert task_qa rows (2N+1 → 3 queries fijas)
+      const savedEntries: ExistingEntry[] =
+        (existingEntries as ExistingEntry[] | null) ?? [];
+      let savedCategoryHours: ExistingCatHour[] = [];
+      if (savedEntries.length > 0) {
+        const savedEntryIds = savedEntries.map((e) => e.id);
+        const { data: savedCh, error: savedChError } = await client
+          .from("timing_qa_category_hours")
+          .select("id, timing_qa_entry_id, category_id, hours")
+          .in("timing_qa_entry_id", savedEntryIds);
+        if (savedChError)
+          throw new Error(
+            `Error reading existing category hours: ${savedChError.message}`,
+          );
+        savedCategoryHours = (savedCh as ExistingCatHour[] | null) ?? [];
+      }
+
+      const { error: deleteQaEntriesError } = await client
+        .from("timing_qa_entries")
+        .delete()
+        .eq("timing_id", id);
+      if (deleteQaEntriesError)
+        throw new Error(
+          `Error deleting QA entries: ${deleteQaEntriesError.message}`,
+        );
+
       const { data: taskQAsUpdate, error: tqaUpdateErr } = await client
         .from("task_qa")
         .upsert(
@@ -465,7 +537,6 @@ export const timingService = {
           { onConflict: "task_id,qa_name" },
         )
         .select("id, qa_name");
-
       if (tqaUpdateErr)
         throw new Error(`Error upserting task_qa: ${tqaUpdateErr.message}`);
 
@@ -475,31 +546,104 @@ export const timingService = {
           t.id,
         ]),
       );
-
-      const qaInsertsUpdate = input.qa_entries.map((entry) => ({
-        timing_id: id,
-        task_qa_id: idByNameUpdate.get(entry.qa_name)!,
-        effective_testing_hours: Math.max(0, entry.effective_testing_hours),
-        waiting_environment_hours: Math.max(0, entry.waiting_environment_hours),
-        waiting_development_fixes_hours: Math.max(
-          0,
-          entry.waiting_development_fixes_hours,
-        ),
-        retest_hours: Math.max(0, entry.retest_hours),
-        clarification_hours: Math.max(0, entry.clarification_hours),
-      }));
-
-      const { error: qaError } = await client
+      const { data: updatedEntries, error: qaInsertErr } = await client
         .from("timing_qa_entries")
-        .insert(qaInsertsUpdate);
+        .insert(
+          input.qa_entries.map((e) => ({
+            timing_id: id,
+            task_qa_id: idByNameUpdate.get(e.qa_name)!,
+          })),
+        )
+        .select("id, task_qa_id");
+      if (qaInsertErr) {
+        // Compensación: restaurar entries anteriores + sus horas por categoría
+        if (savedEntries.length > 0) {
+          await client.from("timing_qa_entries").insert(
+            savedEntries.map((e) => ({
+              id: e.id,
+              timing_id: id,
+              task_qa_id: e.task_qa_id,
+            })),
+          );
+          if (savedCategoryHours.length > 0) {
+            await client.from("timing_qa_category_hours").insert(
+              savedCategoryHours.map((ch) => ({
+                id: ch.id,
+                timing_qa_entry_id: ch.timing_qa_entry_id,
+                category_id: ch.category_id,
+                hours: ch.hours,
+              })),
+            );
+          }
+        }
+        throw new Error(`Error updating QA entries: ${qaInsertErr.message}`);
+      }
 
-      if (qaError)
-        throw new Error(`Error updating QA entries: ${qaError.message}`);
+      const entryIdByQaIdUpdate = new Map(
+        (updatedEntries as { id: string; task_qa_id: string }[]).map((e) => [
+          e.task_qa_id,
+          e.id,
+        ]),
+      );
+      const categoryHourUpdates: {
+        timing_qa_entry_id: string;
+        category_id: string;
+        hours: number;
+      }[] = [];
+      for (const entry of input.qa_entries) {
+        const qaId = idByNameUpdate.get(entry.qa_name);
+        const entryId = qaId ? entryIdByQaIdUpdate.get(qaId) : undefined;
+        if (!entryId) continue;
+        for (const [categoryId, hours] of Object.entries(
+          entry.hours_by_category,
+        )) {
+          if (hours > 0)
+            categoryHourUpdates.push({
+              timing_qa_entry_id: entryId,
+              category_id: categoryId,
+              hours,
+            });
+        }
+      }
+      if (categoryHourUpdates.length > 0) {
+        const { error: chErr } = await client
+          .from("timing_qa_category_hours")
+          .insert(categoryHourUpdates);
+        if (chErr) {
+          // Compensación: eliminar las nuevas entries y restaurar las anteriores con sus horas
+          const newEntryIds = (
+            updatedEntries as { id: string; task_qa_id: string }[]
+          ).map((e) => e.id);
+          if (newEntryIds.length > 0) {
+            await client
+              .from("timing_qa_entries")
+              .delete()
+              .in("id", newEntryIds);
+          }
+          if (savedEntries.length > 0) {
+            await client.from("timing_qa_entries").insert(
+              savedEntries.map((e) => ({
+                id: e.id,
+                timing_id: id,
+                task_qa_id: e.task_qa_id,
+              })),
+            );
+            if (savedCategoryHours.length > 0) {
+              await client.from("timing_qa_category_hours").insert(
+                savedCategoryHours.map((ch) => ({
+                  id: ch.id,
+                  timing_qa_entry_id: ch.timing_qa_entry_id,
+                  category_id: ch.category_id,
+                  hours: ch.hours,
+                })),
+              );
+            }
+          }
+          throw new Error(`Error updating category hours: ${chErr.message}`);
+        }
+      }
 
-      // Sincronizar assigned_qa después de actualizar
       await syncAssignedQA(client, timingData.task_id);
-
-      // Read back from VIEW to get computed totals
       return await this.getTimingById(id, token);
     } catch (error) {
       console.error("Error in updateTiming:", error);
@@ -507,27 +651,18 @@ export const timingService = {
     }
   },
 
-  // Eliminar un timing (cascade deletes QA entries)
   async deleteTiming(id: string, token?: string) {
     try {
       const client = await getClient(token);
-
-      // Get task_id before deleting
       const { data: timingData, error: timingError } = await client
         .from("task_timings")
         .select("task_id")
         .eq("id", id)
         .single();
-
       if (timingError || !timingData) throw new Error("Timing not found");
-
       const { error } = await client.from("task_timings").delete().eq("id", id);
-
       if (error) throw error;
-
-      // Sincronizar assigned_qa después de eliminar
       await syncAssignedQA(client, timingData.task_id);
-
       return { success: true };
     } catch (error) {
       console.error("Error in deleteTiming:", error);
@@ -535,7 +670,6 @@ export const timingService = {
     }
   },
 
-  // Obtener métricas de tiempos por product_type (reads from VIEW)
   async getSquadTimingMetrics(
     filters: {
       month?: number;
@@ -548,218 +682,202 @@ export const timingService = {
   ) {
     try {
       const client = await getClient(token);
+      const categories = await getTimingCategories(client);
+      const catIds = categories.map((c) => c.id);
 
-      // Read from VIEW which already has aggregated hours
-      let metricsQuery = client
-        .from(TIMINGS_VIEW)
-        .select(
-          "id, task_id, month, year, effective_testing_hours, waiting_environment_hours, waiting_development_fixes_hours, retest_hours, clarification_hours, total_hours, created_at",
-        );
-
-      // When date range is provided, filter by effort_score_date on tasks table
+      let timingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
         const taskIds = await getTaskIdsByEffortDate(
           client,
           filters.startDate,
           filters.endDate,
-          {
-            product_type: filters.product_type,
-          },
+          { product_type: filters.product_type },
         );
-        if (!taskIds || taskIds.length === 0) return [];
-        metricsQuery = metricsQuery.in("task_id", taskIds);
+        if (taskIds.length === 0) return [];
+        timingsQuery = timingsQuery.in("task_id", taskIds);
       } else {
-        metricsQuery = buildDateRangeFilter(metricsQuery, filters);
+        timingsQuery = buildDateRangeFilter(timingsQuery, filters);
       }
 
-      const { data: timingsData, error: timingsError } = await metricsQuery;
-
+      const { data: timingsData, error: timingsError } = await timingsQuery;
       if (timingsError) throw timingsError;
+      if (!timingsData || timingsData.length === 0) return [];
 
-      if (!timingsData || timingsData.length === 0) {
-        return [];
-      }
-
-      // Get task product_type mapping
-      const taskIds = [
-        ...new Set(timingsData.map((t: TimingViewRow) => t.task_id)),
+      const allTaskIds = [
+        ...new Set(
+          timingsData.map((t: { id: string; task_id: string }) => t.task_id),
+        ),
       ];
-
       const { data: tasksData } = await client
         .from("tasks")
         .select("id, product_type")
-        .in("id", taskIds);
-
-      const taskProductTypeMap = (tasksData || []).reduce(
-        (acc: Record<string, string>, task: TaskProductRow) => {
-          acc[task.id] = task.product_type;
+        .in("id", allTaskIds);
+      const taskProductTypeMap = ((tasksData || []) as TaskProductRow[]).reduce(
+        (acc: Record<string, string>, t) => {
+          acc[t.id] = t.product_type;
           return acc;
         },
         {},
       );
 
-      // Group timings by product_type
-      const timingsByProductType = (timingsData as TimingViewRow[]).reduce(
-        (acc, timing) => {
-          const productType = taskProductTypeMap[timing.task_id] || "Unknown";
+      let filteredTimings = timingsData as { id: string; task_id: string }[];
+      if (filters.product_type && !(filters.startDate && filters.endDate)) {
+        filteredTimings = filteredTimings.filter(
+          (t) => taskProductTypeMap[t.task_id] === filters.product_type,
+        );
+        if (filteredTimings.length === 0) return [];
+      }
 
-          if (filters.product_type && productType !== filters.product_type) {
-            return acc;
-          }
+      const timingIds = filteredTimings.map((t) => t.id);
+      const { data: qaEntryRows, error: qaErr } = await client
+        .from("timing_qa_entries")
+        .select(
+          "id, timing_id, task_qa_id, created_at, updated_at, task_qa!inner(qa_name)",
+        )
+        .in("timing_id", timingIds);
+      if (qaErr) throw qaErr;
 
-          if (!acc[productType]) {
-            acc[productType] = {
-              product_type: productType,
-              timings: [],
-            };
-          }
-          acc[productType].timings.push(timing);
-          return acc;
-        },
-        {} as Record<
-          string,
-          { product_type: string; timings: TimingViewRow[] }
-        >,
-      );
+      let categoryHoursData: CategoryHourRow[] = [];
+      if (qaEntryRows && qaEntryRows.length > 0) {
+        const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
+        const { data: ch, error: chErr } = await client
+          .from("timing_qa_category_hours")
+          .select("id, timing_qa_entry_id, category_id, hours")
+          .in("timing_qa_entry_id", entryIds);
+        if (chErr) throw chErr;
+        categoryHoursData = (ch as CategoryHourRow[]) ?? [];
+      }
 
-      // Calculate aggregations
-      const metrics: SquadTimingMetrics[] = Object.values(
-        timingsByProductType,
-      ).map(
-        (productData: { product_type: string; timings: TimingViewRow[] }) => {
-          const { product_type, timings } = productData;
-          const total_effective_testing_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.effective_testing_hours) || 0),
-            0,
-          );
-          const total_waiting_environment_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.waiting_environment_hours) || 0),
-            0,
-          );
-          const total_waiting_development_fixes_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.waiting_development_fixes_hours) || 0),
-            0,
-          );
-          const total_retest_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.retest_hours) || 0),
-            0,
-          );
-          const total_clarification_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.clarification_hours) || 0),
-            0,
-          );
-          const total_hours = timings.reduce(
-            (sum: number, t: TimingViewRow) =>
-              sum + (parseFloat(t.total_hours) || 0),
-            0,
-          );
-          const task_count = timings.length;
+      const initCatTotals = () =>
+        catIds.reduce(
+          (a, id) => {
+            a[id] = 0;
+            return a;
+          },
+          {} as Record<string, number>,
+        );
+      const entryToTiming: Record<string, string> = {};
+      if (qaEntryRows)
+        for (const e of qaEntryRows as QAEntryRow[])
+          entryToTiming[e.id] = e.timing_id;
+      const timingToProduct: Record<string, string> = {};
+      for (const t of filteredTimings)
+        timingToProduct[t.id] = taskProductTypeMap[t.task_id] || "Unknown";
 
-          return {
-            product_type,
-            total_effective_testing_hours:
-              Math.round(total_effective_testing_hours * 100) / 100,
-            total_waiting_environment_hours:
-              Math.round(total_waiting_environment_hours * 100) / 100,
-            total_waiting_development_fixes_hours:
-              Math.round(total_waiting_development_fixes_hours * 100) / 100,
-            total_retest_hours: Math.round(total_retest_hours * 100) / 100,
-            total_clarification_hours:
-              Math.round(total_clarification_hours * 100) / 100,
-            total_hours: Math.round(total_hours * 100) / 100,
-            avg_effective_testing_hours:
-              Math.round((total_effective_testing_hours / task_count) * 100) /
-              100,
-            avg_waiting_environment_hours:
-              Math.round((total_waiting_environment_hours / task_count) * 100) /
-              100,
-            avg_waiting_development_fixes_hours:
-              Math.round(
-                (total_waiting_development_fixes_hours / task_count) * 100,
-              ) / 100,
-            avg_retest_hours:
-              Math.round((total_retest_hours / task_count) * 100) / 100,
-            avg_clarification_hours:
-              Math.round((total_clarification_hours / task_count) * 100) / 100,
-            avg_total_hours: Math.round((total_hours / task_count) * 100) / 100,
-            task_count,
+      const byProductType: Record<
+        string,
+        { timings: Set<string>; totals_by_category: Record<string, number> }
+      > = {};
+      for (const ch of categoryHoursData) {
+        const timingId = entryToTiming[ch.timing_qa_entry_id];
+        if (!timingId) continue;
+        const pt = timingToProduct[timingId] || "Unknown";
+        if (!byProductType[pt])
+          byProductType[pt] = {
+            timings: new Set(),
+            totals_by_category: initCatTotals(),
           };
-        },
-      );
+        byProductType[pt].timings.add(timingId);
+        byProductType[pt].totals_by_category[ch.category_id] =
+          (byProductType[pt].totals_by_category[ch.category_id] ?? 0) +
+          ch.hours;
+      }
+      for (const t of filteredTimings) {
+        const pt = timingToProduct[t.id] || "Unknown";
+        if (!byProductType[pt])
+          byProductType[pt] = {
+            timings: new Set(),
+            totals_by_category: initCatTotals(),
+          };
+        byProductType[pt].timings.add(t.id);
+      }
 
-      return metrics;
+      return Object.entries(byProductType).map(([product_type, agg]) => {
+        const task_count = agg.timings.size;
+        const totals_by_category = agg.totals_by_category;
+        const total_hours = Object.values(totals_by_category).reduce(
+          (s, v) => s + v,
+          0,
+        );
+        const averages_by_category = catIds.reduce(
+          (a, id) => {
+            a[id] =
+              task_count > 0
+                ? Math.round(
+                    ((totals_by_category[id] ?? 0) / task_count) * 100,
+                  ) / 100
+                : 0;
+            return a;
+          },
+          {} as Record<string, number>,
+        );
+        return {
+          product_type,
+          totals_by_category,
+          averages_by_category,
+          total_hours: Math.round(total_hours * 100) / 100,
+          avg_total_hours:
+            task_count > 0
+              ? Math.round((total_hours / task_count) * 100) / 100
+              : 0,
+          task_count,
+        };
+      }) as SquadTimingMetrics[];
     } catch (error) {
       console.error("Error in getSquadTimingMetrics:", error);
       throw error;
     }
   },
 
-  // Obtener tiempos por tarea con información de tareas (reads from VIEW)
   async getTaskTimingsWithTaskInfo(filters: {
     month?: number;
     year?: number;
     product_type?: string;
   }) {
     try {
-      // For this method we need the VIEW data + task info
-      // Since PostgREST views can't use foreign key joins, do separate queries
-      let query = supabase.from(TIMINGS_VIEW).select("*");
-
-      if (filters.month !== undefined) {
-        query = query.eq("month", filters.month);
-      }
-      if (filters.year !== undefined) {
-        query = query.eq("year", filters.year);
-      }
+      let query = supabase
+        .from("task_timings")
+        .select("id, task_id, month, year, created_at, updated_at");
+      if (filters.month !== undefined) query = query.eq("month", filters.month);
+      if (filters.year !== undefined) query = query.eq("year", filters.year);
 
       const { data: timingsData, error: timingsError } = await query.order(
         "created_at",
-        {
-          ascending: false,
-        },
+        { ascending: false },
       );
-
       if (timingsError) throw timingsError;
       if (!timingsData || timingsData.length === 0) return [];
 
-      // Get task info for these timings
       const taskIds = [
-        ...new Set(timingsData.map((t: TimingViewRow) => t.task_id)),
+        ...new Set(timingsData.map((t: { task_id: string }) => t.task_id)),
       ];
       let tasksQuery = supabase
         .from("tasks")
         .select("id, name, task_link, status, product_type, created_at")
         .in("id", taskIds);
-
-      if (filters.product_type) {
+      if (filters.product_type)
         tasksQuery = tasksQuery.eq("product_type", filters.product_type);
-      }
 
       const { data: tasksData } = await tasksQuery;
-      const tasksMap = (tasksData || []).reduce(
-        (acc: Record<string, TaskInfoRow>, task: TaskInfoRow) => {
+      const tasksMap = ((tasksData || []) as TaskInfoRow[]).reduce(
+        (acc: Record<string, TaskInfoRow>, task) => {
           acc[task.id] = task;
           return acc;
         },
         {},
       );
-
-      // Combine and filter
       return timingsData
-        .filter((t: TimingViewRow) => tasksMap[t.task_id])
-        .map((t: TimingViewRow) => ({ ...t, tasks: tasksMap[t.task_id] }));
+        .filter((t: { task_id: string }) => tasksMap[t.task_id])
+        .map((t: { task_id: string }) => ({
+          ...t,
+          tasks: tasksMap[t.task_id],
+        }));
     } catch (error) {
       console.error("Error in getTaskTimingsWithTaskInfo:", error);
       throw error;
     }
   },
 
-  // Obtener métricas de tiempos agrupadas por QA
   async getQATimingMetrics(
     filters: {
       month?: number;
@@ -772,151 +890,139 @@ export const timingService = {
   ): Promise<QATimingMetrics[]> {
     try {
       const client = await getClient(token);
+      const categories = await getTimingCategories(client);
+      const catIds = categories.map((c) => c.id);
+      const slugToId = buildSlugToIdMap(categories);
+      const effectiveTestingId = slugToId["effective_testing"];
+      const retestId = slugToId["retest"];
 
-      // Get all task_timings IDs for the date range
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
-
-      // When date range is provided, filter by effort_score_date on tasks table
       if (filters.startDate && filters.endDate) {
         const effortTaskIds = await getTaskIdsByEffortDate(
           client,
           filters.startDate,
           filters.endDate,
-          {
-            product_type: filters.product_type,
-          },
+          { product_type: filters.product_type },
         );
-        if (!effortTaskIds || effortTaskIds.length === 0) return [];
+        if (effortTaskIds.length === 0) return [];
         qaTimingsQuery = qaTimingsQuery.in("task_id", effortTaskIds);
       } else {
         qaTimingsQuery = buildDateRangeFilter(qaTimingsQuery, filters);
       }
 
       const { data: timingsData, error: timingsError } = await qaTimingsQuery;
-
       if (timingsError) throw timingsError;
       if (!timingsData || timingsData.length === 0) return [];
 
-      // If product_type filter (only when no date range — already filtered above)
-      let filteredTimingIds = timingsData.map(
-        (t: { id: string; task_id: string }) => t.id,
-      );
+      let filteredTimingIds = (
+        timingsData as { id: string; task_id: string }[]
+      ).map((t) => t.id);
       if (filters.product_type && !(filters.startDate && filters.endDate)) {
-        const taskIds = [
+        const allTaskIds = [
           ...new Set(
-            timingsData.map((t: { id: string; task_id: string }) => t.task_id),
+            (timingsData as { id: string; task_id: string }[]).map(
+              (t) => t.task_id,
+            ),
           ),
         ];
         const { data: tasksData } = await client
           .from("tasks")
-          .select("id, product_type")
-          .in("id", taskIds)
+          .select("id")
+          .in("id", allTaskIds)
           .eq("product_type", filters.product_type);
-
         const matchingTaskIds = new Set(
           (tasksData || []).map((t: TaskIdRow) => t.id),
         );
-        filteredTimingIds = timingsData
-          .filter((t: { id: string; task_id: string }) =>
-            matchingTaskIds.has(t.task_id),
-          )
-          .map((t: { id: string; task_id: string }) => t.id);
-
+        filteredTimingIds = (timingsData as { id: string; task_id: string }[])
+          .filter((t) => matchingTaskIds.has(t.task_id))
+          .map((t) => t.id);
         if (filteredTimingIds.length === 0) return [];
       }
 
-      // Get all QA entries for these timings
-      const { data: qaEntries, error: qaError } = await client
+      const { data: qaEntryRows, error: qaError } = await client
         .from("timing_qa_entries")
-        .select("*, task_qa!inner(qa_name)")
+        .select(
+          "id, timing_id, task_qa_id, created_at, updated_at, task_qa!inner(qa_name)",
+        )
         .in("timing_id", filteredTimingIds);
-
       if (qaError) throw qaError;
-      if (!qaEntries || qaEntries.length === 0) return [];
+      if (!qaEntryRows || qaEntryRows.length === 0) return [];
 
-      // Flatten task_qa join and group by qa_name
+      const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
+      const { data: catHours, error: catHoursErr } = await client
+        .from("timing_qa_category_hours")
+        .select("id, timing_qa_entry_id, category_id, hours")
+        .in("timing_qa_entry_id", entryIds);
+      if (catHoursErr) throw catHoursErr;
+      const flatEntries = flattenQAEntries(
+        qaEntryRows as QAEntryRow[],
+        (catHours as CategoryHourRow[]) ?? [],
+      );
+
       const byQA: Record<string, TimingQAEntry[]> = {};
-      for (const entry of qaEntries) {
-        const qaName =
-          (entry as { task_qa?: { qa_name: string } }).task_qa?.qa_name || "";
-        const flatEntry = {
-          ...entry,
-          qa_name: qaName,
-        };
-        delete (flatEntry as { task_qa?: unknown }).task_qa;
-        if (!byQA[qaName]) byQA[qaName] = [];
-        byQA[qaName].push(flatEntry as TimingQAEntry);
+      for (const entry of flatEntries) {
+        if (!byQA[entry.qa_name]) byQA[entry.qa_name] = [];
+        byQA[entry.qa_name].push(entry);
       }
 
-      // Calculate metrics per QA
+      const initTotals = () =>
+        catIds.reduce(
+          (a, id) => {
+            a[id] = 0;
+            return a;
+          },
+          {} as Record<string, number>,
+        );
+
       const metrics: QATimingMetrics[] = Object.entries(byQA).map(
         ([qaName, entries]) => {
-          const totals = {
-            effective_testing_hours: 0,
-            waiting_environment_hours: 0,
-            waiting_development_fixes_hours: 0,
-            retest_hours: 0,
-            clarification_hours: 0,
-            total_hours: 0,
-          };
-
+          const totals_by_category = initTotals();
+          let total_hours = 0;
           for (const e of entries) {
-            totals.effective_testing_hours +=
-              Number(e.effective_testing_hours) || 0;
-            totals.waiting_environment_hours +=
-              Number(e.waiting_environment_hours) || 0;
-            totals.waiting_development_fixes_hours +=
-              Number(e.waiting_development_fixes_hours) || 0;
-            totals.retest_hours += Number(e.retest_hours) || 0;
-            totals.clarification_hours += Number(e.clarification_hours) || 0;
-            totals.total_hours += Number(e.total_hours) || 0;
+            for (const [catId, hours] of Object.entries(e.hours_by_category)) {
+              totals_by_category[catId] =
+                (totals_by_category[catId] ?? 0) + hours;
+            }
+            total_hours += e.total_hours;
           }
-
           const count = entries.length;
-          const efficiencyRate =
-            totals.total_hours > 0
-              ? (totals.effective_testing_hours / totals.total_hours) * 100
-              : 0;
-          const retestRate =
-            totals.effective_testing_hours > 0
-              ? (totals.retest_hours / totals.effective_testing_hours) * 100
-              : 0;
-
+          const averages_by_category = catIds.reduce(
+            (a, id) => {
+              a[id] =
+                count > 0
+                  ? Math.round(((totals_by_category[id] ?? 0) / count) * 100) /
+                    100
+                  : 0;
+              return a;
+            },
+            {} as Record<string, number>,
+          );
+          const effectiveTesting = effectiveTestingId
+            ? (totals_by_category[effectiveTestingId] ?? 0)
+            : 0;
+          const retest = retestId ? (totals_by_category[retestId] ?? 0) : 0;
           return {
             qa_name: qaName,
-            total_effective_testing_hours:
-              Math.round(totals.effective_testing_hours * 100) / 100,
-            total_waiting_environment_hours:
-              Math.round(totals.waiting_environment_hours * 100) / 100,
-            total_waiting_development_fixes_hours:
-              Math.round(totals.waiting_development_fixes_hours * 100) / 100,
-            total_retest_hours: Math.round(totals.retest_hours * 100) / 100,
-            total_clarification_hours:
-              Math.round(totals.clarification_hours * 100) / 100,
-            total_hours: Math.round(totals.total_hours * 100) / 100,
-            avg_effective_testing_hours:
-              Math.round((totals.effective_testing_hours / count) * 100) / 100,
-            avg_waiting_environment_hours:
-              Math.round((totals.waiting_environment_hours / count) * 100) /
-              100,
-            avg_waiting_development_fixes_hours:
-              Math.round(
-                (totals.waiting_development_fixes_hours / count) * 100,
-              ) / 100,
-            avg_retest_hours:
-              Math.round((totals.retest_hours / count) * 100) / 100,
-            avg_clarification_hours:
-              Math.round((totals.clarification_hours / count) * 100) / 100,
+            totals_by_category,
+            averages_by_category,
+            total_hours: Math.round(total_hours * 100) / 100,
             avg_total_hours:
-              Math.round((totals.total_hours / count) * 100) / 100,
+              count > 0 ? Math.round((total_hours / count) * 100) / 100 : 0,
             task_count: count,
-            efficiency_rate: Math.round(efficiencyRate * 100) / 100,
-            retest_rate: Math.round(retestRate * 100) / 100,
+            efficiency_rate:
+              Math.round(
+                (total_hours > 0 ? (effectiveTesting / total_hours) * 100 : 0) *
+                  100,
+              ) / 100,
+            retest_rate:
+              Math.round(
+                (effectiveTesting > 0 ? (retest / effectiveTesting) * 100 : 0) *
+                  100,
+              ) / 100,
           };
         },
       );
 
-      // Sort by total hours descending
       return metrics.sort((a, b) => b.total_hours - a.total_hours);
     } catch (error) {
       console.error("Error in getQATimingMetrics:", error);

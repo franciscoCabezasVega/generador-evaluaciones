@@ -8,9 +8,14 @@ import CatalogManager, {
   CatalogItem,
   FieldDef,
 } from "@/components/CatalogManager";
-import { CatalogComplexity, CatalogSquad } from "@/lib/types";
+import {
+  CatalogComplexity,
+  CatalogSquad,
+  CatalogTimingCategory,
+} from "@/lib/types";
 import { authenticatedFetch } from "@/lib/fetchAuth";
 import { invalidateCatalogCache } from "@/hooks/useCatalogData";
+import CacheWarningBanner from "@/components/CacheWarningBanner";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
 // ─── Tipos de tab ─────────────────────────────────────────────────────────────
@@ -19,7 +24,8 @@ type TabId =
   | "project-types"
   | "complexities"
   | "squads"
-  | "qa-members";
+  | "qa-members"
+  | "timing-categories";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "products", label: "Productos" },
@@ -27,6 +33,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "complexities", label: "Complejidad" },
   { id: "squads", label: "Squads" },
   { id: "qa-members", label: "QA Members" },
+  { id: "timing-categories", label: "Categorías de Tiempo" },
 ];
 
 // ─── Definición de campos por entidad ────────────────────────────────────────
@@ -92,6 +99,31 @@ const QA_FIELDS: FieldDef[] = [
   },
 ];
 
+const TIMING_CATEGORY_FIELDS: FieldDef[] = [
+  {
+    key: "name",
+    label: "Nombre",
+    type: "text",
+    placeholder: "Ej: Reuniones diarias",
+    required: true,
+  },
+  {
+    key: "hex_color",
+    label: "Color",
+    type: "color",
+    required: true,
+  },
+  {
+    key: "display_order",
+    label: "Orden",
+    type: "number",
+    min: 1,
+    required: true,
+    description: "Posición en formularios (1 = primero)",
+  },
+  // is_system es solo lectura: el backend lo ignora en PATCH y lo fuerza a false en POST
+];
+
 // ─── Página ───────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -105,6 +137,9 @@ export default function SettingsPage() {
   const [complexities, setComplexities] = useState<CatalogComplexity[]>([]);
   const [squads, setSquads] = useState<CatalogSquad[]>([]);
   const [qaMembers, setQaMembers] = useState<CatalogItem[]>([]);
+  const [timingCategories, setTimingCategories] = useState<
+    CatalogTimingCategory[]
+  >([]);
 
   const [loadingTab, setLoadingTab] = useState(false);
   const [tabError, setTabError] = useState<string | null>(null);
@@ -149,6 +184,9 @@ export default function SettingsPage() {
           break;
         case "qa-members":
           setQaMembers(data);
+          break;
+        case "timing-categories":
+          setTimingCategories(data);
           break;
       }
     } catch (err) {
@@ -242,6 +280,48 @@ export default function SettingsPage() {
     },
   ];
 
+  const timingCategoryExtraColumns = [
+    {
+      header: "Color",
+      render: (item: CatalogItem) => {
+        const c = item as unknown as CatalogTimingCategory;
+        return (
+          <span
+            className="inline-block w-6 h-6 rounded border border-gray-300"
+            style={{ backgroundColor: c.hex_color }}
+            title={c.hex_color}
+          />
+        );
+      },
+    },
+    {
+      header: "Orden",
+      render: (item: CatalogItem) => {
+        const c = item as unknown as CatalogTimingCategory;
+        return (
+          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">
+            {c.display_order}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Tipo",
+      render: (item: CatalogItem) => {
+        const c = item as unknown as CatalogTimingCategory;
+        return c.is_system ? (
+          <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200">
+            Sistema
+          </span>
+        ) : (
+          <span className="text-xs bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full border border-gray-200">
+            Custom
+          </span>
+        );
+      },
+    },
+  ];
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   if (authLoading) {
@@ -263,6 +343,7 @@ export default function SettingsPage() {
     <>
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 py-8">
+        <CacheWarningBanner />
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Configuración</h1>
@@ -371,6 +452,23 @@ export default function SettingsPage() {
                     fields={QA_FIELDS}
                     onRefresh={handleRefresh}
                     itemLabel="miembro QA"
+                  />
+                )}
+                {activeTab === "timing-categories" && (
+                  <CatalogManager
+                    title="Categorías de Tiempo"
+                    apiPath="/api/settings/timing-categories"
+                    items={timingCategories as unknown as CatalogItem[]}
+                    fields={TIMING_CATEGORY_FIELDS}
+                    onRefresh={handleRefresh}
+                    extraColumns={timingCategoryExtraColumns}
+                    itemLabel="categoría de tiempo"
+                    isProtected={(item) =>
+                      Boolean(
+                        (item as unknown as CatalogTimingCategory).is_system,
+                      )
+                    }
+                    protectedMessage="Las categorías del sistema no pueden eliminarse; desactívalas en su lugar"
                   />
                 )}
               </>

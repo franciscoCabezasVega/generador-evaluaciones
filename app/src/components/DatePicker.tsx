@@ -104,7 +104,9 @@ export default function DatePicker({
   // Derived display: when not editing, compute directly from the prop.
   const displayText = isEditing
     ? inputText
-    : selectedDate ? format(selectedDate, "dd/MM/yyyy") : "";
+    : selectedDate
+      ? format(selectedDate, "dd/MM/yyyy")
+      : "";
 
   // Snap viewDate to selectedDate when the calendar is opened.
   const openCalendar = () => {
@@ -205,11 +207,12 @@ export default function DatePicker({
   const month = getMonth(viewDate);
   const days = useMemo(() => getCalendarDays(year, month), [year, month]);
 
-  const borderClass = hasError || inputError
-    ? "border-red-500"
-    : isOpen
-      ? "border-blue-400"
-      : "border-gray-300";
+  const borderClass =
+    hasError || inputError
+      ? "border-red-500"
+      : isOpen
+        ? "border-blue-400"
+        : "border-gray-300";
 
   return (
     <div
@@ -319,11 +322,12 @@ export default function DatePicker({
                     onClick={() => handleSelectDate(day)}
                     className={`
                       h-8 text-xs font-medium rounded-md transition-all
-                      ${isSelected
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : isToday
-                          ? "ring-1 ring-blue-300 text-gray-700 hover:bg-gray-100"
-                          : "text-gray-700 hover:bg-gray-100"
+                      ${
+                        isSelected
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : isToday
+                            ? "ring-1 ring-blue-300 text-gray-700 hover:bg-gray-100"
+                            : "text-gray-700 hover:bg-gray-100"
                       }
                     `}
                   >
