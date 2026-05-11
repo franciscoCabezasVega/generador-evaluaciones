@@ -276,10 +276,11 @@ export const timingService = {
       let categoryHoursData: CategoryHourRow[] = [];
       if (!qaError && qaEntryRows && qaEntryRows.length > 0) {
         const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-        const { data: ch } = await client
+        const { data: ch, error: categoryHoursError } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", entryIds);
+        if (categoryHoursError) throw categoryHoursError;
         categoryHoursData = (ch as CategoryHourRow[]) ?? [];
       }
 
@@ -336,10 +337,11 @@ export const timingService = {
       let qa_entries: TimingQAEntry[] = [];
       if (!qaError && qaEntryRows && qaEntryRows.length > 0) {
         const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-        const { data: catHours } = await client
+        const { data: catHours, error: catHoursError } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", entryIds);
+        if (catHoursError) throw catHoursError;
         qa_entries = flattenQAEntries(
           qaEntryRows as QAEntryRow[],
           (catHours as CategoryHourRow[]) ?? [],
@@ -481,11 +483,30 @@ export const timingService = {
         .eq("id", id);
       if (touchError) throw touchError;
 
-      // Guardar entries existentes antes de borrar, para poder restaurarlas si falla el insert
+      // Guardar entries existentes (+ sus horas por categoría) antes de borrar
       const { data: existingEntries } = await client
         .from("timing_qa_entries")
         .select("id, task_qa_id")
         .eq("timing_id", id);
+
+      type ExistingEntry = { id: string; task_qa_id: string };
+      type ExistingCatHour = {
+        id: string;
+        timing_qa_entry_id: string;
+        category_id: string;
+        hours: number;
+      };
+      const savedEntries: ExistingEntry[] =
+        (existingEntries as ExistingEntry[] | null) ?? [];
+      let savedCategoryHours: ExistingCatHour[] = [];
+      if (savedEntries.length > 0) {
+        const savedEntryIds = savedEntries.map((e) => e.id);
+        const { data: savedCh } = await client
+          .from("timing_qa_category_hours")
+          .select("id, timing_qa_entry_id, category_id, hours")
+          .in("timing_qa_entry_id", savedEntryIds);
+        savedCategoryHours = (savedCh as ExistingCatHour[] | null) ?? [];
+      }
 
       const { error: deleteQaEntriesError } = await client
         .from("timing_qa_entries")
@@ -525,10 +546,7 @@ export const timingService = {
         )
         .select("id, task_qa_id");
       if (qaInsertErr) {
-        // Compensación: restaurar las entries anteriores si el insert falla
-        const savedEntries =
-          (existingEntries as { id: string; task_qa_id: string }[] | null) ??
-          [];
+        // Compensación: restaurar entries anteriores + sus horas por categoría
         if (savedEntries.length > 0) {
           await client.from("timing_qa_entries").insert(
             savedEntries.map((e) => ({
@@ -537,6 +555,16 @@ export const timingService = {
               task_qa_id: e.task_qa_id,
             })),
           );
+          if (savedCategoryHours.length > 0) {
+            await client.from("timing_qa_category_hours").insert(
+              savedCategoryHours.map((ch) => ({
+                id: ch.id,
+                timing_qa_entry_id: ch.timing_qa_entry_id,
+                category_id: ch.category_id,
+                hours: ch.hours,
+              })),
+            );
+          }
         }
         throw new Error(`Error updating QA entries: ${qaInsertErr.message}`);
       }
@@ -572,7 +600,7 @@ export const timingService = {
           .from("timing_qa_category_hours")
           .insert(categoryHourUpdates);
         if (chErr) {
-          // Compensación: eliminar las QA entries recién creadas para no dejar datos inconsistentes
+          // Compensación: eliminar las nuevas entries y restaurar las anteriores con sus horas
           const newEntryIds = (
             updatedEntries as { id: string; task_qa_id: string }[]
           ).map((e) => e.id);
@@ -581,6 +609,25 @@ export const timingService = {
               .from("timing_qa_entries")
               .delete()
               .in("id", newEntryIds);
+          }
+          if (savedEntries.length > 0) {
+            await client.from("timing_qa_entries").insert(
+              savedEntries.map((e) => ({
+                id: e.id,
+                timing_id: id,
+                task_qa_id: e.task_qa_id,
+              })),
+            );
+            if (savedCategoryHours.length > 0) {
+              await client.from("timing_qa_category_hours").insert(
+                savedCategoryHours.map((ch) => ({
+                  id: ch.id,
+                  timing_qa_entry_id: ch.timing_qa_entry_id,
+                  category_id: ch.category_id,
+                  hours: ch.hours,
+                })),
+              );
+            }
           }
           throw new Error(`Error updating category hours: ${chErr.message}`);
         }
@@ -683,10 +730,11 @@ export const timingService = {
       let categoryHoursData: CategoryHourRow[] = [];
       if (qaEntryRows && qaEntryRows.length > 0) {
         const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-        const { data: ch } = await client
+        const { data: ch, error: chErr } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", entryIds);
+        if (chErr) throw chErr;
         categoryHoursData = (ch as CategoryHourRow[]) ?? [];
       }
 
@@ -891,10 +939,11 @@ export const timingService = {
       if (!qaEntryRows || qaEntryRows.length === 0) return [];
 
       const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-      const { data: catHours } = await client
+      const { data: catHours, error: catHoursErr } = await client
         .from("timing_qa_category_hours")
         .select("id, timing_qa_entry_id, category_id, hours")
         .in("timing_qa_entry_id", entryIds);
+      if (catHoursErr) throw catHoursErr;
       const flatEntries = flattenQAEntries(
         qaEntryRows as QAEntryRow[],
         (catHours as CategoryHourRow[]) ?? [],

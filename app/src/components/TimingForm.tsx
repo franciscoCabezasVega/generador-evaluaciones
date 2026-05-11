@@ -822,9 +822,17 @@ function TimingFormComponent(
         <Button
           type="submit"
           disabled={
-            isLoading || grandTotal === 0 || formData.qa_entries.length === 0
+            isLoading ||
+            activeCategories.length === 0 ||
+            grandTotal === 0 ||
+            formData.qa_entries.length === 0
           }
           className="flex-1 bg-blue-500 hover:bg-blue-600"
+          title={
+            activeCategories.length === 0
+              ? "No hay categorías de tiempo activas. Configúralas en Ajustes."
+              : undefined
+          }
         >
           {isLoading ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
         </Button>

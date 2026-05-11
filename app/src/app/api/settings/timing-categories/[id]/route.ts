@@ -135,12 +135,18 @@ export async function DELETE(
   const { id } = await params;
 
   // Verificar existencia
-  const { data: category } = await supabase
+  const { data: category, error: fetchError } = await supabase
     .from("timing_categories")
     .select("name, is_system")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
+  if (fetchError) {
+    return NextResponse.json(
+      { error: "Error al obtener la categoría", details: fetchError.message },
+      { status: 500 },
+    );
+  }
   if (!category) {
     return NextResponse.json(
       { error: "Categoría no encontrada" },

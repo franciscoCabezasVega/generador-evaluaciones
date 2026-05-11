@@ -1187,7 +1187,12 @@ export function QASummaryCards({
     content: string,
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
+    setTooltip({
+      visible: true,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10,
+      content,
+    });
   };
   const handleBarTooltipHide = () => {
     setTooltip((prev) => ({ ...prev, visible: false }));
@@ -1207,123 +1212,126 @@ export function QASummaryCards({
 
   return (
     <>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {qaMetrics
-        .sort((a, b) => b.total_hours - a.total_hours)
-        .map((qa, idx) => {
-          const color = QA_CHART_COLORS[idx % QA_CHART_COLORS.length];
-          const qualityScore = Math.max(0, 100 - qa.retest_rate);
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {qaMetrics
+          .sort((a, b) => b.total_hours - a.total_hours)
+          .map((qa, idx) => {
+            const color = QA_CHART_COLORS[idx % QA_CHART_COLORS.length];
+            const qualityScore = Math.max(0, 100 - qa.retest_rate);
 
-          return (
-            <div
-              key={qa.qa_name}
-              className="rounded-lg border border-gray-200 bg-white overflow-hidden"
-            >
-              {/* Header colored accent */}
-              <div className="h-1.5" style={{ backgroundColor: color }} />
-              <div className="p-5">
-                <h4 className="text-base font-bold text-gray-900 mb-3">
-                  {qa.qa_name}
-                </h4>
+            return (
+              <div
+                key={qa.qa_name}
+                className="rounded-lg border border-gray-200 bg-white overflow-hidden"
+              >
+                {/* Header colored accent */}
+                <div className="h-1.5" style={{ backgroundColor: color }} />
+                <div className="p-5">
+                  <h4 className="text-base font-bold text-gray-900 mb-3">
+                    {qa.qa_name}
+                  </h4>
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-500 text-xs">Horas Totales</p>
-                    <p className="font-bold text-gray-900">
-                      {qa.total_hours.toFixed(1)}h
-                    </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500 text-xs">Horas Totales</p>
+                      <p className="font-bold text-gray-900">
+                        {qa.total_hours.toFixed(1)}h
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Tareas</p>
+                      <p className="font-bold text-gray-900">{qa.task_count}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Eficiencia</p>
+                      <p
+                        className={`font-bold ${
+                          qa.efficiency_rate > 70
+                            ? "text-green-600"
+                            : qa.efficiency_rate > 50
+                              ? "text-yellow-600"
+                              : "text-red-600"
+                        }`}
+                      >
+                        {qa.efficiency_rate.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Calidad</p>
+                      <p
+                        className={`font-bold ${
+                          qualityScore > 80
+                            ? "text-green-600"
+                            : qualityScore > 60
+                              ? "text-yellow-600"
+                              : "text-red-600"
+                        }`}
+                      >
+                        {qualityScore.toFixed(0)}/100
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-gray-500 text-xs">Tareas</p>
-                    <p className="font-bold text-gray-900">{qa.task_count}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 text-xs">Eficiencia</p>
-                    <p
-                      className={`font-bold ${
-                        qa.efficiency_rate > 70
-                          ? "text-green-600"
-                          : qa.efficiency_rate > 50
-                            ? "text-yellow-600"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {qa.efficiency_rate.toFixed(1)}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 text-xs">Calidad</p>
-                    <p
-                      className={`font-bold ${
-                        qualityScore > 80
-                          ? "text-green-600"
-                          : qualityScore > 60
-                            ? "text-yellow-600"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {qualityScore.toFixed(0)}/100
-                    </p>
-                  </div>
-                </div>
 
-                {/* Mini stacked bar */}
-                <div className="mt-4">
-                  <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-100">
-                    {activeCategories.map((cat) => {
-                      const hours = qa.totals_by_category?.[cat.id] ?? 0;
-                      const pct = qa.total_hours > 0 ? (hours / qa.total_hours) * 100 : 0;
-                      return (
-                        <div
-                          key={cat.id}
-                          onMouseEnter={(e) =>
-                            handleBarTooltipShow(
-                              e,
-                              `${cat.name}: ${hours.toFixed(1)}h (${pct.toFixed(0)}%)`,
-                            )
-                          }
-                          onMouseLeave={handleBarTooltipHide}
-                          className="h-full cursor-pointer hover:opacity-80 transition-opacity"
-                          style={{
-                            width: `${pct}%`,
-                            backgroundColor: cat.hex_color,
-                          }}
-                        />
-                      );
-                    })}
+                  {/* Mini stacked bar */}
+                  <div className="mt-4">
+                    <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-100">
+                      {activeCategories.map((cat) => {
+                        const hours = qa.totals_by_category?.[cat.id] ?? 0;
+                        const pct =
+                          qa.total_hours > 0
+                            ? (hours / qa.total_hours) * 100
+                            : 0;
+                        return (
+                          <div
+                            key={cat.id}
+                            onMouseEnter={(e) =>
+                              handleBarTooltipShow(
+                                e,
+                                `${cat.name}: ${hours.toFixed(1)}h (${pct.toFixed(0)}%)`,
+                              )
+                            }
+                            onMouseLeave={handleBarTooltipHide}
+                            className="h-full cursor-pointer hover:opacity-80 transition-opacity"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: cat.hex_color,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-    </div>
-    {/* Tooltip barra mini */}
-    <div
-      className="fixed bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-sm pointer-events-none z-50"
-      style={{
-        left: `${tooltip.x}px`,
-        top: `${tooltip.y}px`,
-        transform: "translate(-50%, -100%)",
-        opacity: tooltip.visible ? 1 : 0,
-        visibility: tooltip.visible ? "visible" : "hidden",
-        transitionProperty: "opacity, visibility",
-        transitionDuration: "100ms",
-        transitionTimingFunction: "ease-in-out",
-        willChange: "opacity, visibility",
-      }}
-    >
-      {tooltip.content}
+            );
+          })}
+      </div>
+      {/* Tooltip barra mini */}
       <div
-        className="absolute w-2 h-2 bg-gray-900"
+        className="fixed bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-sm pointer-events-none z-50"
         style={{
-          left: "50%",
-          top: "100%",
-          transform: "translateX(-50%)",
-          clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+          left: `${tooltip.x}px`,
+          top: `${tooltip.y}px`,
+          transform: "translate(-50%, -100%)",
+          opacity: tooltip.visible ? 1 : 0,
+          visibility: tooltip.visible ? "visible" : "hidden",
+          transitionProperty: "opacity, visibility",
+          transitionDuration: "100ms",
+          transitionTimingFunction: "ease-in-out",
+          willChange: "opacity, visibility",
         }}
-      />
-    </div>
+      >
+        {tooltip.content}
+        <div
+          className="absolute w-2 h-2 bg-gray-900"
+          style={{
+            left: "50%",
+            top: "100%",
+            transform: "translateX(-50%)",
+            clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+          }}
+        />
+      </div>
     </>
   );
 }
