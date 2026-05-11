@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth";
 
 const HEX_REGEX = /^#[0-9A-Fa-f]{6}$/;
-const PROTECTED_FIELDS = ["slug"];
+const PROTECTED_FIELDS = ["slug", "is_system"];
 
 export async function PATCH(
   request: NextRequest,

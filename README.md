@@ -498,7 +498,10 @@ app/
 │           ├── 20260509000000_rename_category_to_project_type.sql # categories → project_types
 │           ├── 20260510000000_create_timing_categories.sql       # Tabla timing_categories + tabla puente
 │           ├── 20260510000001_migrate_timing_data.sql            # Backfill de horas históricas
-│           └── 20260510000002_drop_legacy_columns_and_recreate_view.sql # Drop columnas legacy + recrear VIEW
+│           ├── 20260510000002_drop_legacy_columns_and_recreate_view.sql # Drop columnas legacy + recrear VIEW
+│           ├── 20260511000000_fix_timing_qa_category_hours_rls.sql # Ajuste RLS ownership para timing_qa_category_hours
+│           ├── 20260511060000_normalize_timing_category_slugs.sql # Normalización de slugs semánticos en timing_categories
+│           └── 20260511120000_protect_system_timing_categories.sql # RLS: bloquear UPDATE/DELETE de categorías del sistema
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright
