@@ -201,7 +201,9 @@ async function syncAssignedQA(
       return;
     }
     const qaNames = [
-      ...new Set((qaData as { qa_name: string }[]).map((q) => q.qa_name)),
+      ...new Set(
+        ((qaData ?? []) as { qa_name: string }[]).map((q) => q.qa_name),
+      ),
     ];
     const { error: updateError } = await client
       .from("tasks")
@@ -479,6 +481,12 @@ export const timingService = {
         .eq("id", id);
       if (touchError) throw touchError;
 
+      // Guardar entries existentes antes de borrar, para poder restaurarlas si falla el insert
+      const { data: existingEntries } = await client
+        .from("timing_qa_entries")
+        .select("id, task_qa_id")
+        .eq("timing_id", id);
+
       const { error: deleteQaEntriesError } = await client
         .from("timing_qa_entries")
         .delete()
@@ -516,8 +524,22 @@ export const timingService = {
           })),
         )
         .select("id, task_qa_id");
-      if (qaInsertErr)
+      if (qaInsertErr) {
+        // Compensación: restaurar las entries anteriores si el insert falla
+        const savedEntries =
+          (existingEntries as { id: string; task_qa_id: string }[] | null) ??
+          [];
+        if (savedEntries.length > 0) {
+          await client.from("timing_qa_entries").insert(
+            savedEntries.map((e) => ({
+              id: e.id,
+              timing_id: id,
+              task_qa_id: e.task_qa_id,
+            })),
+          );
+        }
         throw new Error(`Error updating QA entries: ${qaInsertErr.message}`);
+      }
 
       const entryIdByQaIdUpdate = new Map(
         (updatedEntries as { id: string; task_qa_id: string }[]).map((e) => [

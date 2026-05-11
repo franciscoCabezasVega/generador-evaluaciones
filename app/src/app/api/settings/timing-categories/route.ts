@@ -90,12 +90,14 @@ export async function POST(request: NextRequest) {
   }
 
   const name = body.name.trim();
+  // Escapar comodines ILIKE para evitar falsos positivos con nombres que contienen % o _
+  const escapedName = name.replace(/[%_\\]/g, "\\$&");
 
   // Verificar duplicado (case-insensitive, activos)
   const { data: existing } = await supabase
     .from("timing_categories")
     .select("id")
-    .ilike("name", name)
+    .ilike("name", escapedName)
     .eq("is_active", true)
     .maybeSingle();
 

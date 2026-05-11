@@ -1,6 +1,8 @@
 -- ============================================================
 -- PR5 — Drop columnas legacy + recrear VIEW
--- ¡Ejecutar SOLO después de validar PR4 en producción!
+-- Esta migración usa DROP IF EXISTS y CREATE OR REPLACE para ser idempotente.
+-- Es seguro ejecutarla en orden automático siempre que las columnas nuevas
+-- (timing_qa_category_hours) existan (migración 20260510000001 previa).
 -- ============================================================
 
 -- 1. Eliminar VIEW que depende de las columnas antiguas

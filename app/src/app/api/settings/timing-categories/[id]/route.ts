@@ -44,11 +44,13 @@ export async function PATCH(
       );
     }
     const name = body.name.trim();
+    // Escapar comodines ILIKE para evitar falsos positivos con % o _
+    const escapedName = name.replace(/[%_\\]/g, "\\$&");
     // Verificar duplicado (excluir el propio)
     const { data: existing } = await supabase
       .from("timing_categories")
       .select("id")
-      .ilike("name", name)
+      .ilike("name", escapedName)
       .eq("is_active", true)
       .neq("id", id)
       .maybeSingle();
