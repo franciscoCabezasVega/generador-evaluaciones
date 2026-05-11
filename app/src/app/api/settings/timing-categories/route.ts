@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (body.hex_color && !HEX_REGEX.test(body.hex_color)) {
+  if (body.hex_color !== undefined && !HEX_REGEX.test(body.hex_color)) {
     return NextResponse.json(
       { error: "hex_color debe tener formato #RRGGBB" },
       { status: 400 },

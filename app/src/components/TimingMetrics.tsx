@@ -401,7 +401,7 @@ export function TimingMetricsComparisonChart({
             ? (metric.averages_by_category?.[retestId] ?? 0)
             : 0;
           const totalWaiting = activeCategories
-            .filter((c) => c.slug !== "effective_testing")
+            .filter((c) => c.slug.startsWith("waiting_"))
             .reduce(
               (s, c) => s + (metric.averages_by_category?.[c.id] ?? 0),
               0,
@@ -477,7 +477,7 @@ export function SquadTimingSummaryCard({
 
   // Calcular métricas derivadas
   const totalWaitingHours = activeCategories
-    .filter((c) => c.slug !== "effective_testing")
+    .filter((c) => c.slug.startsWith("waiting_"))
     .reduce((s, c) => s + (metric.totals_by_category?.[c.id] ?? 0), 0);
 
   const efficiencyRate =
@@ -1084,7 +1084,7 @@ export function QAEfficiencyChart({
                                     className={
                                       taskIdx % 2 === 0
                                         ? "bg-white dark:bg-white/[0.04] border-b border-slate-100 dark:border-white/5"
-                                        : "bg-slate-50 dark:bg-transparent border-b border-slate-100 dark:border-white/5"
+                                        : "bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/5"
                                     }
                                   >
                                     <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
@@ -1134,7 +1134,10 @@ export function QAEfficiencyChart({
                                         h
                                       </td>
                                     ))}
-                                    <td className="py-2 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                                    <td
+                                      className="py-2 px-3 text-center font-bold"
+                                      style={{ color: "#F59E0B" }}
+                                    >
                                       {Number(detail.total).toFixed(2)}h
                                     </td>
                                   </tr>

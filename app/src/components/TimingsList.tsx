@@ -166,14 +166,20 @@ export default function TimingsList({
                   <>
                     {/* Mini cards de horas por categoría — solo las que tienen horas */}
                     {(() => {
-                      const catsWithHours = activeCategories.filter(
-                        (cat) => sumCategoryHours(timing, cat.id) > 0,
-                      );
-                      if (catsWithHours.length === 0) return null;
+                      const categoriesWithHours = activeCategories.reduce<
+                        {
+                          cat: (typeof activeCategories)[number];
+                          hours: number;
+                        }[]
+                      >((acc, cat) => {
+                        const hours = sumCategoryHours(timing, cat.id);
+                        if (hours > 0) acc.push({ cat, hours });
+                        return acc;
+                      }, []);
+                      if (categoriesWithHours.length === 0) return null;
                       return (
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {catsWithHours.map((cat) => {
-                            const hours = sumCategoryHours(timing, cat.id);
+                          {categoriesWithHours.map(({ cat, hours }) => {
                             return (
                               <div
                                 key={cat.id}

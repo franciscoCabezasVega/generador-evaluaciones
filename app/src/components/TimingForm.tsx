@@ -688,8 +688,10 @@ function TimingFormComponent(
                     )}
                     {activeCategories.map((cat) => {
                       const catHours = entry.hours_by_category[cat.id] ?? 0;
-                      // Usar qaIdx en lugar de qa_name para evitar espacios/caracteres inválidos en id HTML
-                      const fieldKey = `qa_${qaIdx}_${cat.id}`;
+                      // fieldId: id HTML válido (sin espacios/símbolos del nombre del QA)
+                      const fieldId = `qa_${qaIdx}_${cat.id}`;
+                      // errorKey: clave del mapa de errores, debe coincidir con lo que usa updateQAHours
+                      const errorKey = `${entry.qa_name}_${cat.id}`;
                       return (
                         <div
                           key={`${entry.qa_name}-${cat.id}`}
@@ -698,7 +700,7 @@ function TimingFormComponent(
                         >
                           <div className="flex items-center justify-between">
                             <label
-                              htmlFor={fieldKey}
+                              htmlFor={fieldId}
                               className="text-xs font-medium"
                               style={{ color: cat.hex_color }}
                             >
@@ -706,8 +708,8 @@ function TimingFormComponent(
                             </label>
                             <div className="flex items-center gap-1.5">
                               <input
-                                id={fieldKey}
-                                name={fieldKey}
+                                id={fieldId}
+                                name={fieldId}
                                 type="text"
                                 inputMode="numeric"
                                 value={catHours === 0 ? "" : catHours}
@@ -734,9 +736,9 @@ function TimingFormComponent(
                               />
                             </div>
                           </div>
-                          {errors[fieldKey] && (
+                          {errors[errorKey] && (
                             <p className="mt-1 text-xs text-red-600">
-                              {errors[fieldKey]}
+                              {errors[errorKey]}
                             </p>
                           )}
                         </div>
