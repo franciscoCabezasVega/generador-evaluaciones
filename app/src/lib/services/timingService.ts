@@ -68,10 +68,12 @@ async function getClient(token?: string) {
 async function getTimingCategories(
   client: SupabaseClient,
 ): Promise<CatalogTimingCategory[]> {
-  const { data } = await client
+  const { data, error } = await client
     .from("timing_categories")
     .select("*")
     .order("display_order", { ascending: true });
+  if (error)
+    throw new Error(`Failed to fetch timing categories: ${error.message}`);
   return (data as CatalogTimingCategory[]) ?? [];
 }
 
@@ -270,10 +272,11 @@ export const timingService = {
       let categoryHoursData: CategoryHourRow[] = [];
       if (!qaError && qaEntryRows && qaEntryRows.length > 0) {
         const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-        const { data: ch } = await client
+        const { data: ch, error: chError } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", entryIds);
+        if (chError) throw chError;
         categoryHoursData = (ch as CategoryHourRow[]) ?? [];
       }
 
@@ -538,8 +541,19 @@ export const timingService = {
         const { error: chErr } = await client
           .from("timing_qa_category_hours")
           .insert(categoryHourUpdates);
-        if (chErr)
+        if (chErr) {
+          // Compensación: eliminar las QA entries recién creadas para no dejar datos inconsistentes
+          const newEntryIds = (
+            updatedEntries as { id: string; task_qa_id: string }[]
+          ).map((e) => e.id);
+          if (newEntryIds.length > 0) {
+            await client
+              .from("timing_qa_entries")
+              .delete()
+              .in("id", newEntryIds);
+          }
           throw new Error(`Error updating category hours: ${chErr.message}`);
+        }
       }
 
       await syncAssignedQA(client, timingData.task_id);
@@ -639,10 +653,11 @@ export const timingService = {
       let categoryHoursData: CategoryHourRow[] = [];
       if (qaEntryRows && qaEntryRows.length > 0) {
         const entryIds = (qaEntryRows as QAEntryRow[]).map((e) => e.id);
-        const { data: ch } = await client
+        const { data: ch, error: chError } = await client
           .from("timing_qa_category_hours")
           .select("id, timing_qa_entry_id, category_id, hours")
           .in("timing_qa_entry_id", entryIds);
+        if (chError) throw chError;
         categoryHoursData = (ch as CategoryHourRow[]) ?? [];
       }
 
@@ -791,8 +806,8 @@ export const timingService = {
       const categories = await getTimingCategories(client);
       const catIds = categories.map((c) => c.id);
       const slugToId = buildSlugToIdMap(categories);
-      const effectiveTestingId = slugToId["qa_testing"];
-      const retestId = slugToId["qa_ready_for_testing"];
+      const effectiveTestingId = slugToId["effective_testing"];
+      const retestId = slugToId["retest"];
 
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {

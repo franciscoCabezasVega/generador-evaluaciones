@@ -102,6 +102,23 @@ export async function POST(request: NextRequest) {
 
   const slug = slugify(name);
 
+  // Verificar colisión de slug (pueden existir nombres distintos que producen el mismo slug)
+  const { data: slugConflict } = await supabase
+    .from("timing_categories")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (slugConflict) {
+    return NextResponse.json(
+      {
+        error:
+          "Ya existe una categoría con un nombre similar. Intenta con un nombre más distintivo.",
+      },
+      { status: 409 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("timing_categories")
     .insert({

@@ -392,8 +392,8 @@ export function TimingMetricsComparisonChart({
       {/* Insights */}
       <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
         {metrics.map((metric) => {
-          const effectiveId = slugToId["qa_testing"];
-          const retestId = slugToId["qa_ready_for_testing"];
+          const effectiveId = slugToId["effective_testing"];
+          const retestId = slugToId["retest"];
           const avgEffective = effectiveId
             ? (metric.averages_by_category?.[effectiveId] ?? 0)
             : 0;
@@ -401,7 +401,7 @@ export function TimingMetricsComparisonChart({
             ? (metric.averages_by_category?.[retestId] ?? 0)
             : 0;
           const totalWaiting = activeCategories
-            .filter((c) => c.slug !== "qa_testing")
+            .filter((c) => c.slug !== "effective_testing")
             .reduce(
               (s, c) => s + (metric.averages_by_category?.[c.id] ?? 0),
               0,
@@ -466,8 +466,8 @@ export function SquadTimingSummaryCard({
     {} as Record<string, string>,
   );
 
-  const effectiveTestingId = slugToId["qa_testing"];
-  const retestId = slugToId["qa_ready_for_testing"];
+  const effectiveTestingId = slugToId["effective_testing"];
+  const retestId = slugToId["retest"];
   const totalEffective = effectiveTestingId
     ? (metric.totals_by_category?.[effectiveTestingId] ?? 0)
     : 0;
@@ -477,7 +477,7 @@ export function SquadTimingSummaryCard({
 
   // Calcular métricas derivadas
   const totalWaitingHours = activeCategories
-    .filter((c) => c.slug !== "qa_testing")
+    .filter((c) => c.slug !== "effective_testing")
     .reduce((s, c) => s + (metric.totals_by_category?.[c.id] ?? 0), 0);
 
   const efficiencyRate =
@@ -985,18 +985,17 @@ export function QAEfficiencyChart({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-blue-600">
-                        {(slugToId["qa_testing"]
-                          ? (qa.totals_by_category?.[slugToId["qa_testing"]] ??
-                            0)
+                        {(slugToId["effective_testing"]
+                          ? (qa.totals_by_category?.[
+                              slugToId["effective_testing"]
+                            ] ?? 0)
                           : 0
                         ).toFixed(1)}
                         h
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-red-600">
-                        {(slugToId["qa_ready_for_testing"]
-                          ? (qa.totals_by_category?.[
-                              slugToId["qa_ready_for_testing"]
-                            ] ?? 0)
+                        {(slugToId["retest"]
+                          ? (qa.totals_by_category?.[slugToId["retest"]] ?? 0)
                           : 0
                         ).toFixed(1)}
                         h

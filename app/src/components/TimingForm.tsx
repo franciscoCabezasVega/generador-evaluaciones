@@ -260,7 +260,9 @@ function TimingFormComponent(
     const key = `${qaName}_${categoryId}`;
 
     if (filteredValue !== "") {
-      const error = validateHours(filteredValue, categoryId);
+      const catLabel =
+        activeCategories.find((c) => c.id === categoryId)?.name ?? "Horas";
+      const error = validateHours(filteredValue, catLabel);
       if (error) {
         setErrors((prev) => ({ ...prev, [key]: error }));
         return;

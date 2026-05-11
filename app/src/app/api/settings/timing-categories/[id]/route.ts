@@ -159,10 +159,18 @@ export async function DELETE(
   }
 
   // Verificar uso en timing_qa_category_hours
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from("timing_qa_category_hours")
     .select("id", { count: "exact", head: true })
     .eq("category_id", id);
+
+  if (countError) {
+    console.error("Error checking category usage:", countError);
+    return NextResponse.json(
+      { error: "Error al verificar el uso de la categoría" },
+      { status: 500 },
+    );
+  }
 
   if (count && count > 0) {
     return NextResponse.json(
