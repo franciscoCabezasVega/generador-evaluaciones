@@ -102,6 +102,17 @@ export async function POST(request: NextRequest) {
 
   const slug = slugify(name);
 
+  // Validar que el slug resultante no sea vacío (p.ej. nombres con solo símbolos: "!!!")
+  if (!slug || slug.trim().length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "El nombre no produce un identificador válido. Usa letras o números en el nombre.",
+      },
+      { status: 400 },
+    );
+  }
+
   // Verificar colisión de slug (pueden existir nombres distintos que producen el mismo slug)
   const { data: slugConflict } = await supabase
     .from("timing_categories")

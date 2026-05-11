@@ -688,7 +688,8 @@ function TimingFormComponent(
                     )}
                     {activeCategories.map((cat) => {
                       const catHours = entry.hours_by_category[cat.id] ?? 0;
-                      const fieldKey = `${entry.qa_name}_${cat.id}`;
+                      // Usar qaIdx en lugar de qa_name para evitar espacios/caracteres inválidos en id HTML
+                      const fieldKey = `qa_${qaIdx}_${cat.id}`;
                       return (
                         <div
                           key={`${entry.qa_name}-${cat.id}`}

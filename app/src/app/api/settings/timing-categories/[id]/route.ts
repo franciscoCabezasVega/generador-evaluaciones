@@ -86,9 +86,8 @@ export async function PATCH(
     updates.is_active = Boolean(body.is_active);
   }
 
-  if (body.is_system !== undefined) {
-    updates.is_system = Boolean(body.is_system);
-  }
+  // is_system es un campo protegido: no se puede cambiar desde el cliente
+  // para evitar desproteger categorías seed usadas en métricas
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
