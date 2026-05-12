@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
   try {
     const results = await syncAllEnabledTasks();
 
-    const succeeded = results.filter((r) => r.success).length;
+    // "succeeded" = actually wrote data; "skipped" = ran but nothing to write.
+    // Keep them separate so cron stats reflect real writes, not no-ops.
+    const succeeded = results.filter((r) => r.success && !r.skipped).length;
     const failed = results.filter((r) => !r.success).length;
     const skipped = results.filter((r) => r.skipped).length;
 

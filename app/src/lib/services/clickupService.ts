@@ -80,7 +80,13 @@ async function getClickUpApiKey(): Promise<string | null> {
     .limit(1)
     .single();
 
-  if (error || !data) return null;
+  if (error) {
+    // PGRST116 = "JSON object requested, multiple (or no) rows returned"
+    // i.e. no key has been configured yet — return null (not an error).
+    if (error.code === "PGRST116") return null;
+    throw new Error(`DB error reading clickup_settings: ${error.message}`);
+  }
+  if (!data) return null;
 
   try {
     return await decryptText(data.encrypted_key, data.key_iv);
@@ -316,7 +322,7 @@ export async function syncTaskTimings(
             }
 
             // Step 5a: Real write happened — update sync record.
-            await supabase
+            const { error: syncUpdateError } = await supabase
               .from("clickup_task_sync")
               .update({
                 last_synced_at: new Date().toISOString(),
@@ -326,6 +332,10 @@ export async function syncTaskTimings(
                   : {}),
               })
               .eq("task_id", internalTaskId);
+
+            if (syncUpdateError) {
+              throw new Error(`DB error updating clickup_task_sync: ${syncUpdateError.message}`);
+            }
 
             return {
               taskId: internalTaskId,

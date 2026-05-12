@@ -140,11 +140,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
-  // Disable all syncs first
-  await supabase
+  // Disable all syncs first — must succeed before deleting the key
+  const { error: disableError } = await supabase
     .from("clickup_task_sync")
     .update({ sync_enabled: false })
     .eq("sync_enabled", true);
+
+  if (disableError) {
+    console.error("Error disabling ClickUp syncs:", disableError);
+    return NextResponse.json(
+      { error: "Error al deshabilitar los syncs activos" },
+      { status: 500 },
+    );
+  }
 
   // Delete the key
   const { error } = await supabase
