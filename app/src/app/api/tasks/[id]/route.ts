@@ -352,7 +352,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const rawIdempotencyKeyDelete = request.headers.get("Idempotency-Key");
+    if (
+      rawIdempotencyKeyDelete &&
+      !IDEMPOTENCY_KEY_REGEX.test(rawIdempotencyKeyDelete)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid Idempotency-Key format" },
+        { status: 400 },
+      );
+    }
+    const idempotencyKey = rawIdempotencyKeyDelete ?? null;
     const result = await withIdempotency(
       idempotencyKey,
       user.id,

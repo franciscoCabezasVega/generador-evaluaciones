@@ -35,7 +35,7 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a c
 - **MutationQueueContext**: React context/provider que expone `useMutationQueue()` para que cualquier componente pueda encolar mutaciones, consultar estado (`pending`, `failed`, `processing`, `retryingCount`) y relanzar fallos (`retryFailed`)
 - **QueueStatusIndicator**: Componente en la Navbar que refleja en tiempo real el estado de la cola — muestra "Reintentando..." cuando hay reintentos activos, spinner de sincronización, advertencia con botón "Reintentar" si hay fallos permanentes, y aviso de sin conexión cuando `navigator.onLine === false`
 - **Feedback de reintento en formulario**: El botón de submit muestra `Reintentando X/N...` mientras `useSafeAuthFetch` reintenta, eliminando el `safetyTimer` de 10 s que re-habilitaba el botón prematuramente y causaba envíos duplicados
-- **Auth cache en servidor**: `getAuthContext()` hashea el JWT con SHA-256 y cachea el resultado en memoria (TTL 30 s) con coalescing de Promises concurrentes, reduciendo de 2 RTTs a Supabase por request a 0 en el caso caliente
+- **Auth cache en servidor**: `getAuthContext()` hashea el JWT con SHA-256 y cachea el resultado en memoria (TTL 5 s) con coalescing de Promises concurrentes, reduciendo de 2 RTTs a Supabase por request a 0 en el caso caliente
 - **Audit logs no bloqueantes**: Los registros de auditoría en POST/PATCH/DELETE se escriben vía `after()` de Next.js, sin bloquear la respuesta al cliente
 - **BroadcastChannel de sesión**: Cuando el caché de sesión se invalida en una pestaña (p. ej. logout), se propaga inmediatamente al resto de pestañas vía `BroadcastChannel`, evitando que operen con un JWT obsoleto
 - **Adaptive timeouts en escritura**: `useSafeAuthFetch` usa timeouts más cortos para peticiones de lectura y más largos para mutaciones, con backoff automático en reintentos
@@ -403,9 +403,11 @@ Ambas funciones usan `SECURITY INVOKER` y `set search_path = public`, respetando
 
 | Ajuste | Valor | Propósito |
 |--------|-------|-----------|
-| `statement_timeout` (rol `authenticated`) | 10 s | Corta queries largas antes de agotar el `maxDuration` de Vercel |
-| `idle_in_transaction_session_timeout` (rol `authenticated`) | 5 s | Libera conexiones estancadas en transacciones abiertas |
+| `SET LOCAL statement_timeout` (dentro de cada RPC) | 10 s | Corta queries largas dentro de la transacción RPC antes de agotar el `maxDuration` de Vercel |
+| `SET LOCAL idle_in_transaction_session_timeout` (dentro de cada RPC) | 5 s | Libera transacciones estancadas durante la ejecución de la RPC |
 | Índice `user_profiles_id_role_idx` | `(id) INCLUDE (role_id)` | Index-only scan en el lookup de rol por cada request autenticado |
+
+Los timeouts **no** se aplican a nivel del rol `authenticated` con `ALTER ROLE ... SET`; las migraciones los resetean y los aplican localmente con `SET LOCAL` dentro de cada RPC.
 
 ---
 

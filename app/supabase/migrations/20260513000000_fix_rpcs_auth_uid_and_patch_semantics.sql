@@ -20,7 +20,7 @@ declare
   v_task    tasks%rowtype;
   v_squads  jsonb;
 begin
-  -- Aislate this RPC from the global statement_timeout (which may be
+  -- Isolate this RPC from the global statement_timeout (which may be
   -- unset or set to a longer value for reports / batch AI).
   set local statement_timeout = '10s';
 

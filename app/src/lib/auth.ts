@@ -17,7 +17,7 @@ function getServiceClient(): SupabaseClient | null {
   return _serviceClient;
 }
 
-// ─── Auth context in-process cache (TTL 30s) ──────────────────────────────────
+// ─── Auth context in-process cache (TTL 5s) ───────────────────────────────────
 // Keyed by SHA-256(token). Never stores the raw token as key.
 // Warm hit avoids 2 RTT (auth.getUser + user_profiles SELECT) per request.
 // Lambda isolation means this cache is per-process, which is acceptable:
@@ -113,7 +113,7 @@ export async function getUserRole(userId: string) {
  * Contexto de autenticación completo: usuario + rol + cliente autenticado
  * Combina getUserFromRequest + getUserRole + getAuthenticatedSupabase en 1 llamada
  * Reutiliza el mismo service-role client para JWT verification y role lookup.
- * Resultado cacheado en memoria por 30s (keyed por SHA-256 del token).
+ * Resultado cacheado en memoria por 5s (keyed por SHA-256 del token).
  */
 export async function getAuthContext(request: NextRequest): Promise<{
   user: User;
