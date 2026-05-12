@@ -12,7 +12,15 @@
 -- 1. Drop redundant index (the UNIQUE constraint already provides this index)
 DROP INDEX IF EXISTS clickup_task_sync_task_id_idx;
 
--- 2. Add singleton_key to clickup_settings
+-- 2. Ensure clickup_settings has at most one row before adding the unique index.
+--    Keep the most recently updated row and remove any older duplicates.
+--    (On a fresh deploy this is a no-op; guards against re-applying on legacy data.)
+DELETE FROM clickup_settings
+WHERE id NOT IN (
+  SELECT id FROM clickup_settings ORDER BY updated_at DESC LIMIT 1
+);
+
+-- 3. Add singleton_key to clickup_settings
 --    The column is always TRUE; the unique constraint prevents a second row.
 ALTER TABLE clickup_settings
   ADD COLUMN IF NOT EXISTS singleton_key BOOLEAN NOT NULL DEFAULT true;

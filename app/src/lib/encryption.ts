@@ -9,10 +9,13 @@ const ALGORITHM = "AES-GCM";
 const IV_BYTE_LENGTH = 12; // 96-bit IV recommended for AES-GCM
 
 function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
-  if (hex.length % 2 !== 0) throw new Error("Invalid hex string");
+  if (hex.length % 2 !== 0) throw new Error("Invalid hex string: odd length");
+  if (!/^[0-9a-fA-F]*$/.test(hex)) throw new Error("Invalid hex string: non-hex characters");
   const bytes = new Uint8Array(hex.length / 2) as Uint8Array<ArrayBuffer>;
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    const byte = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (!Number.isFinite(byte)) throw new Error(`Invalid hex byte at position ${i}`);
+    bytes[i] = byte;
   }
   return bytes;
 }

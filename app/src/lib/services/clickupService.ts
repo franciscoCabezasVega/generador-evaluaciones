@@ -17,7 +17,7 @@ import { decryptText } from "@/lib/encryption";
 
 interface ClickUpTimeInStatus {
   status: string;
-  /** Total time in this status in milliseconds */
+  /** Total time in this status; `by_minute` is in minutes (not milliseconds). */
   total_time: {
     by_minute: number;
     since: string;
@@ -249,7 +249,13 @@ export async function syncTaskTimings(
           .select("id")
           .eq("timing_id", timing.id);
 
-        if (qaEntries?.length) {
+        // Use only the FIRST qa_entry to avoid inflating totals.
+        // If a task has multiple QA members the correct entry cannot be
+        // determined from time_in_status alone (it has no per-assignee
+        // breakdown). Writing to all entries would multiply the hours by N.
+        // A future improvement: resolve the entry via clickup_user_id.
+        const targetEntry = qaEntries?.[0];
+        if (targetEntry) {
           // 4c. Resolve category IDs by slug.
           const { data: categories } = await supabase
             .from("timing_categories")
@@ -261,15 +267,13 @@ export async function syncTaskTimings(
           );
 
           // 4d. Build upsert rows and write them.
-          const rows = qaEntries.flatMap((entry) =>
-            Object.entries(categoryHours)
-              .filter(([slug]) => categoryMap.has(slug))
-              .map(([slug, hours]) => ({
-                timing_qa_entry_id: entry.id as string,
-                category_id: categoryMap.get(slug)!,
-                hours: Math.round(hours * 100) / 100,
-              })),
-          );
+          const rows = Object.entries(categoryHours)
+            .filter(([slug]) => categoryMap.has(slug))
+            .map(([slug, hours]) => ({
+              timing_qa_entry_id: targetEntry.id as string,
+              category_id: categoryMap.get(slug)!,
+              hours: Math.round(hours * 100) / 100,
+            }));
 
           if (rows.length > 0) {
             const { error: upsertError } = await supabase
@@ -281,28 +285,42 @@ export async function syncTaskTimings(
             if (upsertError) {
               throw new Error(`DB upsert failed: ${upsertError.message}`);
             }
+
+            // Step 5a: Real write happened — update sync record.
+            await supabase
+              .from("clickup_task_sync")
+              .update({
+                last_synced_at: new Date().toISOString(),
+                last_clickup_status: latestStatus,
+                ...(latestStatus && isTerminalStatus(latestStatus)
+                  ? { sync_enabled: false }
+                  : {}),
+              })
+              .eq("task_id", internalTaskId);
+
+            return {
+              taskId: internalTaskId,
+              clickupTaskId: clickupQaTaskId,
+              success: true,
+            };
           }
         }
       }
     }
 
-    // Step 5: Update sync record
+    // Step 5b: Nothing was written (no timing row, no qa entries, or no mapped
+    // statuses). Record the attempt timestamp but signal skipped so callers
+    // can distinguish "sync ran but had nothing to write" from success.
     await supabase
       .from("clickup_task_sync")
-      .update({
-        last_synced_at: new Date().toISOString(),
-        last_clickup_status: latestStatus,
-        // Disable sync if terminal status reached
-        ...(latestStatus && isTerminalStatus(latestStatus)
-          ? { sync_enabled: false }
-          : {}),
-      })
+      .update({ last_synced_at: new Date().toISOString() })
       .eq("task_id", internalTaskId);
 
     return {
       taskId: internalTaskId,
       clickupTaskId: clickupQaTaskId,
       success: true,
+      skipped: true,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

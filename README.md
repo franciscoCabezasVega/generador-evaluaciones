@@ -538,7 +538,8 @@ app/
 │           ├── 20260511000000_fix_timing_qa_category_hours_rls.sql # Ajuste RLS ownership para timing_qa_category_hours
 │           ├── 20260511060000_normalize_timing_category_slugs.sql # Normalización de slugs semánticos en timing_categories
 │           ├── 20260511120000_protect_system_timing_categories.sql # RLS: bloquear UPDATE/DELETE de categorías del sistema
-│           └── 20260515000000_clickup_integration.sql             # Tablas clickup_settings, clickup_task_sync + columna qa_members.clickup_user_id
+│           ├── 20260515000000_clickup_integration.sql             # Tablas clickup_settings, clickup_task_sync + columna qa_members.clickup_user_id
+│           └── 20260516000000_clickup_singleton_and_cleanup.sql  # Singleton constraint en clickup_settings + drop índice duplicado
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright
