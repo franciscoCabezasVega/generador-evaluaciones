@@ -634,7 +634,7 @@ El sistema puede sincronizar automáticamente los tiempos por estado de tareas Q
 1. El administrador configura su **API Key de ClickUp** en **Configuración → Integraciones**.  
 2. Para cada tarea, se puede asociar un **ID de tarea en ClickUp** (URL o ID bare).  
 3. Una vez habilitado el sync, el sistema consulta el endpoint `GET /task/{taskId}/time_in_status` de ClickUp y mapea los estados a las categorías internas de timing.  
-4. Un **cron job en Vercel** se ejecuta automáticamente **cada hora** (`0 * * * *`) y sincroniza todas las tareas con sync habilitado.
+4. Un **cron job externo** (configurado en [cron-job.org](https://console.cron-job.org)) llama al endpoint cada hora y sincroniza todas las tareas con sync habilitado. Vercel Hobby no soporta crons de alta frecuencia, por lo que se usa un servicio externo.
 
 ### Seguridad
 
@@ -657,8 +657,22 @@ El sistema puede sincronizar automáticamente los tiempos por estado de tareas Q
 
 ```env
 CLICKUP_ENCRYPTION_KEY=<32 bytes en hex>   # openssl rand -hex 32
-CRON_SECRET=<token aleatorio seguro>
+CRON_SECRET=<token aleatorio seguro>       # node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
+
+### Configuración del cron externo (cron-job.org)
+
+1. Crear cuenta en [console.cron-job.org](https://console.cron-job.org)
+2. **Create cronjob** con:
+   - **URL**: `https://<tu-dominio>.vercel.app/api/cron/sync-clickup-timings`
+   - **Schedule**: Every 1 hour (o la frecuencia deseada)
+   - **Save responses in job history**: activado (para monitoreo)
+3. En la tab **Advanced → Headers**, agregar:
+   - **Name**: `Authorization`
+   - **Value**: `Bearer <tu CRON_SECRET>`
+4. El endpoint responde `{ ok, total, succeeded, failed, skipped, durationMs }` — visible en el historial de cron-job.org.
+
+> **Nota**: Vercel Hobby solo permite crons con frecuencia diaria. Por eso la entrada `crons` fue eliminada de `vercel.json` y el scheduling se delega a cron-job.org.
 
 ### Mapeo de estados
 
