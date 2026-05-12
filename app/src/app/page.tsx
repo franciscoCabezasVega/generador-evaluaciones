@@ -85,16 +85,6 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 py-12">
         {/* Hero section */}
         <div className="mb-12">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
-              <span className="text-gray-50 font-black text-sm tracking-tighter">
-                QA
-              </span>
-            </div>
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-              Evaluador de Tareas
-            </span>
-          </div>
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2">
             Bienvenido
             {profile?.name ? (

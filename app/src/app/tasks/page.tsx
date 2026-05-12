@@ -50,6 +50,7 @@ export default function TasksPage() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const formRef = useRef<{ handleCancelWithConfirm: () => void }>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -100,6 +101,12 @@ export default function TasksPage() {
   const { safeFetch } = useSafeAuthFetch();
   const { enqueue } = useMutationQueue();
 
+  // Debounce del buscador para evitar N requests al tipear
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
   // Redirigir a login si no hay sesión
   useEffect(() => {
     if (!authLoading && !user) {
@@ -121,12 +128,17 @@ export default function TasksPage() {
     fetchFn: useCallback(
       async (signal: AbortSignal) => {
         const params = new URLSearchParams();
-        if (filters.month) params.append("month", filters.month.toString());
-        if (filters.year) params.append("year", filters.year.toString());
-        if (filters.productType)
-          params.append("product_type", filters.productType);
-        if (filters.squad) params.append("squad", filters.squad);
-        if (filters.status) params.append("status", filters.status);
+        if (debouncedSearch) {
+          // Búsqueda global: ignorar filtros de mes/año/etc.
+          params.append("search", debouncedSearch);
+        } else {
+          if (filters.month) params.append("month", filters.month.toString());
+          if (filters.year) params.append("year", filters.year.toString());
+          if (filters.productType)
+            params.append("product_type", filters.productType);
+          if (filters.squad) params.append("squad", filters.squad);
+          if (filters.status) params.append("status", filters.status);
+        }
 
         const response = await safeFetch(`/api/tasks?${params.toString()}`, {
           signal,
@@ -134,9 +146,14 @@ export default function TasksPage() {
         if (!response.ok) throw new Error("Error al cargar tareas");
         return await response.json();
       },
-      [filters, safeFetch],
+      [filters, debouncedSearch, safeFetch],
     ),
-    filters,
+    // effectiveFilters: cuando hay búsqueda global, la cache key solo incluye
+    // el término de búsqueda (el backend ignora los demás filtros en ese modo).
+    // Esto evita cache misses espurios al cambiar mes/año mientras se busca.
+    filters: debouncedSearch
+      ? { search: debouncedSearch }
+      : { ...filters, search: "" },
     enabled: !authLoading && !!user,
     initialData: [],
   });
@@ -571,8 +588,7 @@ export default function TasksPage() {
         {/* Tabla de tareas */}
         {loading ? (
           <SkeletonTable />
-        ) : tasks.filter((task) => task.name.toLowerCase().includes(searchTerm))
-            .length === 0 ? (
+        ) : tasks.length === 0 ? (
           <div
             className="bg-gray-100 border border-gray-200 rounded-xl p-6 text-center fade-in-smooth"
             data-testid="tasks-empty-state"
@@ -580,9 +596,9 @@ export default function TasksPage() {
             <p className="text-gray-600 py-8">
               {hasError
                 ? "Ocurrió un error al consultar los registros. Intenta actualizar la página."
-                : tasks.length === 0
-                  ? "No hay tareas"
-                  : `No se encontraron tareas que coincidan con "${searchTerm}"`}
+                : debouncedSearch
+                  ? `No se encontraron tareas que coincidan con "${debouncedSearch}"`
+                  : "No hay tareas"}
             </p>
             {hasError && (
               <button
@@ -639,9 +655,6 @@ export default function TasksPage() {
               </thead>
               <tbody>
                 {tasks
-                  .filter((task) =>
-                    task.name.toLowerCase().includes(searchTerm),
-                  )
                   .map((task, index) => {
                     const squads = task.squads || [];
                     const avgScore =

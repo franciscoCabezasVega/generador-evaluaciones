@@ -187,34 +187,6 @@ async function getTaskIdsByEffortDate(
   return data ? (data as TaskIdRow[]).map((t) => t.id) : [];
 }
 
-async function syncAssignedQA(
-  client: SupabaseClient,
-  taskId: string,
-): Promise<void> {
-  try {
-    const { data: qaData, error: qaError } = await client
-      .from("task_qa")
-      .select("qa_name")
-      .eq("task_id", taskId);
-    if (qaError) {
-      console.error("Error fetching task_qa for sync:", qaError);
-      return;
-    }
-    const qaNames = [
-      ...new Set(
-        ((qaData ?? []) as { qa_name: string }[]).map((q) => q.qa_name),
-      ),
-    ];
-    const { error: updateError } = await client
-      .from("tasks")
-      .update({ assigned_qa: qaNames })
-      .eq("id", taskId);
-    if (updateError) console.error("Error updating assigned_qa:", updateError);
-  } catch (error) {
-    console.error("Error in syncAssignedQA:", error);
-  }
-}
-
 export const timingService = {
   async getTimings(
     filters: {
@@ -456,7 +428,6 @@ export const timingService = {
         }
       }
 
-      await syncAssignedQA(client, input.task_id);
       return await this.getTimingById(parentId, token);
     } catch (error) {
       console.error("Error in createTiming:", error);
@@ -643,7 +614,6 @@ export const timingService = {
         }
       }
 
-      await syncAssignedQA(client, timingData.task_id);
       return await this.getTimingById(id, token);
     } catch (error) {
       console.error("Error in updateTiming:", error);
@@ -662,7 +632,6 @@ export const timingService = {
       if (timingError || !timingData) throw new Error("Timing not found");
       const { error } = await client.from("task_timings").delete().eq("id", id);
       if (error) throw error;
-      await syncAssignedQA(client, timingData.task_id);
       return { success: true };
     } catch (error) {
       console.error("Error in deleteTiming:", error);
@@ -959,10 +928,99 @@ export const timingService = {
         (catHours as CategoryHourRow[]) ?? [],
       );
 
-      const byQA: Record<string, TimingQAEntry[]> = {};
+      // Construir mapa timingId -> taskId a partir de timingsData
+      const timingToTask = new Map<string, string>(
+        (timingsData as { id: string; task_id: string }[]).map((t) => [
+          t.id,
+          t.task_id,
+        ]),
+      );
+
+      // Obtener assigned_qa de todas las tareas involucradas
+      const involvedTaskIds = [
+        ...new Set(timingToTask.values()),
+      ];
+      const { data: assignedQAData, error: assignedQAError } = await client
+        .from("tasks")
+        .select("id, assigned_qa")
+        .in("id", involvedTaskIds);
+      if (assignedQAError) throw assignedQAError;
+      const taskAssignedQA = new Map<string, string[]>(
+        ((assignedQAData ?? []) as { id: string; assigned_qa: string[] }[]).map(
+          (t) => [t.id, Array.isArray(t.assigned_qa) ? t.assigned_qa.filter(Boolean) : []],
+        ),
+      );
+
+      // Pre-agregación diferenciada:
+      // - Tareas CON assigned_qa: colapsar por timing_id (todos los registradores → suma)
+      //   para luego redistribuir equitativamente entre los QAs asignados.
+      // - Tareas SIN assigned_qa: agregar por (timing_id, qa_name) para preservar
+      //   el desglose real por registrador sin perder información.
+      const byTimingAssigned = new Map<string, TimingQAEntry>(); // timing_id → aggregate
+      const byTimingQA = new Map<string, TimingQAEntry>();        // `${timing_id}|${qa_name}` → aggregate
+
       for (const entry of flatEntries) {
-        if (!byQA[entry.qa_name]) byQA[entry.qa_name] = [];
-        byQA[entry.qa_name].push(entry);
+        const taskId = timingToTask.get(entry.timing_id);
+        const assignedQAs = taskId ? (taskAssignedQA.get(taskId) ?? []) : [];
+
+        if (assignedQAs.length > 0) {
+          const existing = byTimingAssigned.get(entry.timing_id);
+          if (!existing) {
+            byTimingAssigned.set(entry.timing_id, {
+              ...entry,
+              hours_by_category: { ...entry.hours_by_category },
+            });
+          } else {
+            existing.total_hours += entry.total_hours;
+            for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+              existing.hours_by_category[catId] =
+                (existing.hours_by_category[catId] ?? 0) + hours;
+            }
+          }
+        } else {
+          const key = `${entry.timing_id}|${entry.qa_name}`;
+          const existing = byTimingQA.get(key);
+          if (!existing) {
+            byTimingQA.set(key, {
+              ...entry,
+              hours_by_category: { ...entry.hours_by_category },
+            });
+          } else {
+            existing.total_hours += entry.total_hours;
+            for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+              existing.hours_by_category[catId] =
+                (existing.hours_by_category[catId] ?? 0) + hours;
+            }
+          }
+        }
+      }
+
+      // Redistribuir timings con assigned_qa: 1 entrada por (timing, qaAsignado)
+      const byQA: Record<string, TimingQAEntry[]> = {};
+      for (const entry of byTimingAssigned.values()) {
+        const taskId = timingToTask.get(entry.timing_id);
+        const assignedQAs = taskId ? (taskAssignedQA.get(taskId) ?? []) : [];
+        const share = 1 / assignedQAs.length;
+        for (const qaName of assignedQAs) {
+          if (!byQA[qaName]) byQA[qaName] = [];
+          byQA[qaName].push({
+            ...entry,
+            qa_name: qaName,
+            total_hours: entry.total_hours * share,
+            hours_by_category: Object.fromEntries(
+              Object.entries(entry.hours_by_category).map(([k, v]) => [
+                k,
+                v * share,
+              ]),
+            ),
+          });
+        }
+      }
+      // Timings sin assigned_qa: agregar directamente por registrador
+      for (const entry of byTimingQA.values()) {
+        const qaName = entry.qa_name;
+        if (!byQA[qaName]) byQA[qaName] = [];
+        byQA[qaName].push(entry);
       }
 
       const initTotals = () =>
@@ -978,14 +1036,17 @@ export const timingService = {
         ([qaName, entries]) => {
           const totals_by_category = initTotals();
           let total_hours = 0;
+          const uniqueTaskIds = new Set<string>();
           for (const e of entries) {
             for (const [catId, hours] of Object.entries(e.hours_by_category)) {
               totals_by_category[catId] =
                 (totals_by_category[catId] ?? 0) + hours;
             }
             total_hours += e.total_hours;
+            const taskId = timingToTask.get(e.timing_id);
+            if (taskId) uniqueTaskIds.add(taskId);
           }
-          const count = entries.length;
+          const count = uniqueTaskIds.size || entries.length;
           const averages_by_category = catIds.reduce(
             (a, id) => {
               a[id] =

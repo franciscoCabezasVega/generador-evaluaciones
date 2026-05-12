@@ -257,6 +257,23 @@ export function useCachedFetch<T>({
     });
   }, [cacheKey, enabled, doFetch]);
 
+  // Revalidar al volver a la pestaña si la caché venció mientras estaba en background
+  useEffect(() => {
+    if (!enabled) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!cacheStore.isFresh(fullKeyRef.current, staleTime)) {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+        doFetch(true, controller.signal);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [enabled, staleTime, doFetch]);
+
   const refresh = useCallback(() => {
     abortRef.current?.abort();
     cacheStore.delete(fullKeyRef.current);

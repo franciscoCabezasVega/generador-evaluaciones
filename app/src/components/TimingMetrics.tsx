@@ -5,6 +5,7 @@ import {
   SquadTimingMetrics,
   QATimingMetrics,
   TaskTiming,
+  TimingQAEntry,
   Task,
   TshirtSize,
 } from "@/lib/types";
@@ -813,6 +814,60 @@ export function QAHoursBarChart({
   );
 }
 
+/**
+ * Redistribuye las horas de qa_entries de un timing según assigned_qa.
+ * - Con assigned_qa: suma todas las entradas y divide equitativamente entre ellos.
+ * - Sin assigned_qa: devuelve una entrada por qa_entry con sus horas originales.
+ * Retorna un Map<qaName, { totalHours, hours_by_category }>.
+ */
+function redistributeTimingHours(
+  qaEntries: TimingQAEntry[],
+  assignedQAs: string[],
+): Map<string, { totalHours: number; hours_by_category: Record<string, number> }> {
+  const result = new Map<
+    string,
+    { totalHours: number; hours_by_category: Record<string, number> }
+  >();
+
+  if (assignedQAs.length > 0) {
+    let total = 0;
+    const byCategory: Record<string, number> = {};
+    for (const entry of qaEntries) {
+      total += Number(entry.total_hours) || 0;
+      for (const [k, v] of Object.entries(entry.hours_by_category ?? {})) {
+        byCategory[k] = (byCategory[k] ?? 0) + Number(v);
+      }
+    }
+    const share = 1 / assignedQAs.length;
+    for (const qa of assignedQAs) {
+      result.set(qa, {
+        totalHours: total * share,
+        hours_by_category: Object.fromEntries(
+          Object.entries(byCategory).map(([k, v]) => [k, v * share]),
+        ),
+      });
+    }
+  } else {
+    for (const entry of qaEntries) {
+      const existing = result.get(entry.qa_name);
+      if (existing) {
+        existing.totalHours += Number(entry.total_hours) || 0;
+        for (const [k, v] of Object.entries(entry.hours_by_category ?? {})) {
+          existing.hours_by_category[k] =
+            (existing.hours_by_category[k] ?? 0) + Number(v);
+        }
+      } else {
+        result.set(entry.qa_name, {
+          totalHours: Number(entry.total_hours) || 0,
+          hours_by_category: { ...(entry.hours_by_category ?? {}) },
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
 // Efficiency & Retest comparison bar chart
 interface QAEfficiencyChartProps extends QATimingMetricsProps {
   timings?: TaskTiming[];
@@ -854,7 +909,8 @@ export function QAEfficiencyChart({
     });
   };
 
-  // Get task details for a specific QA
+  // Get task details for a specific QA — uses assigned_qa (not registerer) to
+  // match the server-side redistribution logic in getQATimingMetrics.
   const getTaskDetailsForQA = (qaName: string) => {
     const taskDetails: {
       taskId: string;
@@ -867,19 +923,23 @@ export function QAEfficiencyChart({
     }[] = [];
 
     for (const timing of timings) {
-      if (!timing.qa_entries) continue;
-      const qaEntry = timing.qa_entries.find((e) => e.qa_name === qaName);
-      if (!qaEntry) continue;
-
+      if (!timing.qa_entries || timing.qa_entries.length === 0) continue;
       const task = taskMap.get(timing.task_id);
+      if (!task) continue;
+
+      const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
+      const redistribution = redistributeTimingHours(timing.qa_entries, assignedQAs);
+      const qaData = redistribution.get(qaName);
+      if (!qaData) continue;
+
       taskDetails.push({
         taskId: timing.task_id,
-        taskName: task?.name || "Tarea desconocida",
-        taskLink: task?.task_link || "",
-        tshirtSize: task?.tshirt_size || "",
-        project_type: task?.project_type || "",
-        hours_by_category: qaEntry.hours_by_category ?? {},
-        total: qaEntry.total_hours,
+        taskName: task.name || "Tarea desconocida",
+        taskLink: task.task_link || "",
+        tshirtSize: task.tshirt_size || "",
+        project_type: task.project_type || "",
+        hours_by_category: qaData.hours_by_category,
+        total: qaData.totalHours,
       });
     }
 
@@ -1486,15 +1546,17 @@ export function TshirtSizeComparison({
 
     const group = groupMap.get(key)!;
 
-    for (const qaEntry of timing.qa_entries) {
-      const totalH = Number(qaEntry.total_hours) || 0;
+    const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
+    const redistribution = redistributeTimingHours(timing.qa_entries, assignedQAs);
+
+    for (const [qaName, data] of redistribution) {
       group.entries.push({
-        qaName: qaEntry.qa_name,
+        qaName,
         taskId: timing.task_id,
         taskName: task.name,
         taskLink: task.task_link || "",
-        totalHours: totalH,
-        hours_by_category: qaEntry.hours_by_category ?? {},
+        totalHours: data.totalHours,
+        hours_by_category: data.hours_by_category,
       });
     }
   }
