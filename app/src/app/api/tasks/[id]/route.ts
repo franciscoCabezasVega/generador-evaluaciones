@@ -190,7 +190,9 @@ export async function PATCH(
         );
 
         if (rpcError) {
-          if (rpcError.message?.includes("Task not found")) {
+          // P0002 = no_data_found: stable SQLSTATE raised by the RPC when the
+          // task does not exist. Avoids fragile substring match on message text.
+          if (rpcError.code === "P0002") {
             return { status: 404, body: { error: "Task not found" } };
           }
           if (rpcError.code === "42501") {
