@@ -49,6 +49,13 @@ export async function POST(request: NextRequest) {
     );
   }
   const name = body.name.trim();
+  // clickup_user_id es opcional — puede ser null para limpiar
+  const clickupUserId =
+    body.clickup_user_id !== undefined
+      ? typeof body.clickup_user_id === "string" && body.clickup_user_id.trim()
+        ? body.clickup_user_id.trim()
+        : null
+      : undefined;
 
   const { data: existing } = await supabase
     .from("qa_members")
@@ -65,7 +72,10 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("qa_members")
-    .insert({ name })
+    .insert({
+      name,
+      ...(clickupUserId !== undefined ? { clickup_user_id: clickupUserId } : {}),
+    })
     .select()
     .single();
 

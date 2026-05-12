@@ -5,7 +5,7 @@ import { User } from "@supabase/supabase-js";
 
 // Singleton service-role client (reused across requests in the same process)
 let _serviceClient: SupabaseClient | null = null;
-function getServiceClient(): SupabaseClient | null {
+export function getServiceClient(): SupabaseClient | null {
   if (_serviceClient) return _serviceClient;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

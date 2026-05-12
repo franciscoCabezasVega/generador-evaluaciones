@@ -16,6 +16,7 @@ import {
 import { authenticatedFetch } from "@/lib/fetchAuth";
 import { invalidateCatalogCache } from "@/hooks/useCatalogData";
 import CacheWarningBanner from "@/components/CacheWarningBanner";
+import ClickUpSettingsPanel from "@/components/ClickUpSettingsPanel";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
 // ─── Tipos de tab ─────────────────────────────────────────────────────────────
@@ -25,7 +26,8 @@ type TabId =
   | "complexities"
   | "squads"
   | "qa-members"
-  | "timing-categories";
+  | "timing-categories"
+  | "integrations";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "products", label: "Productos" },
@@ -34,6 +36,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "squads", label: "Squads" },
   { id: "qa-members", label: "QA Members" },
   { id: "timing-categories", label: "Categorías de Tiempo" },
+  { id: "integrations", label: "Integraciones" },
 ];
 
 // ─── Definición de campos por entidad ────────────────────────────────────────
@@ -97,6 +100,13 @@ const QA_FIELDS: FieldDef[] = [
     placeholder: "Ej: Ana García",
     required: true,
   },
+  {
+    key: "clickup_user_id",
+    label: "ClickUp User ID",
+    type: "text",
+    placeholder: "Ej: 12345678 (opcional)",
+    description: "ID numérico del miembro en ClickUp. Requerido para sincronizar tiempos automáticamente.",
+  },
 ];
 
 const TIMING_CATEGORY_FIELDS: FieldDef[] = [
@@ -154,6 +164,12 @@ export default function SettingsPage() {
   // ─── Fetch para el tab activo ──────────────────────────────────────────────
 
   const fetchTab = async (tab: TabId, retryCount = 0) => {
+    // El tab de integraciones gestiona su propio estado
+    if (tab === "integrations") {
+      setTabError(null);
+      return;
+    }
+
     setLoadingTab(true);
     setTabError(null);
     const controller = new AbortController();
@@ -343,7 +359,7 @@ export default function SettingsPage() {
     <>
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 py-8">
-        <CacheWarningBanner />
+        <CacheWarningBanner show={!!tabError} />
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Configuración</h1>
@@ -470,6 +486,18 @@ export default function SettingsPage() {
                     }
                     protectedMessage="Las categorías del sistema no pueden eliminarse; desactívalas en su lugar"
                   />
+                )}
+                {activeTab === "integrations" && (
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-800 mb-1">
+                      Integración ClickUp
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-6">
+                      Configura la API key de ClickUp para sincronizar tiempos
+                      de tareas automáticamente vía el cron job horario.
+                    </p>
+                    <ClickUpSettingsPanel />
+                  </div>
                 )}
               </>
             )}

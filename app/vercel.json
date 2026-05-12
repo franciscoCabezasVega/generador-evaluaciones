@@ -35,6 +35,15 @@
     },
     "src/app/api/generate-ai-comments-batch/route.ts": {
       "maxDuration": 120
+    },
+    "src/app/api/cron/sync-clickup-timings/route.ts": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/sync-clickup-timings",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
