@@ -24,13 +24,17 @@ function getServiceClient(): SupabaseClient | null {
 // even a cold start shares cache across requests in the same warm instance.
 
 interface AuthCacheEntry {
-  ctx: { user: User; role: string | null; token: string };
+  ctx: { user: User; role: string | null }; // token NOT stored — always use token from current request
   expiresAt: number;
 }
 
 const _authCache = new Map<string, AuthCacheEntry>();
 const _authCachePending = new Map<string, Promise<AuthCacheEntry | null>>();
-const AUTH_CACHE_TTL_MS = 30_000; // 30 seconds
+// TTL de 5s: balance entre RTTs ahorrados y ventana de privilegios elevados.
+// Un admin degradado pasa a 403 en ≤5s en instancias Lambda calientes.
+const AUTH_CACHE_TTL_MS = 5_000;
+// ~200KB max (≈1000 entries × 64 bytes hex key + entry overhead).
+const AUTH_CACHE_MAX_ENTRIES = 1_000; // Cap to prevent unbounded memory in warm instances
 
 async function hashToken(token: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -124,12 +128,19 @@ export async function getAuthContext(request: NextRequest): Promise<{
     const cacheKey = await hashToken(token);
     const now = Date.now();
 
-    // Cache hit — return immediately without hitting Supabase
+    // IMPORTANT: check _authCache BEFORE _authCachePending so a just-resolved
+    // Promise cuts through the hot-cache path without awaiting again.
     const cached = _authCache.get(cacheKey);
     if (cached) {
       if (cached.expiresAt > now) {
         const supabase = getAuthenticatedSupabase(token);
-        return { ...cached.ctx, supabase };
+        // Return token from current request, not from cache (avoids stale-token issues)
+        return {
+          user: cached.ctx.user,
+          role: cached.ctx.role,
+          supabase,
+          token,
+        };
       }
       // Eliminar entradas expiradas de forma oportunista
       _authCache.delete(cacheKey);
@@ -140,7 +151,8 @@ export async function getAuthContext(request: NextRequest): Promise<{
       const entry = await _authCachePending.get(cacheKey)!;
       if (!entry) return null;
       const supabase = getAuthenticatedSupabase(token);
-      return { ...entry.ctx, supabase };
+      // Return token from current request, not from cache
+      return { user: entry.ctx.user, role: entry.ctx.role, supabase, token };
     }
 
     const pendingPromise = (async (): Promise<AuthCacheEntry | null> => {
@@ -167,9 +179,20 @@ export async function getAuthContext(request: NextRequest): Promise<{
         }
 
         const entry: AuthCacheEntry = {
-          ctx: { user, role, token },
+          ctx: { user, role }, // token omitted intentionally — always source from request
           expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
         };
+        // Opportunistic cleanup: evict expired entries when approaching the cap
+        if (_authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+          const now = Date.now();
+          for (const [k, v] of _authCache) {
+            if (v.expiresAt <= now) _authCache.delete(k);
+          }
+          if (_authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+            const firstKey = _authCache.keys().next().value;
+            if (firstKey !== undefined) _authCache.delete(firstKey);
+          }
+        }
         _authCache.set(cacheKey, entry);
         return entry;
       } finally {
@@ -182,7 +205,8 @@ export async function getAuthContext(request: NextRequest): Promise<{
     if (!entry) return null;
 
     const supabase = getAuthenticatedSupabase(token);
-    return { ...entry.ctx, supabase };
+    // Return token from current request, not from cache
+    return { ...entry.ctx, supabase, token };
   } catch (error) {
     console.error("Error in getAuthContext:", error);
     return null;

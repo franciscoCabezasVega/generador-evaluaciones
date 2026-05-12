@@ -21,11 +21,45 @@ interface IdempotencyCacheEntry {
 
 const _cache = new Map<string, IdempotencyCacheEntry>();
 // Coalescing de requests en vuelo con el mismo key
-const _pending = new Map<string, Promise<{ status: number; body: unknown } | null>>();
+const _pending = new Map<
+  string,
+  Promise<{ status: number; body: unknown } | null>
+>();
 const TTL_MS = 5 * 60 * 1_000; // 5 minutes
+const MAX_KEY_LENGTH = 128; // Reject excessively long keys (UUIDs are 36 chars; 128 is generous)
+const MAX_CACHE_ENTRIES = 10_000; // Cap to prevent unbounded memory growth
+const EVICT_BATCH_PERCENT = 0.1; // Evict 10% oldest entries when cap is reached
 
-function makeKey(userId: string, method: string, path: string, idempotencyKey: string): string {
+function makeKey(
+  userId: string,
+  method: string,
+  path: string,
+  idempotencyKey: string,
+): string {
   return `${userId}:${method}:${path}:${idempotencyKey}`;
+}
+
+/**
+ * Evict expired entries; if still over the cap, drop the oldest 10% (insertion-order).
+ * Batch eviction amortises the cost during write bursts.
+ */
+function enforceMaxEntries(): void {
+  const now = Date.now();
+  for (const [k, v] of _cache) {
+    if (v.expiresAt <= now) _cache.delete(k);
+  }
+  if (_cache.size >= MAX_CACHE_ENTRIES) {
+    const toEvict = Math.max(
+      1,
+      Math.floor(MAX_CACHE_ENTRIES * EVICT_BATCH_PERCENT),
+    );
+    let evicted = 0;
+    for (const k of _cache.keys()) {
+      if (evicted >= toEvict) break;
+      _cache.delete(k);
+      evicted++;
+    }
+  }
 }
 
 /**
@@ -67,13 +101,16 @@ export async function withIdempotency(
   handler: () => Promise<{ status: number; body: unknown }>,
 ): Promise<{ status: number; body: unknown }> {
   if (!idempotencyKey) return handler();
+  // Reject excessively long keys — skip idempotency to prevent memory abuse
+  if (idempotencyKey.length > MAX_KEY_LENGTH) return handler();
 
   const key = makeKey(userId, method, path, idempotencyKey);
 
   // Cache hit
   const cached = _cache.get(key);
   if (cached) {
-    if (cached.expiresAt > Date.now()) return { status: cached.status, body: cached.body };
+    if (cached.expiresAt > Date.now())
+      return { status: cached.status, body: cached.body };
     _cache.delete(key);
   }
 
@@ -83,16 +120,12 @@ export async function withIdempotency(
   const promise = (async () => {
     try {
       const result = await handler();
-      _cache.set(key, { ...result, expiresAt: Date.now() + TTL_MS });
-
-      // Opportunistic cleanup every ~100 writes
-      if (_cache.size % 100 === 0) {
-        const now = Date.now();
-        for (const [k, v] of _cache) {
-          if (v.expiresAt <= now) _cache.delete(k);
-        }
+      // Only cache successful responses — transient errors (4xx/5xx) must not
+      // be replayed to clients with in-flight retries from the offline queue.
+      if (result.status >= 200 && result.status < 300) {
+        enforceMaxEntries();
+        _cache.set(key, { ...result, expiresAt: Date.now() + TTL_MS });
       }
-
       return result;
     } finally {
       _pending.delete(key);
@@ -116,16 +149,11 @@ export function cacheIdempotencyResponse(
   body: unknown,
   path?: string,
 ): void {
-  if (!idempotencyKey) return;
+  if (!idempotencyKey || idempotencyKey.length > MAX_KEY_LENGTH) return;
+  // Only cache successful responses
+  if (status < 200 || status >= 300) return;
 
   const key = makeKey(userId, method, path ?? "", idempotencyKey);
+  enforceMaxEntries();
   _cache.set(key, { status, body, expiresAt: Date.now() + TTL_MS });
-
-  // Opportunistic cleanup of expired entries (every ~100 writes)
-  if (_cache.size % 100 === 0) {
-    const now = Date.now();
-    for (const [k, v] of _cache) {
-      if (v.expiresAt <= now) _cache.delete(k);
-    }
-  }
 }

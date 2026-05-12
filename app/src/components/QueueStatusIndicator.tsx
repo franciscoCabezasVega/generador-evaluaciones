@@ -64,7 +64,11 @@ export default function QueueStatusIndicator() {
     return (
       <div
         className="flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-600"
-        title={isRetrying ? "Reintentando sincronización en segundo plano..." : "Sincronizando cambios en segundo plano..."}
+        title={
+          isRetrying
+            ? "Reintentando sincronización en segundo plano..."
+            : "Sincronizando cambios en segundo plano..."
+        }
       >
         <Loader2 size={12} className="animate-spin" />
         <span className="hidden sm:inline">

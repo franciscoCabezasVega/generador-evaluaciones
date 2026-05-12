@@ -70,16 +70,29 @@ export default function TasksPage() {
   // Sincronizar filtros cuando la URL cambia externamente (back/forward, navegación externa)
   useEffect(() => {
     startTransition(() => {
-      setFilters({
-        month: searchParams.get("month")
-          ? parseInt(searchParams.get("month")!)
-          : new Date().getMonth() + 1,
-        year: searchParams.get("year")
-          ? parseInt(searchParams.get("year")!)
-          : new Date().getFullYear(),
-        productType: searchParams.get("productType") || "",
-        squad: searchParams.get("squad") || "",
-        status: searchParams.get("status") || "",
+      setFilters((prev) => {
+        const next = {
+          month: searchParams.get("month")
+            ? parseInt(searchParams.get("month")!)
+            : new Date().getMonth() + 1,
+          year: searchParams.get("year")
+            ? parseInt(searchParams.get("year")!)
+            : new Date().getFullYear(),
+          productType: searchParams.get("productType") || "",
+          squad: searchParams.get("squad") || "",
+          status: searchParams.get("status") || "",
+        };
+        // Skip re-render if URL-derived values haven't changed
+        if (
+          prev.month === next.month &&
+          prev.year === next.year &&
+          prev.productType === next.productType &&
+          prev.squad === next.squad &&
+          prev.status === next.status
+        ) {
+          return prev;
+        }
+        return next;
       });
     });
   }, [searchParams]);
@@ -167,7 +180,8 @@ export default function TasksPage() {
       const params = new URLSearchParams();
       if (updatedFilters.month)
         params.set("month", updatedFilters.month.toString());
-      if (updatedFilters.year) params.set("year", updatedFilters.year.toString());
+      if (updatedFilters.year)
+        params.set("year", updatedFilters.year.toString());
       if (updatedFilters.productType)
         params.set("productType", updatedFilters.productType);
       if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
@@ -177,7 +191,10 @@ export default function TasksPage() {
     });
   };
 
-  const handleSubmit = async (data: CreateTaskInput, onRetry?: (info: RetryInfo | null) => void) => {
+  const handleSubmit = async (
+    data: CreateTaskInput,
+    onRetry?: (info: RetryInfo | null) => void,
+  ) => {
     // ── Pre-flight: verificar link duplicado ANTES del optimistic update ──────
     // Si falla, lanza un error para que TaskForm lo muestre sin cerrar el form.
     const checkRes = await safeFetch(

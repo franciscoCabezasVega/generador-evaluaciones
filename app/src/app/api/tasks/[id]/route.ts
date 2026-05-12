@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { validateReturns, calculateTaskScore } from "@/lib/scoreCalculator";
 import { getAuthContext } from "@/lib/auth";
-import { checkIdempotency, cacheIdempotencyResponse } from "@/lib/idempotency";
+import { withIdempotency } from "@/lib/idempotency";
 
 export async function GET(
   request: NextRequest,
@@ -72,25 +72,7 @@ export async function PATCH(
       );
     }
 
-    // Idempotency check: return cached response if key already seen
-    const idempotencyKey = request.headers.get("Idempotency-Key");
-    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "PATCH", `/api/tasks/${id}`);
-    if (idempotentHit) {
-      return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
-    }
-
     const body = await request.json();
-
-    // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
-    const { data: existingTask, error: getError } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (getError || !existingTask) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
 
     // Separar squads de los datos de la tarea
     const { squads, assigned_qa, ...taskUpdateData } = body;
@@ -136,34 +118,8 @@ export async function PATCH(
       }
     }
 
-    // Obtener squads ANTES de actualizar para capturar cambios
-    const { data: existingSquads } = await supabase
-      .from("task_squad")
-      .select("*")
-      .eq("task_id", id);
-
-    // Actualizar tarea
-    const { data: updatedTask, error: updateError } = await supabase
-      .from("tasks")
-      .update({
-        ...taskUpdateData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error("Error updating task:", updateError);
-      return NextResponse.json(
-        { error: "Error al actualizar la tarea" },
-        { status: 400 },
-      );
-    }
-
-    // Si se proporcionan squads, actualizar task_squad
+    // Validar devoluciones ANTES de entrar en la sección de escritura
     if (squads && Array.isArray(squads)) {
-      // Validar todas las devoluciones ANTES de hacer cualquier write
       for (const squadData of squads) {
         if (
           !validateReturns(squadData.low_returns) ||
@@ -178,222 +134,178 @@ export async function PATCH(
           );
         }
       }
+    }
 
-      const existingSquadNames = (existingSquads || []).map((sq) => sq.squad);
-      const newSquadNames = squads.map((sq: { squad: string }) => sq.squad);
+    const rawIdempotencyKey = request.headers.get("Idempotency-Key");
+    // M2: solo aceptar claves con caracteres seguros (máx. 128 chars)
+    const IDEMPOTENCY_KEY_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
+    const idempotencyKey =
+      rawIdempotencyKey && IDEMPOTENCY_KEY_REGEX.test(rawIdempotencyKey)
+        ? rawIdempotencyKey
+        : null;
+    const result = await withIdempotency(
+      idempotencyKey,
+      user.id,
+      "PATCH",
+      `/api/tasks/${id}`,
+      async (): Promise<{ status: number; body: unknown }> => {
+        // Calcular scores para squads (si se proporcionan)
+        const squadsWithScores =
+          squads && Array.isArray(squads)
+            ? squads.map(
+                (sq: {
+                  squad: string;
+                  low_returns: number;
+                  medium_returns: number;
+                  high_returns: number;
+                  additional_notes?: string;
+                }) => ({
+                  squad: sq.squad,
+                  low_returns: sq.low_returns,
+                  medium_returns: sq.medium_returns,
+                  high_returns: sq.high_returns,
+                  calculated_score: calculateTaskScore({
+                    lowReturns: sq.low_returns,
+                    mediumReturns: sq.medium_returns,
+                    highReturns: sq.high_returns,
+                  }),
+                  additional_notes: sq.additional_notes || "",
+                }),
+              )
+            : undefined;
 
-      // Eliminar squads que ya no están
-      const squadsToDelete = existingSquadNames.filter(
-        (sq) => !newSquadNames.includes(sq),
-      );
-      if (squadsToDelete.length > 0) {
-        await supabase
-          .from("task_squad")
-          .delete()
-          .eq("task_id", id)
-          .in("squad", squadsToDelete);
-      }
+        const rpcInput: Record<string, unknown> = { ...taskUpdateData };
+        if (squadsWithScores !== undefined) rpcInput.squads = squadsWithScores;
 
-      // Batch upsert: preparar todos los registros y enviar en una sola query
-      const upsertRecords = squads.map(
-        (squadData: {
-          squad: string;
-          low_returns: number;
-          medium_returns: number;
-          high_returns: number;
-          additional_notes?: string;
-        }) => {
-          const calculatedScore = calculateTaskScore({
-            lowReturns: squadData.low_returns,
-            mediumReturns: squadData.medium_returns,
-            highReturns: squadData.high_returns,
-          });
-          return {
-            task_id: id,
-            squad: squadData.squad,
-            low_returns: squadData.low_returns,
-            medium_returns: squadData.medium_returns,
-            high_returns: squadData.high_returns,
-            calculated_score: calculatedScore,
-            additional_notes: squadData.additional_notes || "",
-            updated_at: new Date().toISOString(),
-          };
-        },
-      );
-
-      const { error: squadUpsertError } = await supabase
-        .from("task_squad")
-        .upsert(upsertRecords, { onConflict: "task_id,squad" });
-
-      if (squadUpsertError) {
-        console.error("Error upserting squads:", squadUpsertError);
-        return NextResponse.json(
-          { error: "Error al actualizar squads" },
-          { status: 400 },
+        // Llamada atómica: tarea + squads en una sola transacción PG.
+        // Devuelve { old_task, new_task, old_squads, new_squads } para el audit log.
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          "update_task_with_squads",
+          { p_id: id, p_input: rpcInput },
         );
-      }
-    }
 
-    // Obtener squads actualizados ANTES de crear el audit log
-    const { data: updatedSquads } = await supabase
-      .from("task_squad")
-      .select("*")
-      .eq("task_id", id);
-
-    // Register audit log
-    const userEmail = user.email || "unknown";
-    const changes: Record<string, { old: unknown; new: unknown }> = {};
-
-    // Campos que no deben registrarse como cambios de tarea (pertenecen a squads)
-    const fieldsToIgnore = ["additional_notes"];
-
-    // Capturar cambios en campos de tarea
-    Object.keys(body).forEach((key) => {
-      if (key !== "squads" && !fieldsToIgnore.includes(key)) {
-        const oldVal = existingTask[key as keyof typeof existingTask];
-        const newVal = body[key];
-
-        // Comparación especial para arrays (assigned_qa)
-        if (Array.isArray(newVal) || Array.isArray(oldVal)) {
-          const oldArr = Array.isArray(oldVal) ? [...oldVal].sort() : [];
-          const newArr = Array.isArray(newVal) ? [...newVal].sort() : [];
-          if (JSON.stringify(oldArr) !== JSON.stringify(newArr)) {
-            changes[key] = { old: oldVal ?? [], new: newVal };
+        if (rpcError) {
+          if (rpcError.message?.includes("Task not found")) {
+            return { status: 404, body: { error: "Task not found" } };
           }
-        } else if (oldVal !== newVal) {
-          changes[key] = { old: oldVal, new: newVal };
+          if (rpcError.code === "42501") {
+            return { status: 401, body: { error: "Unauthorized" } };
+          }
+          console.error("Error calling update_task_with_squads:", rpcError);
+          return {
+            status: 400,
+            body: { error: "Error al actualizar la tarea" },
+          };
         }
-      }
-    });
 
-    // Capturar cambios en squads - SOLO los que realmente cambiaron
-    if (Array.isArray(updatedSquads) || Array.isArray(existingSquads)) {
-      const changedSquads = {
-        old: [] as Record<string, unknown>[],
-        new: [] as Record<string, unknown>[],
-      };
+        type SquadRow = Record<string, unknown>;
+        const rpcData = rpcResult as {
+          old_task: Record<string, unknown>;
+          new_task: Record<string, unknown>;
+          old_squads: SquadRow[];
+          new_squads: SquadRow[];
+        };
+        const updatedTask = rpcData.new_task;
+        const updatedSquads = Array.isArray(rpcData.new_squads)
+          ? rpcData.new_squads
+          : [];
+        const snapshotTask = rpcData.old_task;
+        const snapshotSquads = Array.isArray(rpcData.old_squads)
+          ? rpcData.old_squads
+          : [];
 
-      const oldSquadMap = new Map(
-        (existingSquads || []).map((sq) => [sq.squad, sq]),
-      );
-      const newSquadMap = new Map(
-        (updatedSquads || []).map((sq) => [sq.squad, sq]),
-      );
+        // Construir diff para el audit log
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const fieldsToIgnore = ["additional_notes"];
 
-      // Conjunto de todos los squads (viejos + nuevos)
-      const allSquadNames = new Set([
-        ...oldSquadMap.keys(),
-        ...newSquadMap.keys(),
-      ]);
+        Object.keys(body).forEach((key) => {
+          if (key !== "squads" && !fieldsToIgnore.includes(key)) {
+            const oldVal = snapshotTask?.[key];
+            const newVal = body[key] as unknown;
+            if (Array.isArray(newVal) || Array.isArray(oldVal)) {
+              const oldArr = Array.isArray(oldVal)
+                ? [...(oldVal as unknown[])].sort()
+                : [];
+              const newArr = Array.isArray(newVal) ? [...newVal].sort() : [];
+              if (JSON.stringify(oldArr) !== JSON.stringify(newArr)) {
+                changes[key] = { old: oldVal ?? [], new: newVal };
+              }
+            } else if (oldVal !== newVal) {
+              changes[key] = { old: oldVal, new: newVal };
+            }
+          }
+        });
 
-      // Comparar cada squad
-      for (const squadName of allSquadNames) {
-        const oldSquad = oldSquadMap.get(squadName);
-        const newSquad = newSquadMap.get(squadName);
+        // Capturar cambios en squads - SOLO los que realmente cambiaron
+        if (updatedSquads.length > 0 || snapshotSquads.length > 0) {
+          const changedSquads: { old: SquadRow[]; new: SquadRow[] } = {
+            old: [],
+            new: [],
+          };
+          const oldSquadMap = new Map<unknown, SquadRow>(
+            snapshotSquads.map((sq) => [sq.squad, sq]),
+          );
+          const newSquadMap = new Map<unknown, SquadRow>(
+            updatedSquads.map((sq) => [sq.squad, sq]),
+          );
+          const allSquadNames = new Set([
+            ...oldSquadMap.keys(),
+            ...newSquadMap.keys(),
+          ]);
 
-        // Si el squad fue eliminado
-        if (oldSquad && !newSquad) {
-          changedSquads.old.push({ ...oldSquad });
-        }
-        // Si el squad es nuevo
-        else if (!oldSquad && newSquad) {
-          changedSquads.new.push({ ...newSquad });
-        }
-        // Si el squad existe en ambas versiones, comparar sus valores
-        else if (oldSquad && newSquad) {
-          // Normalizar valores: null/undefined → 0, pero mantener la distinción en la comparación
-          // Esto permite detectar cambios de 0 hacia valores diferentes y viceversa
-          const oldLow =
-            oldSquad.low_returns !== null && oldSquad.low_returns !== undefined
-              ? Number(oldSquad.low_returns)
-              : 0;
-          const newLow =
-            newSquad.low_returns !== null && newSquad.low_returns !== undefined
-              ? Number(newSquad.low_returns)
-              : 0;
-          const oldMedium =
-            oldSquad.medium_returns !== null &&
-            oldSquad.medium_returns !== undefined
-              ? Number(oldSquad.medium_returns)
-              : 0;
-          const newMedium =
-            newSquad.medium_returns !== null &&
-            newSquad.medium_returns !== undefined
-              ? Number(newSquad.medium_returns)
-              : 0;
-          const oldHigh =
-            oldSquad.high_returns !== null &&
-            oldSquad.high_returns !== undefined
-              ? Number(oldSquad.high_returns)
-              : 0;
-          const newHigh =
-            newSquad.high_returns !== null &&
-            newSquad.high_returns !== undefined
-              ? Number(newSquad.high_returns)
-              : 0;
-          const oldScore =
-            oldSquad.calculated_score !== null &&
-            oldSquad.calculated_score !== undefined
-              ? Number(oldSquad.calculated_score)
-              : 0;
-          const newScore =
-            newSquad.calculated_score !== null &&
-            newSquad.calculated_score !== undefined
-              ? Number(newSquad.calculated_score)
-              : 0;
-          const oldNotes = oldSquad.additional_notes || "";
-          const newNotes = newSquad.additional_notes || "";
+          const n = (v: unknown): number => (v != null ? Number(v) : 0);
 
-          const lowChanged = oldLow !== newLow;
-          const mediumChanged = oldMedium !== newMedium;
-          const highChanged = oldHigh !== newHigh;
-          const scoreChanged = oldScore !== newScore;
-          const notesChanged = oldNotes !== newNotes;
+          for (const squadName of allSquadNames) {
+            const oldSquad = oldSquadMap.get(squadName);
+            const newSquad = newSquadMap.get(squadName);
+            if (oldSquad && !newSquad) {
+              changedSquads.old.push({ ...oldSquad });
+            } else if (!oldSquad && newSquad) {
+              changedSquads.new.push({ ...newSquad });
+            } else if (oldSquad && newSquad) {
+              if (
+                n(oldSquad.low_returns) !== n(newSquad.low_returns) ||
+                n(oldSquad.medium_returns) !== n(newSquad.medium_returns) ||
+                n(oldSquad.high_returns) !== n(newSquad.high_returns) ||
+                n(oldSquad.calculated_score) !== n(newSquad.calculated_score) ||
+                (oldSquad.additional_notes || "") !==
+                  (newSquad.additional_notes || "")
+              ) {
+                changedSquads.old.push({ ...oldSquad });
+                changedSquads.new.push({ ...newSquad });
+              }
+            }
+          }
 
-          if (
-            lowChanged ||
-            mediumChanged ||
-            highChanged ||
-            scoreChanged ||
-            notesChanged
-          ) {
-            // Squad existente con cambios - CLONAR OBJETOS para evitar referencias compartidas
-            changedSquads.old.push({ ...oldSquad });
-            changedSquads.new.push({ ...newSquad });
+          if (changedSquads.old.length > 0 || changedSquads.new.length > 0) {
+            changes.squads = changedSquads;
           }
         }
-      }
 
-      // Solo registrar cambios si hubo squads que realmente cambiaron
-      if (changedSquads.old.length > 0 || changedSquads.new.length > 0) {
-        changes["squads"] = changedSquads;
-      }
-    }
+        // Audit log async: no bloquea la respuesta al cliente
+        after(async () => {
+          try {
+            await supabase.from("audit_logs").insert({
+              user_id: user.id,
+              user_email: user.email || "unknown",
+              action: "UPDATE",
+              entity_type: "TASK",
+              entity_id: id,
+              entity_name: updatedTask?.name,
+              changes,
+              old_values: snapshotTask,
+              new_values: { ...updatedTask, squads: updatedSquads },
+              timestamp: new Date().toISOString(),
+            });
+          } catch (auditError) {
+            console.error("Error logging audit action:", auditError);
+          }
+        });
 
-    // Audit log async: no bloquea la respuesta al cliente
-    const auditPayload = {
-      user_id: user.id,
-      user_email: userEmail,
-      action: "UPDATE",
-      entity_type: "TASK",
-      entity_id: id,
-      entity_name: updatedTask.name,
-      changes,
-      old_values: existingTask,
-      new_values: { ...updatedTask, squads: updatedSquads || [] },
-      timestamp: new Date().toISOString(),
-    };
-    after(async () => {
-      try {
-        await supabase.from("audit_logs").insert(auditPayload);
-      } catch (auditError) {
-        console.error("Error logging audit action:", auditError);
-      }
-    });
-
-    const responseBody = { ...updatedTask, squads: updatedSquads || [] };
-    cacheIdempotencyResponse(idempotencyKey, user.id, "PATCH", 200, responseBody, `/api/tasks/${id}`);
-    return NextResponse.json(responseBody);
+        return { status: 200, body: { ...updatedTask, squads: updatedSquads } };
+      },
+    );
+    return NextResponse.json(result.body as object, { status: result.status });
   } catch (error) {
     console.error("Error updating task:", error);
     return NextResponse.json(
@@ -424,13 +336,6 @@ export async function DELETE(
       );
     }
 
-    // Idempotency check: return cached response if key already seen
-    const idempotencyKey = request.headers.get("Idempotency-Key");
-    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "DELETE", `/api/tasks/${id}`);
-    if (idempotentHit) {
-      return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
-    }
-
     // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
     const { data: existingTask, error: getError } = await supabase
       .from("tasks")
@@ -442,51 +347,57 @@ export async function DELETE(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Obtener squads ANTES de eliminar (para audit log)
-    const { data: existingSquads } = await supabase
-      .from("task_squad")
-      .select("*")
-      .eq("task_id", id);
+    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const result = await withIdempotency(
+      idempotencyKey,
+      user.id,
+      "DELETE",
+      `/api/tasks/${id}`,
+      async (): Promise<{ status: number; body: unknown }> => {
+        // Obtener squads ANTES de eliminar (para audit log)
+        const { data: existingSquads } = await supabase
+          .from("task_squad")
+          .select("*")
+          .eq("task_id", id);
 
-    // Eliminar tarea (task_squad se elimina automáticamente por ON DELETE CASCADE)
-    const { error: deleteError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", id);
+        // Eliminar tarea (task_squad se elimina automáticamente por ON DELETE CASCADE)
+        const { error: deleteError } = await supabase
+          .from("tasks")
+          .delete()
+          .eq("id", id);
 
-    if (deleteError) {
-      console.error("Error deleting task:", deleteError);
-      return NextResponse.json(
-        { error: "Error al eliminar la tarea" },
-        { status: 400 },
-      );
-    }
+        if (deleteError) {
+          console.error("Error deleting task:", deleteError);
+          return { status: 400, body: { error: "Error al eliminar la tarea" } };
+        }
 
-    // Register audit log async (no bloquea la respuesta al cliente)
-    const userEmail = user.email || "unknown";
-    const auditPayload = {
-      user_id: user.id,
-      user_email: userEmail,
-      action: "DELETE",
-      entity_type: "TASK",
-      entity_id: id,
-      entity_name: existingTask.name,
-      old_values: {
-        ...existingTask,
-        squads: existingSquads || [],
+        // Register audit log async (no bloquea la respuesta al cliente)
+        const userEmail = user.email || "unknown";
+        const auditPayload = {
+          user_id: user.id,
+          user_email: userEmail,
+          action: "DELETE",
+          entity_type: "TASK",
+          entity_id: id,
+          entity_name: existingTask.name,
+          old_values: {
+            ...existingTask,
+            squads: existingSquads || [],
+          },
+          timestamp: new Date().toISOString(),
+        };
+        after(async () => {
+          try {
+            await supabase.from("audit_logs").insert(auditPayload);
+          } catch (auditError) {
+            console.error("Error logging audit action:", auditError);
+          }
+        });
+
+        return { status: 200, body: { success: true } };
       },
-      timestamp: new Date().toISOString(),
-    };
-    after(async () => {
-      try {
-        await supabase.from("audit_logs").insert(auditPayload);
-      } catch (auditError) {
-        console.error("Error logging audit action:", auditError);
-      }
-    });
-
-    cacheIdempotencyResponse(idempotencyKey, user.id, "DELETE", 200, { success: true }, `/api/tasks/${id}`);
-    return NextResponse.json({ success: true });
+    );
+    return NextResponse.json(result.body as object, { status: result.status });
   } catch (error) {
     console.error("Error deleting task:", error);
     return NextResponse.json(

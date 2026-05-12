@@ -219,7 +219,12 @@ export class MutationQueue {
     return [...this.queue];
   }
 
-  getStatus(): { pending: number; processing: boolean; failed: number; retryingCount: number } {
+  getStatus(): {
+    pending: number;
+    processing: boolean;
+    failed: number;
+    retryingCount: number;
+  } {
     const pending = this.queue.filter(
       (i) => i.status === "pending" || i.status === "processing",
     ).length;
@@ -229,7 +234,11 @@ export class MutationQueue {
       (i) => i.status === "failed" || i.status === "permanent_failure",
     ).length;
     const retryingCount = this.queue.filter(
-      (i) => i.status === "processing" && i.attempts > 1,
+      (i) =>
+        (i.status === "processing" && i.attempts > 1) ||
+        (i.status === "failed" &&
+          i.attempts >= 1 &&
+          i.attempts < i.maxAttempts),
     ).length;
     return { pending, processing, failed, retryingCount };
   }
@@ -260,7 +269,9 @@ export class MutationQueue {
         method: item.method,
         headers: {
           "Content-Type": "application/json",
-          ...(item.idempotencyKey ? { "Idempotency-Key": item.idempotencyKey } : {}),
+          ...(item.idempotencyKey
+            ? { "Idempotency-Key": item.idempotencyKey }
+            : {}),
         },
         body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
         signal: controller.signal,
@@ -287,6 +298,25 @@ export class MutationQueue {
           item.error = undefined;
           this.persist();
           // Invalidar cachés para que la UI refresque y muestre el recurso existente
+          this.onSuccessGlobal?.(item, {});
+          this.inMemoryCallbacks.delete(item.id);
+          this.notifyStatusChange();
+          this.cleanup();
+          return;
+        }
+
+        // 404 en DELETE = recurso ya no existe. Un retry previo en otra instancia
+        // Lambda pudo haberlo borrado — tratar como éxito idempotente para que
+        // el optimistic update no sea revertido innecesariamente.
+        if (response.status === 404 && item.method === "DELETE") {
+          console.warn(
+            "[MutationQueue] 404 en DELETE — recurso ya eliminado (éxito idempotente):",
+            item.url,
+          );
+          item.status = "completed";
+          item.completedAt = Date.now();
+          item.error = undefined;
+          this.persist();
           this.onSuccessGlobal?.(item, {});
           this.inMemoryCallbacks.delete(item.id);
           this.notifyStatusChange();

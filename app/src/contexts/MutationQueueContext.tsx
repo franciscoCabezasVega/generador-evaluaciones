@@ -35,8 +35,6 @@ interface MutationQueueContextValue {
   queueStatus: QueueStatus;
   /** Reintenta todos los ítems fallidos manualmente */
   retryFailed: () => void;
-  /** Devuelve true si hay una mutación en vuelo para la URL + método dados */
-  isInFlight: (url: string, method?: string) => boolean;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -122,20 +120,9 @@ export function MutationQueueProvider({
     queueRef.current?.retryFailed();
   }, []);
 
-  const isInFlight = useCallback((url: string, method?: string): boolean => {
-    if (!queueRef.current) return false;
-    const queue = queueRef.current.getQueue();
-    return queue.some(
-      (item) =>
-        item.url === url &&
-        (method === undefined || item.method === method) &&
-        (item.status === "pending" || item.status === "processing"),
-    );
-  }, []);
-
   return (
     <MutationQueueContext.Provider
-      value={{ enqueue, queueStatus, retryFailed, isInFlight }}
+      value={{ enqueue, queueStatus, retryFailed }}
     >
       {children}
     </MutationQueueContext.Provider>
