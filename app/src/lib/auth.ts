@@ -17,6 +17,33 @@ function getServiceClient(): SupabaseClient | null {
   return _serviceClient;
 }
 
+// ─── Auth context in-process cache (TTL 5s) ───────────────────────────────────
+// Keyed by SHA-256(token). Never stores the raw token as key.
+// Warm hit avoids 2 RTT (auth.getUser + user_profiles SELECT) per request.
+// Lambda isolation means this cache is per-process, which is acceptable:
+// even a cold start shares cache across requests in the same warm instance.
+
+interface AuthCacheEntry {
+  ctx: { user: User; role: string | null }; // token NOT stored — always use token from current request
+  expiresAt: number;
+}
+
+const _authCache = new Map<string, AuthCacheEntry>();
+const _authCachePending = new Map<string, Promise<AuthCacheEntry | null>>();
+// TTL de 5s: balance entre RTTs ahorrados y ventana de privilegios elevados.
+// Un admin degradado pasa a 403 en ≤5s en instancias Lambda calientes.
+const AUTH_CACHE_TTL_MS = 5_000;
+// ~200KB max (≈1000 entries × 64 bytes hex key + entry overhead).
+const AUTH_CACHE_MAX_ENTRIES = 1_000; // Cap to prevent unbounded memory in warm instances
+
+async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Extraer token del header Authorization
  */
@@ -85,7 +112,8 @@ export async function getUserRole(userId: string) {
 /**
  * Contexto de autenticación completo: usuario + rol + cliente autenticado
  * Combina getUserFromRequest + getUserRole + getAuthenticatedSupabase en 1 llamada
- * Reutiliza el mismo service-role client para JWT verification y role lookup
+ * Reutiliza el mismo service-role client para JWT verification y role lookup.
+ * Resultado cacheado en memoria por 5s (keyed por SHA-256 del token).
  */
 export async function getAuthContext(request: NextRequest): Promise<{
   user: User;
@@ -97,34 +125,88 @@ export async function getAuthContext(request: NextRequest): Promise<{
     const token = extractToken(request);
     if (!token) return null;
 
-    const serviceClient = getServiceClient();
-    if (!serviceClient) return null;
+    const cacheKey = await hashToken(token);
+    const now = Date.now();
 
-    // Verificar JWT y obtener rol en paralelo no es posible porque
-    // necesitamos el user.id para el rol. Pero reutilizamos el mismo cliente.
-    const {
-      data: { user },
-      error,
-    } = await serviceClient.auth.getUser(token);
-
-    if (error || !user) return null;
-
-    // Obtener rol usando el mismo service client (sin crear otro)
-    let role: string | null = null;
-    const { data: profileData } = await serviceClient
-      .from("user_profiles")
-      .select("role_id")
-      .eq("id", user.id)
-      .single();
-
-    if (profileData) {
-      role = await getRoleNameById(profileData.role_id, serviceClient);
+    // IMPORTANT: check _authCache BEFORE _authCachePending so a just-resolved
+    // Promise cuts through the hot-cache path without awaiting again.
+    const cached = _authCache.get(cacheKey);
+    if (cached) {
+      if (cached.expiresAt > now) {
+        const supabase = getAuthenticatedSupabase(token);
+        // Return token from current request, not from cache (avoids stale-token issues)
+        return {
+          user: cached.ctx.user,
+          role: cached.ctx.role,
+          supabase,
+          token,
+        };
+      }
+      // Eliminar entradas expiradas de forma oportunista
+      _authCache.delete(cacheKey);
     }
 
-    // Crear cliente autenticado con RLS
-    const supabase = getAuthenticatedSupabase(token);
+    // Deduplicate concurrent requests for the same token (Promise coalescing)
+    if (_authCachePending.has(cacheKey)) {
+      const entry = await _authCachePending.get(cacheKey)!;
+      if (!entry) return null;
+      const supabase = getAuthenticatedSupabase(token);
+      // Return token from current request, not from cache
+      return { user: entry.ctx.user, role: entry.ctx.role, supabase, token };
+    }
 
-    return { user, role, supabase, token };
+    const pendingPromise = (async (): Promise<AuthCacheEntry | null> => {
+      try {
+        const serviceClient = getServiceClient();
+        if (!serviceClient) return null;
+
+        const {
+          data: { user },
+          error,
+        } = await serviceClient.auth.getUser(token);
+
+        if (error || !user) return null;
+
+        let role: string | null = null;
+        const { data: profileData } = await serviceClient
+          .from("user_profiles")
+          .select("role_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileData) {
+          role = await getRoleNameById(profileData.role_id, serviceClient);
+        }
+
+        const entry: AuthCacheEntry = {
+          ctx: { user, role }, // token omitted intentionally — always source from request
+          expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
+        };
+        // Opportunistic cleanup: evict expired entries when approaching the cap
+        if (_authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+          const now = Date.now();
+          for (const [k, v] of _authCache) {
+            if (v.expiresAt <= now) _authCache.delete(k);
+          }
+          if (_authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+            const firstKey = _authCache.keys().next().value;
+            if (firstKey !== undefined) _authCache.delete(firstKey);
+          }
+        }
+        _authCache.set(cacheKey, entry);
+        return entry;
+      } finally {
+        _authCachePending.delete(cacheKey);
+      }
+    })();
+
+    _authCachePending.set(cacheKey, pendingPromise);
+    const entry = await pendingPromise;
+    if (!entry) return null;
+
+    const supabase = getAuthenticatedSupabase(token);
+    // Return token from current request, not from cache
+    return { ...entry.ctx, supabase, token };
   } catch (error) {
     console.error("Error in getAuthContext:", error);
     return null;

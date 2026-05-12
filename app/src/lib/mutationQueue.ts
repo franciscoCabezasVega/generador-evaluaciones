@@ -24,6 +24,8 @@ export interface MutationItem {
   error?: string;
   /** Claves de caché a invalidar cuando el ítem se complete con éxito */
   cacheKeys?: string[];
+  /** Clave de idempotencia enviada como header al servidor */
+  idempotencyKey?: string;
 }
 
 export interface EnqueueParams {
@@ -130,6 +132,10 @@ export class MutationQueue {
    */
   enqueue(params: EnqueueParams): string {
     const id = `mut_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const idempotencyKey =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : id;
 
     const item: MutationItem = {
       id,
@@ -141,6 +147,7 @@ export class MutationQueue {
       maxAttempts: params.maxAttempts ?? 3,
       createdAt: Date.now(),
       cacheKeys: params.cacheKeys,
+      idempotencyKey,
     };
 
     this.queue.push(item);
@@ -212,7 +219,12 @@ export class MutationQueue {
     return [...this.queue];
   }
 
-  getStatus(): { pending: number; processing: boolean; failed: number } {
+  getStatus(): {
+    pending: number;
+    processing: boolean;
+    failed: number;
+    retryingCount: number;
+  } {
     const pending = this.queue.filter(
       (i) => i.status === "pending" || i.status === "processing",
     ).length;
@@ -221,7 +233,14 @@ export class MutationQueue {
     const failed = this.queue.filter(
       (i) => i.status === "failed" || i.status === "permanent_failure",
     ).length;
-    return { pending, processing, failed };
+    const retryingCount = this.queue.filter(
+      (i) =>
+        (i.status === "processing" && i.attempts > 1) ||
+        (i.status === "failed" &&
+          i.attempts >= 1 &&
+          i.attempts < i.maxAttempts),
+    ).length;
+    return { pending, processing, failed, retryingCount };
   }
 
   destroy(): void {
@@ -248,7 +267,12 @@ export class MutationQueue {
     try {
       const response = await authenticatedFetch(item.url, {
         method: item.method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(item.idempotencyKey
+            ? { "Idempotency-Key": item.idempotencyKey }
+            : {}),
+        },
         body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
         signal: controller.signal,
       });
@@ -274,6 +298,31 @@ export class MutationQueue {
           item.error = undefined;
           this.persist();
           // Invalidar cachés para que la UI refresque y muestre el recurso existente
+          this.onSuccessGlobal?.(item, {});
+          this.inMemoryCallbacks.delete(item.id);
+          this.notifyStatusChange();
+          this.cleanup();
+          return;
+        }
+
+        // 404 en DELETE en un RETRY = recurso ya no existe. Un intento previo en
+        // otra instancia Lambda pudo haberlo borrado — tratar como éxito idempotente
+        // para que el optimistic update no sea revertido innecesariamente.
+        // Solo en retries (attempts > 1): un primer intento con 404 sí es un error real
+        // (ID incorrecto, RLS denegando acceso) y debe surfacear al usuario.
+        if (
+          response.status === 404 &&
+          item.method === "DELETE" &&
+          item.attempts > 1
+        ) {
+          console.warn(
+            "[MutationQueue] 404 en DELETE — recurso ya eliminado (éxito idempotente):",
+            item.url,
+          );
+          item.status = "completed";
+          item.completedAt = Date.now();
+          item.error = undefined;
+          this.persist();
           this.onSuccessGlobal?.(item, {});
           this.inMemoryCallbacks.delete(item.id);
           this.notifyStatusChange();

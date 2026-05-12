@@ -31,8 +31,12 @@ Aplicación web desarrollada con **Next.js 16** y **TypeScript** que permite a c
 - **`warmSession()`**: Pre-calienta el caché de sesión antes de lanzar fetches en paralelo (p.ej. carga de catálogos), evitando que las N peticiones compitan individualmente por el lock
 - **Caché de sesión**: TTL de 5 minutos para reducir llamadas a `getSession` y contención de `navigator.lock` en escenarios multi-pestaña
 - **MutationQueue resiliente**: `HTTP 409` en `POST` se trata como éxito idempotente (el recurso ya existe en el servidor); `SessionLockError` no consume un intento del presupuesto de reintentos — reintenta en 2 s automáticamente
-- **MutationQueueContext**: React context/provider que expone `useMutationQueue()` para que cualquier componente pueda encolar mutaciones, consultar estado (`pending`, `failed`, `processing`) y relanzar fallos (`retryFailed`)
-- **QueueStatusIndicator**: Componente en la Navbar que refleja en tiempo real el estado de la cola — spinner de sincronización en segundo plano, advertencia con botón "Reintentar" si hay fallos permanentes, y aviso de sin conexión cuando `navigator.onLine === false`
+- **Idempotency-Key automático**: El `MutationQueue` genera un UUID por mutación y lo envía como header `Idempotency-Key`; los API routes (POST/PATCH/DELETE) lo verifican contra un cache en proceso (TTL 5 min) y devuelven la respuesta cacheada si la clave ya fue procesada, eliminando duplicados por doble-click o reconexión
+- **MutationQueueContext**: React context/provider que expone `useMutationQueue()` para que cualquier componente pueda encolar mutaciones, consultar estado (`pending`, `failed`, `processing`, `retryingCount`) y relanzar fallos (`retryFailed`)
+- **QueueStatusIndicator**: Componente en la Navbar que refleja en tiempo real el estado de la cola — muestra "Reintentando..." cuando hay reintentos activos, spinner de sincronización, advertencia con botón "Reintentar" si hay fallos permanentes, y aviso de sin conexión cuando `navigator.onLine === false`
+- **Feedback de reintento en formulario**: El botón de submit muestra `Reintentando X/N...` mientras `useSafeAuthFetch` reintenta, eliminando el `safetyTimer` de 10 s que re-habilitaba el botón prematuramente y causaba envíos duplicados
+- **Auth cache en servidor**: `getAuthContext()` hashea el JWT con SHA-256 y cachea el resultado en memoria (TTL 5 s) con coalescing de Promises concurrentes, reduciendo de 2 RTTs a Supabase por request a 0 en el caso caliente
+- **Audit logs no bloqueantes**: Los registros de auditoría en POST/PATCH/DELETE se escriben vía `after()` de Next.js, sin bloquear la respuesta al cliente
 - **BroadcastChannel de sesión**: Cuando el caché de sesión se invalida en una pestaña (p. ej. logout), se propaga inmediatamente al resto de pestañas vía `BroadcastChannel`, evitando que operen con un JWT obsoleto
 - **Adaptive timeouts en escritura**: `useSafeAuthFetch` usa timeouts más cortos para peticiones de lectura y más largos para mutaciones, con backoff automático en reintentos
 
@@ -120,6 +124,7 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 ### Búsqueda y Filtros
 - Filtrar por: Mes, Año, Tipo de sistema, Equipo, Estado
 - Búsqueda integrada por nombre de tarea
+- Todos los dropdowns de filtros actualizan el estado local de forma síncrona (`useState`) y reflejan la URL vía `router.replace` en baja prioridad (`startTransition`), evitando que el cambio de URL interrumpa el evento del select y cause que el dropdown "rebote" al valor anterior
 
 ### Auditoría y Trazabilidad
 - Historial completo de todas las operaciones (crear, editar, eliminar)
@@ -148,7 +153,7 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 |-----------|-----------|
 | Framework | Next.js 16+ |
 | Lenguaje | TypeScript 5+ |
-| Base de Datos | PostgreSQL (Supabase) |
+| Base de Datos | PostgreSQL (Supabase) + RPCs atómicas PL/pgSQL |
 | Autenticación | Supabase Auth |
 | API | Next.js API Routes |
 | Estilos | Tailwind CSS 4 + PostCSS |
@@ -378,6 +383,30 @@ Cada ejecución del pipeline genera artefactos descargables:
 - **jest-coverage**: Reporte de cobertura de tests unitarios (7 días)
 - **playwright-report**: Reporte HTML interactivo de Playwright (14 días)
 - **playwright-results**: Screenshots, videos y traces de fallos (7 días)
+
+---
+
+## Base de Datos
+
+### RPCs Atómicas (PL/pgSQL)
+
+Para eliminar roundtrips y garantizar consistencia transaccional, las operaciones de creación y actualización de tareas tienen RPCs disponibles en Supabase:
+
+| Función | Descripción |
+|---------|-------------|
+| `create_task_with_squads(jsonb)` | Inserta tarea + todos sus squads en una sola transacción; devuelve `{ task, squads }` |
+| `update_task_with_squads(uuid, jsonb)` | Actualiza tarea y reemplaza squads atómicamente; devuelve `{ old_task, new_task, old_squads, new_squads }` para audit |
+
+Ambas funciones usan `SECURITY INVOKER` y `set search_path = public`, respetando las políticas RLS del usuario autenticado.
+
+### Tuning de Rendimiento
+
+| Ajuste | Valor | Propósito |
+|--------|-------|-----------|
+| `SET LOCAL statement_timeout` (dentro de cada RPC) | 10 s | Corta queries largas dentro de la transacción RPC antes de agotar el `maxDuration` de Vercel |
+| Índice `user_profiles_id_role_idx` | `(id) INCLUDE (role_id)` | Index-only scan en el lookup de rol por cada request autenticado |
+
+El timeout documentado **no** se aplica a nivel del rol `authenticated` con `ALTER ROLE ... SET`; las migraciones lo resetean y lo aplican localmente con `SET LOCAL statement_timeout` dentro de cada RPC.
 
 ---
 

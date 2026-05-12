@@ -5,10 +5,11 @@ import React, {
   useState,
   useRef,
   useCallback,
-  useMemo,
+  startTransition,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
+import type { RetryInfo } from "@/hooks/useSafeAuthFetch";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatScore } from "@/lib/scoreCalculator";
 import { parseISO, format as formatDate, isValid } from "date-fns";
@@ -54,20 +55,47 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
   const [isClient] = useState(() => typeof window !== "undefined");
 
-  const filters = useMemo(
-    () => ({
-      month: searchParams.get("month")
-        ? parseInt(searchParams.get("month")!)
-        : new Date().getMonth() + 1,
-      year: searchParams.get("year")
-        ? parseInt(searchParams.get("year")!)
-        : new Date().getFullYear(),
-      productType: searchParams.get("productType") || "",
-      squad: searchParams.get("squad") || "",
-      status: searchParams.get("status") || "",
-    }),
-    [searchParams],
-  );
+  const [filters, setFilters] = useState(() => ({
+    month: searchParams.get("month")
+      ? parseInt(searchParams.get("month")!)
+      : new Date().getMonth() + 1,
+    year: searchParams.get("year")
+      ? parseInt(searchParams.get("year")!)
+      : new Date().getFullYear(),
+    productType: searchParams.get("productType") || "",
+    squad: searchParams.get("squad") || "",
+    status: searchParams.get("status") || "",
+  }));
+
+  // Sincronizar filtros cuando la URL cambia externamente (back/forward, navegación externa)
+  useEffect(() => {
+    startTransition(() => {
+      setFilters((prev) => {
+        const next = {
+          month: searchParams.get("month")
+            ? parseInt(searchParams.get("month")!)
+            : new Date().getMonth() + 1,
+          year: searchParams.get("year")
+            ? parseInt(searchParams.get("year")!)
+            : new Date().getFullYear(),
+          productType: searchParams.get("productType") || "",
+          squad: searchParams.get("squad") || "",
+          status: searchParams.get("status") || "",
+        };
+        // Skip re-render if URL-derived values haven't changed
+        if (
+          prev.month === next.month &&
+          prev.year === next.year &&
+          prev.productType === next.productType &&
+          prev.squad === next.squad &&
+          prev.status === next.status
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    });
+  }, [searchParams]);
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
   const { enqueue } = useMutationQueue();
@@ -144,24 +172,37 @@ export default function TasksPage() {
   const updateFilters = (newFilters: Partial<typeof filters>) => {
     const updatedFilters = { ...filters, ...newFilters };
 
-    const params = new URLSearchParams();
-    if (updatedFilters.month)
-      params.set("month", updatedFilters.month.toString());
-    if (updatedFilters.year) params.set("year", updatedFilters.year.toString());
-    if (updatedFilters.productType)
-      params.set("productType", updatedFilters.productType);
-    if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
-    if (updatedFilters.status) params.set("status", updatedFilters.status);
+    // Actualizar estado local de forma inmediata (no esperar al useEffect de searchParams)
+    setFilters(updatedFilters);
 
-    router.push(`/tasks?${params.toString()}`, { scroll: false });
+    // Actualizar URL en baja prioridad para no interrumpir el evento del dropdown
+    startTransition(() => {
+      const params = new URLSearchParams();
+      if (updatedFilters.month)
+        params.set("month", updatedFilters.month.toString());
+      if (updatedFilters.year)
+        params.set("year", updatedFilters.year.toString());
+      if (updatedFilters.productType)
+        params.set("productType", updatedFilters.productType);
+      if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
+      if (updatedFilters.status) params.set("status", updatedFilters.status);
+
+      router.replace(`/tasks?${params.toString()}`, { scroll: false });
+    });
   };
 
-  const handleSubmit = async (data: CreateTaskInput) => {
+  const handleSubmit = async (
+    data: CreateTaskInput,
+    onRetry?: (info: RetryInfo | null) => void,
+  ) => {
     // ── Pre-flight: verificar link duplicado ANTES del optimistic update ──────
     // Si falla, lanza un error para que TaskForm lo muestre sin cerrar el form.
     const checkRes = await safeFetch(
       `/api/tasks/check-link?link=${encodeURIComponent(data.task_link)}${editingTask ? `&excludeId=${editingTask.id}` : ""}`,
       { method: "GET" },
+      0,
+      undefined,
+      onRetry,
     );
     if (checkRes.status === 409) {
       const body = await checkRes.json().catch(() => ({}));

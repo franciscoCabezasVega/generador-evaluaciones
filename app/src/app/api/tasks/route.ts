@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { CreateTaskInput } from "@/lib/types";
 import { calculateTaskScore, validateReturns } from "@/lib/scoreCalculator";
 import { getAuthContext } from "@/lib/auth";
+import { withIdempotency } from "@/lib/idempotency";
+
+// M2/I-3: compile once at module scope
+const IDEMPOTENCY_KEY_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
 
 export async function POST(request: NextRequest) {
   try {
@@ -109,114 +113,102 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verificar si ya existe una tarea con el mismo link
-    const { data: existingTask, error: checkError } = await supabase
-      .from("tasks")
-      .select("id")
-      .eq("task_link", body.task_link)
-      .single();
-
-    if (existingTask) {
+    const rawIdempotencyKey = request.headers.get("Idempotency-Key");
+    // M2/I-1: clave con formato inválido → rechazar con 400 (no degradar silenciosamente)
+    if (rawIdempotencyKey && !IDEMPOTENCY_KEY_REGEX.test(rawIdempotencyKey)) {
       return NextResponse.json(
-        { error: "Este link ya existe en otra tarea. Usa un link diferente." },
-        { status: 409 },
+        { error: "Invalid Idempotency-Key format" },
+        { status: 400 },
       );
     }
+    const idempotencyKey = rawIdempotencyKey ?? null;
+    const result = await withIdempotency(
+      idempotencyKey,
+      user.id,
+      "POST",
+      "/api/tasks",
+      async (): Promise<{ status: number; body: unknown }> => {
+        // Calcular scores para cada squad antes de enviar al RPC
+        const squadsWithScores = body.squads.map((sq) => ({
+          squad: sq.squad,
+          low_returns: sq.low_returns,
+          medium_returns: sq.medium_returns,
+          high_returns: sq.high_returns,
+          calculated_score: calculateTaskScore({
+            lowReturns: sq.low_returns,
+            mediumReturns: sq.medium_returns,
+            highReturns: sq.high_returns,
+          }),
+          additional_notes: sq.additional_notes || "",
+        }));
 
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error("Error checking for duplicates:", checkError);
-    }
-
-    // Crear tarea sin los campos de devoluciones (se guardan por squad)
-    const { data: task, error: taskError } = await supabase
-      .from("tasks")
-      .insert({
-        name: body.name,
-        task_link: body.task_link,
-        product_type: body.product_type,
-        status: body.status,
-        month: body.month,
-        year: body.year,
-        user_id: user.id,
-        assigned_qa: Array.isArray(body.assigned_qa) ? body.assigned_qa : [],
-        effort_score_date: body.effort_score_date,
-        tshirt_size: body.tshirt_size,
-        project_type: body.project_type,
-      })
-      .select()
-      .single();
-
-    if (taskError) {
-      if (taskError.code === "23505") {
-        return NextResponse.json(
+        // Llamada atómica: tarea + squads en una sola transacción PG.
+        // user_id lo inyecta el RPC desde auth.uid(), no del payload.
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          "create_task_with_squads",
           {
-            error: "Este link ya existe en otra tarea. Usa un link diferente.",
+            p_input: {
+              name: body.name,
+              task_link: body.task_link,
+              product_type: body.product_type,
+              status: body.status,
+              month: body.month,
+              year: body.year,
+              assigned_qa: Array.isArray(body.assigned_qa)
+                ? body.assigned_qa
+                : [],
+              effort_score_date: body.effort_score_date,
+              tshirt_size: body.tshirt_size,
+              project_type: body.project_type,
+              squads: squadsWithScores,
+            },
           },
-          { status: 409 },
         );
-      }
-      return NextResponse.json(
-        { error: "Error al crear la tarea" },
-        { status: 400 },
-      );
-    }
 
-    // Crear registros en task_squad para cada squad
-    const taskSquadRecords = body.squads.map((squadData) => {
-      const calculatedScore = calculateTaskScore({
-        lowReturns: squadData.low_returns,
-        mediumReturns: squadData.medium_returns,
-        highReturns: squadData.high_returns,
-      });
+        if (rpcError) {
+          if (rpcError.code === "23505") {
+            return {
+              status: 409,
+              body: {
+                error:
+                  "Este link ya existe en otra tarea. Usa un link diferente.",
+              },
+            };
+          }
+          console.error("Error calling create_task_with_squads:", rpcError);
+          return { status: 500, body: { error: "Error al crear la tarea" } };
+        }
 
-      return {
-        task_id: task.id,
-        squad: squadData.squad,
-        low_returns: squadData.low_returns,
-        medium_returns: squadData.medium_returns,
-        high_returns: squadData.high_returns,
-        calculated_score: calculatedScore,
-        additional_notes: squadData.additional_notes || "",
-      };
-    });
+        const rpcData = rpcResult as {
+          task: Record<string, unknown>;
+          squads: Record<string, unknown>[];
+        };
+        const task = rpcData.task;
+        const taskSquads = Array.isArray(rpcData.squads) ? rpcData.squads : [];
 
-    const { error: squadError } = await supabase
-      .from("task_squad")
-      .insert(taskSquadRecords);
+        // Register audit log async (no bloquea la respuesta al usuario)
+        const userEmail = user.email || "unknown";
+        after(async () => {
+          try {
+            await supabase.from("audit_logs").insert({
+              user_id: user.id,
+              user_email: userEmail,
+              action: "CREATE",
+              entity_type: "TASK",
+              entity_id: task.id,
+              entity_name: task.name,
+              new_values: { ...task, squads: taskSquads },
+              timestamp: new Date().toISOString(),
+            });
+          } catch (auditError) {
+            console.error("Error logging audit action:", auditError);
+          }
+        });
 
-    if (squadError) {
-      // Si falla insertar los squads, eliminar la tarea
-      await supabase.from("tasks").delete().eq("id", task.id);
-      return NextResponse.json(
-        { error: "Error creating task squads: " + squadError.message },
-        { status: 400 },
-      );
-    }
-
-    // Register audit log async (no bloquea la respuesta al usuario)
-    const userEmail = user.email || "unknown";
-    const auditPayload = {
-      user_id: user.id,
-      user_email: userEmail,
-      action: "CREATE",
-      entity_type: "TASK",
-      entity_id: task.id,
-      entity_name: task.name,
-      new_values: { ...task, squads: taskSquadRecords },
-      timestamp: new Date().toISOString(),
-    };
-    after(async () => {
-      try {
-        await supabase.from("audit_logs").insert(auditPayload);
-      } catch (auditError) {
-        console.error("Error logging audit action:", auditError);
-      }
-    });
-
-    return NextResponse.json(
-      { ...task, squads: taskSquadRecords },
-      { status: 201 },
+        return { status: 201, body: { ...task, squads: taskSquads } };
+      },
     );
+    return NextResponse.json(result.body as object, { status: result.status });
   } catch (error) {
     console.error("Error creating task:", error);
     return NextResponse.json(

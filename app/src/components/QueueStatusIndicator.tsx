@@ -60,14 +60,23 @@ export default function QueueStatusIndicator() {
 
   if (queueStatus.pending > 0 || queueStatus.processing) {
     const count = queueStatus.pending;
+    const isRetrying = queueStatus.retryingCount > 0;
     return (
       <div
         className="flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-600"
-        title="Sincronizando cambios en segundo plano..."
+        title={
+          isRetrying
+            ? "Reintentando sincronización en segundo plano..."
+            : "Sincronizando cambios en segundo plano..."
+        }
       >
         <Loader2 size={12} className="animate-spin" />
         <span className="hidden sm:inline">
-          {count > 1 ? `Sincronizando ${count}...` : "Sincronizando..."}
+          {isRetrying
+            ? "Reintentando..."
+            : count > 1
+              ? `Sincronizando ${count}...`
+              : "Sincronizando..."}
         </span>
       </div>
     );

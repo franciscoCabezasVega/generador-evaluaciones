@@ -24,6 +24,8 @@ export interface QueueStatus {
   processing: boolean;
   /** Ítems que fallaron (incluyendo fallos permanentes) */
   failed: number;
+  /** Ítems que están siendo reintentados (attempt > 1) */
+  retryingCount: number;
 }
 
 interface MutationQueueContextValue {
@@ -54,6 +56,7 @@ export function MutationQueueProvider({
     pending: 0,
     processing: false,
     failed: 0,
+    retryingCount: 0,
   });
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export function MutationQueueProvider({
         pending: s.pending,
         processing: s.processing,
         failed: s.failed,
+        retryingCount: s.retryingCount,
       });
     };
 
