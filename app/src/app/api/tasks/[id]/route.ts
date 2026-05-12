@@ -341,17 +341,6 @@ export async function DELETE(
       );
     }
 
-    // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
-    const { data: existingTask, error: getError } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (getError || !existingTask) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
     const rawIdempotencyKeyDelete = request.headers.get("Idempotency-Key");
     if (
       rawIdempotencyKeyDelete &&
@@ -369,6 +358,19 @@ export async function DELETE(
       "DELETE",
       `/api/tasks/${id}`,
       async (): Promise<{ status: number; body: unknown }> => {
+        // Verificar existencia DENTRO de withIdempotency para que el cache pueda
+        // servir el 200 en duplicados sin volver a hacer el pre-flight.
+        // RLS aplica restricciones de acceso por rol.
+        const { data: existingTask, error: getError } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (getError || !existingTask) {
+          return { status: 404, body: { error: "Task not found" } };
+        }
+
         // Obtener squads ANTES de eliminar (para audit log)
         const { data: existingSquads } = await supabase
           .from("task_squad")

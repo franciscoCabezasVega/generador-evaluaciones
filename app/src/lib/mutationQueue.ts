@@ -305,10 +305,16 @@ export class MutationQueue {
           return;
         }
 
-        // 404 en DELETE = recurso ya no existe. Un retry previo en otra instancia
-        // Lambda pudo haberlo borrado — tratar como éxito idempotente para que
-        // el optimistic update no sea revertido innecesariamente.
-        if (response.status === 404 && item.method === "DELETE") {
+        // 404 en DELETE en un RETRY = recurso ya no existe. Un intento previo en
+        // otra instancia Lambda pudo haberlo borrado — tratar como éxito idempotente
+        // para que el optimistic update no sea revertido innecesariamente.
+        // Solo en retries (attempts > 1): un primer intento con 404 sí es un error real
+        // (ID incorrecto, RLS denegando acceso) y debe surfacear al usuario.
+        if (
+          response.status === 404 &&
+          item.method === "DELETE" &&
+          item.attempts > 1
+        ) {
           console.warn(
             "[MutationQueue] 404 en DELETE — recurso ya eliminado (éxito idempotente):",
             item.url,

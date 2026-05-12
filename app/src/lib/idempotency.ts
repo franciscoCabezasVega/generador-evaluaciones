@@ -21,10 +21,7 @@ interface IdempotencyCacheEntry {
 
 const _cache = new Map<string, IdempotencyCacheEntry>();
 // Coalescing de requests en vuelo con el mismo key
-const _pending = new Map<
-  string,
-  Promise<{ status: number; body: unknown } | null>
->();
+const _pending = new Map<string, Promise<{ status: number; body: unknown }>>();
 const TTL_MS = 5 * 60 * 1_000; // 5 minutes
 const MAX_KEY_LENGTH = 128; // Reject excessively long keys (UUIDs are 36 chars; 128 is generous)
 const MAX_CACHE_ENTRIES = 10_000; // Cap to prevent unbounded memory growth
@@ -115,7 +112,7 @@ export async function withIdempotency(
   }
 
   // In-flight coalescing
-  if (_pending.has(key)) return (await _pending.get(key)!)!;
+  if (_pending.has(key)) return _pending.get(key)!;
 
   const promise = (async () => {
     try {
