@@ -67,7 +67,6 @@ describe("buildFilterKey (cache key builder)", () => {
 describe("visibilitychange revalidation logic", () => {
   let listeners: Array<() => void>;
   let originalAddEventListener: typeof document.addEventListener;
-  let originalRemoveEventListener: typeof document.removeEventListener;
   let originalVisibilityState: string;
 
   // Minimal CacheStore replica used to test isFresh
@@ -91,7 +90,6 @@ describe("visibilitychange revalidation logic", () => {
   beforeEach(() => {
     listeners = [];
     originalAddEventListener = document.addEventListener.bind(document);
-    originalRemoveEventListener = document.removeEventListener.bind(document);
     originalVisibilityState = Object.getOwnPropertyDescriptor(document, "visibilityState")?.value ?? "visible";
 
     // Capture visibilitychange listeners
@@ -99,7 +97,7 @@ describe("visibilitychange revalidation logic", () => {
       if (event === "visibilitychange") {
         listeners.push(handler as () => void);
       } else {
-        originalAddEventListener(event, handler as EventListener, ...args);
+        originalAddEventListener(event, handler as Parameters<typeof document.addEventListener>[1], ...args);
       }
     });
     jest.spyOn(document, "removeEventListener").mockImplementation(() => {});
