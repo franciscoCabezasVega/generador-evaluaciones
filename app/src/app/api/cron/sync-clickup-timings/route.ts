@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { syncAllEnabledTasks } from "@/lib/services/clickupService";
 
@@ -27,7 +28,13 @@ export async function GET(request: NextRequest) {
     ? authHeader.slice(7)
     : "";
 
-  if (token !== cronSecret) {
+  // Use constant-time comparison to reduce timing-attack exposure on the secret.
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(cronSecret);
+  const isValid =
+    tokenBuf.length === secretBuf.length &&
+    timingSafeEqual(tokenBuf, secretBuf);
+  if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

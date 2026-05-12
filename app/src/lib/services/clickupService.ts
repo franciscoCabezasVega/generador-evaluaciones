@@ -110,15 +110,16 @@ async function getClickUpApiKey(): Promise<string | null> {
  *   https://app.clickup.com/12345678/t/abc123def
  */
 export function extractClickUpTaskId(input: string): string {
+  const trimmed = input.trim(); // trim once, applies to both URL and bare-ID paths
   // If it contains a slash, try to parse as URL
-  if (input.includes("/")) {
-    const match = input.match(/\/t\/([a-zA-Z0-9]+)/);
+  if (trimmed.includes("/")) {
+    const match = trimmed.match(/\/t\/([a-zA-Z0-9]+)/);
     if (match) return match[1];
     // Fallback: last path segment
-    const parts = input.split("/").filter(Boolean);
-    return parts[parts.length - 1] ?? input;
+    const parts = trimmed.split("/").filter(Boolean);
+    return parts[parts.length - 1] ?? trimmed;
   }
-  return input.trim();
+  return trimmed;
 }
 
 /**
@@ -398,9 +399,21 @@ export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
 
   if (!syncRows || syncRows.length === 0) return [];
 
+  // Stop before reaching Vercel's 300 s maxDuration to avoid partial/timed-out
+  // responses. 270 s gives ~30 s headroom for teardown and response writing.
+  const BUDGET_MS = 270_000;
+  const deadline = Date.now() + BUDGET_MS;
+
   // Run syncs sequentially to avoid hammering the ClickUp API
   const results: SyncResult[] = [];
   for (const row of syncRows) {
+    if (Date.now() >= deadline) {
+      console.warn(
+        "[syncAllEnabledTasks] Time budget exceeded — stopping early. " +
+          `Processed ${results.length}/${syncRows.length} tasks.`,
+      );
+      break;
+    }
     const result = await syncTaskTimings(
       row.task_id as string,
       row.clickup_qa_task_id as string,
