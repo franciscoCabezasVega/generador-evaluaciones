@@ -28,9 +28,146 @@ import {
   ChevronRight,
   RefreshCw,
   Users,
+  Zap,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMutationQueue } from "@/contexts/MutationQueueContext";
+
+// ── ClickUp Sync Panel ────────────────────────────────────────────────────────
+interface ClickUpSyncInfo {
+  registered: boolean;
+  sync_enabled: boolean;
+  clickup_qa_task_id: string | null;
+  last_synced_at: string | null;
+  last_clickup_status: string | null;
+}
+
+function ClickUpSyncPanel({
+  taskId,
+  safeFetch,
+}: {
+  taskId: string;
+  safeFetch: ReturnType<typeof useSafeAuthFetch>["safeFetch"];
+}) {
+  const [clickupId, setClickupId] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [syncInfo, setSyncInfo] = useState<ClickUpSyncInfo | null>(null);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    safeFetch(`/api/tasks/${taskId}/clickup-sync`)
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json() as ClickUpSyncInfo;
+          setSyncInfo(data);
+          if (data.clickup_qa_task_id) setClickupId(data.clickup_qa_task_id);
+        }
+      })
+      .catch(() => null)
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
+
+  const handleSync = async () => {
+    const id = clickupId.trim();
+    if (!id) { setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." }); return; }
+    setSyncing(true);
+    setMsg(null);
+    try {
+      const res = await safeFetch(`/api/tasks/${taskId}/clickup-sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clickup_qa_task_id: id }),
+      });
+      const data = await res.json() as { ok?: boolean; skipped?: boolean; error?: string; clickup_qa_task_id?: string };
+      if (!res.ok) {
+        setMsg({ type: "error", text: data.error ?? "Error al sincronizar" });
+        return;
+      }
+      setSyncInfo((prev) => ({
+        ...prev,
+        registered: true,
+        sync_enabled: true,
+        clickup_qa_task_id: data.clickup_qa_task_id ?? id,
+        last_synced_at: new Date().toISOString(),
+        last_clickup_status: prev?.last_clickup_status ?? null,
+      }));
+      setMsg({
+        type: "success",
+        text: data.skipped
+          ? "Sincronizado. No había registros de timing para esta tarea todavía — los tiempos se cargarán cuando existan entradas QA."
+          : "¡Tiempos sincronizados correctamente desde ClickUp!",
+      });
+    } catch {
+      setMsg({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>Cargando sync ClickUp...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+        <Zap className="w-3.5 h-3.5" />
+        Sincronizar tiempos desde ClickUp
+        {syncInfo?.registered && (
+          <span className="ml-auto text-violet-500 font-normal">
+            Registrado{syncInfo.last_synced_at
+              ? ` · Último sync: ${new Date(syncInfo.last_synced_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}`
+              : ""}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={clickupId}
+          onChange={(e) => setClickupId(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void handleSync(); }}
+          placeholder="ID de subtarea ClickUp (ej: abc123xy)"
+          className="flex-1 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+          disabled={syncing}
+        />
+        <button
+          onClick={() => void handleSync()}
+          disabled={syncing || !clickupId.trim()}
+          className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+        >
+          {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+          {syncing ? "Sincronizando..." : "Sincronizar"}
+        </button>
+      </div>
+      {msg && (
+        <div className={`flex items-start gap-1.5 text-xs rounded px-2 py-1.5 ${
+          msg.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+        }`}>
+          {msg.type === "success"
+            ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            : <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 type TaskWithSquads = Task & {
   squads?: Array<{
@@ -839,6 +976,8 @@ export default function TasksPage() {
                                       </span>
                                     )}
                                 </div>
+                                {/* ClickUp sync */}
+                                <ClickUpSyncPanel taskId={task.id} safeFetch={safeFetch} />
                                 {/* Tabla de squads */}
                                 <div className="bg-gray-100 border border-gray-300 rounded-lg overflow-hidden">
                                   <table className="w-full text-sm">
