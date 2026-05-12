@@ -51,6 +51,9 @@ export async function GET(
   }
 }
 
+// M2/I-3: compile once at module scope
+const IDEMPOTENCY_KEY_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -137,12 +140,14 @@ export async function PATCH(
     }
 
     const rawIdempotencyKey = request.headers.get("Idempotency-Key");
-    // M2: solo aceptar claves con caracteres seguros (máx. 128 chars)
-    const IDEMPOTENCY_KEY_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
-    const idempotencyKey =
-      rawIdempotencyKey && IDEMPOTENCY_KEY_REGEX.test(rawIdempotencyKey)
-        ? rawIdempotencyKey
-        : null;
+    // M2/I-1: clave con formato inválido → rechazar con 400 (no degradar silenciosamente)
+    if (rawIdempotencyKey && !IDEMPOTENCY_KEY_REGEX.test(rawIdempotencyKey)) {
+      return NextResponse.json(
+        { error: "Invalid Idempotency-Key format" },
+        { status: 400 },
+      );
+    }
+    const idempotencyKey = rawIdempotencyKey ?? null;
     const result = await withIdempotency(
       idempotencyKey,
       user.id,
