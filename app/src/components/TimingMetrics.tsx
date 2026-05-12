@@ -854,7 +854,8 @@ export function QAEfficiencyChart({
     });
   };
 
-  // Get task details for a specific QA
+  // Get task details for a specific QA — uses assigned_qa (not registerer) to
+  // match the server-side redistribution logic in getQATimingMetrics.
   const getTaskDetailsForQA = (qaName: string) => {
     const taskDetails: {
       taskId: string;
@@ -867,19 +868,50 @@ export function QAEfficiencyChart({
     }[] = [];
 
     for (const timing of timings) {
-      if (!timing.qa_entries) continue;
-      const qaEntry = timing.qa_entries.find((e) => e.qa_name === qaName);
-      if (!qaEntry) continue;
-
+      if (!timing.qa_entries || timing.qa_entries.length === 0) continue;
       const task = taskMap.get(timing.task_id);
+      if (!task) continue;
+
+      const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
+
+      let totalHours = 0;
+      const allHoursByCategory: Record<string, number> = {};
+
+      if (assignedQAs.length > 0) {
+        // Task has assigned_qa: include only when qaName is in the list and
+        // sum ALL qa_entries, then redistribute equitably across assigned QAs.
+        if (!assignedQAs.includes(qaName)) continue;
+        const share = 1 / assignedQAs.length;
+        for (const entry of timing.qa_entries) {
+          totalHours += (Number(entry.total_hours) || 0) * share;
+          for (const [catId, hours] of Object.entries(
+            entry.hours_by_category ?? {},
+          )) {
+            allHoursByCategory[catId] =
+              (allHoursByCategory[catId] ?? 0) + Number(hours) * share;
+          }
+        }
+      } else {
+        // Fallback: no assigned_qa set on the task. Use only the qa_entry
+        // belonging to this QA (no double counting across registerers).
+        const qaEntry = timing.qa_entries.find((e) => e.qa_name === qaName);
+        if (!qaEntry) continue;
+        totalHours = Number(qaEntry.total_hours) || 0;
+        for (const [catId, hours] of Object.entries(
+          qaEntry.hours_by_category ?? {},
+        )) {
+          allHoursByCategory[catId] = Number(hours) || 0;
+        }
+      }
+
       taskDetails.push({
         taskId: timing.task_id,
-        taskName: task?.name || "Tarea desconocida",
-        taskLink: task?.task_link || "",
-        tshirtSize: task?.tshirt_size || "",
-        project_type: task?.project_type || "",
-        hours_by_category: qaEntry.hours_by_category ?? {},
-        total: qaEntry.total_hours,
+        taskName: task.name || "Tarea desconocida",
+        taskLink: task.task_link || "",
+        tshirtSize: task.tshirt_size || "",
+        project_type: task.project_type || "",
+        hours_by_category: allHoursByCategory,
+        total: totalHours,
       });
     }
 
@@ -1486,16 +1518,46 @@ export function TshirtSizeComparison({
 
     const group = groupMap.get(key)!;
 
+    const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
+
+    // Consolidar todas las qa_entries del timing en una única suma antes de
+    // redistribuir, para evitar multiplicar entries por (qa_entry × qaAsignado).
+    let timingTotalHours = 0;
+    const timingHoursByCat: Record<string, number> = {};
     for (const qaEntry of timing.qa_entries) {
-      const totalH = Number(qaEntry.total_hours) || 0;
-      group.entries.push({
-        qaName: qaEntry.qa_name,
-        taskId: timing.task_id,
-        taskName: task.name,
-        taskLink: task.task_link || "",
-        totalHours: totalH,
-        hours_by_category: qaEntry.hours_by_category ?? {},
-      });
+      timingTotalHours += Number(qaEntry.total_hours) || 0;
+      for (const [k, v] of Object.entries(qaEntry.hours_by_category ?? {})) {
+        timingHoursByCat[k] = (timingHoursByCat[k] ?? 0) + Number(v);
+      }
+    }
+
+    if (assignedQAs.length > 0) {
+      // Con assigned_qa: 1 entrada por QA asignado con horas redistribuidas.
+      const share = 1 / assignedQAs.length;
+      for (const qaName of assignedQAs) {
+        group.entries.push({
+          qaName,
+          taskId: timing.task_id,
+          taskName: task.name,
+          taskLink: task.task_link || "",
+          totalHours: timingTotalHours * share,
+          hours_by_category: Object.fromEntries(
+            Object.entries(timingHoursByCat).map(([k, v]) => [k, v * share]),
+          ),
+        });
+      }
+    } else {
+      // Sin assigned_qa: 1 entrada por qa_entry (registrador original).
+      for (const qaEntry of timing.qa_entries) {
+        group.entries.push({
+          qaName: qaEntry.qa_name,
+          taskId: timing.task_id,
+          taskName: task.name,
+          taskLink: task.task_link || "",
+          totalHours: Number(qaEntry.total_hours) || 0,
+          hours_by_category: qaEntry.hours_by_category ?? {},
+        });
+      }
     }
   }
 

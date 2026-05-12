@@ -235,55 +235,63 @@ export async function GET(request: NextRequest) {
     const squad = searchParams.get("squad");
     const startDate = searchParams.get("start_date");
     const endDate = searchParams.get("end_date");
+    const rawSearch = searchParams.get("search")?.trim() ?? "";
+    // Escapar caracteres especiales de LIKE para evitar inyección de wildcard
+    const search = rawSearch.replace(/[%_\\]/g, (c) => `\\${c}`);
 
     // Obtener tareas — la visibilidad la controla la política RLS (select_tasks_by_role):
     // admin/gestor/viewer ven todas; roles inferiores solo las propias.
     // No aplicar filtro user_id en código: RLS ya lo hace de forma segura en BD.
     let tasksQuery = supabase.from("tasks").select("*");
 
-    if (month) {
-      tasksQuery = tasksQuery.eq("month", parseInt(month));
-    }
-    if (year) {
-      tasksQuery = tasksQuery.eq("year", parseInt(year));
-    }
-    if (productType) {
-      tasksQuery = tasksQuery.eq("product_type", productType);
-    }
-    if (status) {
-      tasksQuery = tasksQuery.eq("status", status);
-    }
-    // Filtrar por rango de effort_score_date (usado en la vista virtual de Tiempos)
-    if (startDate) {
-      tasksQuery = tasksQuery.gte("effort_score_date", startDate);
-    }
-    if (endDate) {
-      tasksQuery = tasksQuery.lte("effort_score_date", endDate);
-    }
-
-    // El filtro de squad requiere una subconsulta en task_squad,
-    // ya que el squad no está en la tabla tasks sino en task_squad.
-    if (squad) {
-      const { data: squadTaskIds, error: squadError } = await supabase
-        .from("task_squad")
-        .select("task_id")
-        .eq("squad", squad);
-
-      if (squadError) {
-        console.error("Error fetching squad filter:", squadError);
-        return NextResponse.json(
-          { error: "Error al filtrar por squad" },
-          { status: 400 },
-        );
+    if (search) {
+      // Modo búsqueda global: ignorar los demás filtros para buscar en todos los periodos
+      tasksQuery = tasksQuery.ilike("name", `%${search}%`).limit(150);
+    } else {
+      if (month) {
+        tasksQuery = tasksQuery.eq("month", parseInt(month));
+      }
+      if (year) {
+        tasksQuery = tasksQuery.eq("year", parseInt(year));
+      }
+      if (productType) {
+        tasksQuery = tasksQuery.eq("product_type", productType);
+      }
+      if (status) {
+        tasksQuery = tasksQuery.eq("status", status);
+      }
+      // Filtrar por rango de effort_score_date (usado en la vista virtual de Tiempos)
+      if (startDate) {
+        tasksQuery = tasksQuery.gte("effort_score_date", startDate);
+      }
+      if (endDate) {
+        tasksQuery = tasksQuery.lte("effort_score_date", endDate);
       }
 
-      const ids = (squadTaskIds ?? []).map((r) => r.task_id);
-      if (ids.length === 0) {
-        // Ninguna tarea tiene ese squad — responder vacío directamente
-        return NextResponse.json([]);
-      }
+      // El filtro de squad requiere una subconsulta en task_squad,
+      // ya que el squad no está en la tabla tasks sino en task_squad.
+      if (squad) {
+        const { data: squadTaskIds, error: squadError } = await supabase
+          .from("task_squad")
+          .select("task_id")
+          .eq("squad", squad);
 
-      tasksQuery = tasksQuery.in("id", ids);
+        if (squadError) {
+          console.error("Error fetching squad filter:", squadError);
+          return NextResponse.json(
+            { error: "Error al filtrar por squad" },
+            { status: 400 },
+          );
+        }
+
+        const ids = (squadTaskIds ?? []).map((r) => r.task_id);
+        if (ids.length === 0) {
+          // Ninguna tarea tiene ese squad — responder vacío directamente
+          return NextResponse.json([]);
+        }
+
+        tasksQuery = tasksQuery.in("id", ids);
+      }
     }
 
     const { data: tasks, error: tasksError } = await tasksQuery.order(
