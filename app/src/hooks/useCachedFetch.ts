@@ -111,9 +111,24 @@ interface UseCachedFetchReturn<T> {
   loading: boolean;
   error: string | null;
   isRefreshing: boolean;
+  /** True mientras se ejecuta un auto-retry silencioso tras un fallo transitorio. */
+  isReconnecting: boolean;
   refresh: () => void;
   setData: (updater: T | ((prev: T) => T)) => void;
   invalidate: () => void;
+}
+
+/**
+ * Determina si un error es transitorio y puede beneficiarse de un auto-retry.
+ * NO reintenta errores deterministas (4xx) ni AbortErrors.
+ */
+function isRetryableDataError(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === "AbortError") return false;
+  if (err instanceof Error) {
+    // Errores 4xx son deterministas — no reintentar
+    if (/\b4[0-9]{2}\b/.test(err.message)) return false;
+  }
+  return true;
 }
 
 export function useCachedFetch<T>({
@@ -136,6 +151,7 @@ export function useCachedFetch<T>({
   const [loading, setLoading] = useState(!hasFreshCache);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
@@ -144,16 +160,33 @@ export function useCachedFetch<T>({
   fullKeyRef.current = fullKey;
   const fetchFnRef = useRef(fetchFn);
   fetchFnRef.current = fetchFn;
+  // Timer del auto-retry silencioso — se cancela si el componente se desmonta
+  // o si se dispara un nuevo fetch (filtro cambia, refresh manual, etc.)
+  const autoRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      // Cancelar cualquier auto-retry pendiente al desmontar
+      if (autoRetryTimerRef.current !== null) {
+        clearTimeout(autoRetryTimerRef.current);
+        autoRetryTimerRef.current = null;
+      }
     };
   }, []);
 
   const doFetch = useCallback(
-    async (isBackground: boolean, signal: AbortSignal) => {
+    async (isBackground: boolean, signal: AbortSignal, autoRetryAttempt = 0) => {
+      // Cancel any pending auto-retry timer — this call starts a new fetch cycle.
+      // Covers invalidation (cacheStore.subscribe) and visibilitychange paths
+      // that bypass the manual-refresh cancel logic.
+      if (autoRetryTimerRef.current !== null) {
+        clearTimeout(autoRetryTimerRef.current);
+        autoRetryTimerRef.current = null;
+        setIsReconnecting(false);
+      }
+
       fetchIdRef.current += 1;
       const myId = fetchIdRef.current;
 
@@ -172,6 +205,8 @@ export function useCachedFetch<T>({
 
         setDataState(result);
         cacheStore.set(fullKeyRef.current, result);
+        // Si llegamos aquí desde un auto-retry, limpiar el estado de reconexión
+        setIsReconnecting(false);
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         if (err instanceof Error && err.message?.includes("aborted")) return;
@@ -195,6 +230,30 @@ export function useCachedFetch<T>({
           return;
         }
 
+        // ── Auto-retry silencioso ──────────────────────────────────────────────
+        // Si el error es transitorio (timeout, red, 5xx) y aún no hemos agotado
+        // el presupuesto de reintentos, esperar 8s y volver a intentar en background.
+        // El usuario ve datos stale (si los hay) con un indicador sutil de "reconectando".
+        // Si el auto-retry también falla, entonces sí mostramos el error duro.
+        const MAX_AUTO_RETRIES = 1;
+        if (isRetryableDataError(err) && autoRetryAttempt < MAX_AUTO_RETRIES) {
+          console.warn(
+            `[useCachedFetch:${cacheKey}] Error transitorio (intento ${autoRetryAttempt + 1}/${MAX_AUTO_RETRIES + 1}), auto-retry en 8s...`,
+            err,
+          );
+          setIsReconnecting(true);
+          autoRetryTimerRef.current = setTimeout(() => {
+            autoRetryTimerRef.current = null;
+            if (!isMountedRef.current) return;
+            const retryController = new AbortController();
+            abortRef.current = retryController;
+            void doFetch(true, retryController.signal, autoRetryAttempt + 1);
+          }, 8_000);
+          return;
+        }
+
+        // Todos los reintentos agotados — mostrar error al usuario
+        setIsReconnecting(false);
         console.error(`[useCachedFetch:${cacheKey}]`, err);
         setError(err instanceof Error ? err.message : "Error desconocido");
       } finally {
@@ -210,6 +269,13 @@ export function useCachedFetch<T>({
   // Fetch al montar o cambiar filtros/enabled
   useEffect(() => {
     if (!enabled) return;
+
+    // Cancelar cualquier auto-retry pendiente del ciclo anterior
+    if (autoRetryTimerRef.current !== null) {
+      clearTimeout(autoRetryTimerRef.current);
+      autoRetryTimerRef.current = null;
+      setIsReconnecting(false);
+    }
 
     if (cacheStore.isFresh(fullKey, staleTime)) {
       const entry = cacheStore.get<T>(fullKey);
@@ -275,6 +341,13 @@ export function useCachedFetch<T>({
   }, [enabled, staleTime, doFetch]);
 
   const refresh = useCallback(() => {
+    // Cancelar cualquier auto-retry pendiente antes de iniciar fetch manual
+    if (autoRetryTimerRef.current !== null) {
+      clearTimeout(autoRetryTimerRef.current);
+      autoRetryTimerRef.current = null;
+    }
+    setIsReconnecting(false);
+    setError(null);
     abortRef.current?.abort();
     cacheStore.delete(fullKeyRef.current);
     const controller = new AbortController();
@@ -297,7 +370,7 @@ export function useCachedFetch<T>({
     });
   }, []);
 
-  return { data, loading, error, isRefreshing, refresh, setData, invalidate };
+  return { data, loading, error, isRefreshing, isReconnecting, refresh, setData, invalidate };
 }
 
 // ============================================================================

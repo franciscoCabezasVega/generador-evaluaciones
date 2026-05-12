@@ -14,7 +14,6 @@ import { useCachedFetch, invalidateCache } from "@/hooks/useCachedFetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMutationQueue } from "@/contexts/MutationQueueContext";
 import Navbar from "@/components/Navbar";
-import CacheWarningBanner from "@/components/CacheWarningBanner";
 import TimingForm from "@/components/TimingForm";
 import TimingsList from "@/components/TimingsList";
 import Modal from "@/components/Modal";
@@ -377,7 +376,8 @@ export default function TimingsPage() {
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <CacheWarningBanner />
+        {/* CacheWarningBanner no se muestra aquí: el auto-retry silencioso
+            maneja la reconexión sin interrumpir al usuario. */}
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">

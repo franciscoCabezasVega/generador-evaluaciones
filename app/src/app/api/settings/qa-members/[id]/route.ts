@@ -49,6 +49,13 @@ export async function PATCH(
     updates.is_active = Boolean(body.is_active);
   }
 
+  if (body.clickup_user_id !== undefined) {
+    updates.clickup_user_id =
+      typeof body.clickup_user_id === "string" && body.clickup_user_id.trim()
+        ? body.clickup_user_id.trim()
+        : null;
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No hay campos para actualizar" },

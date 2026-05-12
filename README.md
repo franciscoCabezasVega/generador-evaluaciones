@@ -210,6 +210,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # OpenAI
 OPENAI_API_KEY=sk-proj-...
 
+# ClickUp Integration (Opcional)
+CLICKUP_ENCRYPTION_KEY=             # 32 bytes en hex (openssl rand -hex 32)
+CRON_SECRET=                        # Token para proteger el endpoint del cron
+
 # E2E Test Credentials (solo para testing)
 E2E_USER_EMAIL=admin@evaluaciones.test
 E2E_USER_PASSWORD=YourSecurePassword
@@ -371,6 +375,8 @@ Push a main / PR → ┌─ Unit Tests (Jest) ─┐
 | `VERCEL_TOKEN` | Token de la cuenta Vercel |
 | `VERCEL_ORG_ID` | ID de la organización/team en Vercel |
 | `VERCEL_PROJECT_ID` | ID del proyecto en Vercel |
+| `CLICKUP_ENCRYPTION_KEY` | Clave AES-256 para cifrar la API key de ClickUp (32 bytes en hex) |
+| `CRON_SECRET` | Token secreto del endpoint de sync automático de ClickUp |
 
 #### Configurar Vercel
 
@@ -517,6 +523,7 @@ app/
 │           ├── taskService.ts
 │           ├── reportService.ts
 │           ├── timingService.ts
+│           ├── clickupService.ts      # Integración con API de ClickUp (sync timings)
 │           ├── auditService.ts
 │           ├── feedbackService.ts
 │           └── userProfileService.ts
@@ -530,7 +537,9 @@ app/
 │           ├── 20260510000002_drop_legacy_columns_and_recreate_view.sql # Drop columnas legacy + recrear VIEW
 │           ├── 20260511000000_fix_timing_qa_category_hours_rls.sql # Ajuste RLS ownership para timing_qa_category_hours
 │           ├── 20260511060000_normalize_timing_category_slugs.sql # Normalización de slugs semánticos en timing_categories
-│           └── 20260511120000_protect_system_timing_categories.sql # RLS: bloquear UPDATE/DELETE de categorías del sistema
+│           ├── 20260511120000_protect_system_timing_categories.sql # RLS: bloquear UPDATE/DELETE de categorías del sistema
+│           ├── 20260515000000_clickup_integration.sql             # Tablas clickup_settings, clickup_task_sync + columna qa_members.clickup_user_id
+│           └── 20260516000000_clickup_singleton_and_cleanup.sql  # Singleton constraint en clickup_settings + drop índice duplicado
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright
@@ -614,6 +623,82 @@ app/
 - **HTTPS requerido** en producción
 - **Secrets en GitHub**: Credenciales nunca expuestas en código
 - **`.env.local` en `.gitignore`**: Variables de entorno no versionadas
+
+---
+
+## Integración con ClickUp
+
+El sistema puede sincronizar automáticamente los tiempos por estado de tareas QA desde ClickUp, eliminando la carga manual de datos en la sección de Timings.
+
+### Cómo funciona
+
+1. El administrador configura su **API Key de ClickUp** en **Configuración → Integraciones**.  
+2. Para cada tarea, se puede asociar un **ID de tarea en ClickUp** (URL o ID bare).  
+3. Una vez habilitado el sync, el sistema consulta el endpoint `GET /task/{taskId}/time_in_status` de ClickUp y mapea los estados a las categorías internas de timing.  
+4. Un **cron job externo** (configurado en [cron-job.org](https://console.cron-job.org)) llama al endpoint cada hora y sincroniza todas las tareas con sync habilitado. Vercel Hobby no soporta crons de alta frecuencia, por lo que se usa un servicio externo.
+
+### Seguridad
+
+- La API Key de ClickUp se cifra con **AES-256-GCM** (`crypto.subtle`) antes de persistirse en la base de datos. La clave de cifrado vive únicamente en la variable de entorno `CLICKUP_ENCRYPTION_KEY` y nunca se expone al cliente.  
+- El endpoint del cron (`/api/cron/sync-clickup-timings`) está protegido con el header `Authorization: Bearer <CRON_SECRET>`.  
+- RLS de la tabla `clickup_settings` tiene `USING (false)` — solo el service role puede leer/escribir; el cliente nunca accede directamente.
+
+### Archivos clave
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/lib/encryption.ts` | `encryptText` / `decryptText` con AES-256-GCM |
+| `src/lib/services/clickupService.ts` | `syncTaskTimings`, `syncAllEnabledTasks`, mapeo de statuses |
+| `src/app/api/settings/clickup/route.ts` | REST GET/POST/DELETE para la API Key (cifrada) |
+| `src/app/api/cron/sync-clickup-timings/route.ts` | Handler del cron protegido por `CRON_SECRET` |
+| `src/components/ClickUpSettingsPanel.tsx` | Panel UI con status badge, input show/hide y confirmación de borrado |
+| `supabase/migrations/20260515000000_clickup_integration.sql` | Tablas `clickup_settings`, `clickup_task_sync` + `qa_members.clickup_user_id` |
+
+### Variables de entorno requeridas
+
+```env
+CLICKUP_ENCRYPTION_KEY=<32 bytes en hex>   # openssl rand -hex 32
+CRON_SECRET=<token aleatorio seguro>       # node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### Configuración del cron externo (cron-job.org)
+
+1. Crear cuenta en [console.cron-job.org](https://console.cron-job.org)
+2. **Create cronjob** con:
+   - **URL**: `https://<tu-dominio>.vercel.app/api/cron/sync-clickup-timings`
+   - **Schedule**: Every 1 hour (o la frecuencia deseada)
+   - **Save responses in job history**: activado (para monitoreo)
+3. En la tab **Advanced → Headers**, agregar:
+   - **Name**: `Authorization`
+   - **Value**: `Bearer <tu CRON_SECRET>`
+4. El endpoint responde `{ ok, total, succeeded, failed, skipped, durationMs }` — visible en el historial de cron-job.org.
+
+> **Nota**: Vercel Hobby solo permite crons con frecuencia diaria. Por eso la entrada `crons` fue eliminada de `vercel.json` y el scheduling se delega a cron-job.org.
+
+### Mapeo de estados
+
+El servicio mapea los nombres de estado de ClickUp (insensible a mayúsculas) a las categorías internas de timing. Si un estado no tiene mapeo, se omite silenciosamente. Ajusta `STATUS_CATEGORY_MAP` en `clickupService.ts` según los nombres de workflow del equipo.
+
+---
+
+## Resiliencia de Datos — Auto-Retry Silencioso
+
+El hook `useCachedFetch` implementa un mecanismo de **auto-retry transparente** para errores transitorios de red, eliminando falsos positivos de error en la UI:
+
+### Comportamiento
+
+| Escenario | Resultado visible para el usuario |
+|-----------|-----------------------------------|
+| Primer fallo transitorio (timeout, red, 5xx) | Nada — espera 8 s y reintenta en silencio |
+| Retry exitoso | Los datos aparecen normalmente |
+| Segundo fallo consecutivo | Se muestra el banner de error (`CacheWarningBanner`) |
+| Error no-retriable (4xx, abort) | Error inmediato, sin retry |
+
+### Detalles técnicos
+
+- `isReconnecting: boolean` se expone en el return del hook para que los componentes puedan mostrar un indicador sutil si lo desean.
+- El timer de retry se cancela automáticamente si el usuario llama a `refresh()` manualmente, cambia filtros, o el componente se desmonta.
+- `CacheWarningBanner` ahora acepta una prop `show?: boolean` (por defecto `false`). Todas las páginas **excepto Timings** pasan `show={hasError}` — Timings está excluido por diseño (6 hooks en paralelo; mostrar 6 banners simultáneos sería visualmente caótico). El banner nunca aparece durante la carga normal.
 
 ---
 

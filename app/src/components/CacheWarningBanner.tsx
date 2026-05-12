@@ -3,12 +3,32 @@
 import { AlertCircle, X } from "lucide-react";
 import { useState } from "react";
 
+interface CacheWarningBannerProps {
+  /**
+   * Controla si el banner es visible. Por defecto `false`.
+   * Solo pasar `true` cuando hay un error persistente tras los reintentos.
+   */
+  show?: boolean;
+}
+
 /**
- * Banner informativo transversal que indica al usuario cómo proceder
- * en caso de comportamientos inesperados o falta de carga de datos
+ * Banner informativo que indica al usuario cómo proceder ante errores
+ * persistentes de carga de datos. Solo se renderiza cuando `show={true}`.
  */
-export default function CacheWarningBanner() {
-  const [isVisible, setIsVisible] = useState(true);
+export default function CacheWarningBanner({ show = false }: CacheWarningBannerProps) {
+  const [dismissed, setDismissed] = useState(false);
+  // Track the previous value of `show` so we can detect a false→true transition
+  // and reset the dismissed state. This follows the React docs "adjusting state
+  // when a prop changes" pattern (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const [prevShow, setPrevShow] = useState(show);
+  if (show !== prevShow) {
+    setPrevShow(show);
+    if (show) setDismissed(false);
+  }
+
+  if (!show || dismissed) {
+    return null;
+  }
 
   const handleClearCacheAndRefresh = () => {
     // Limpiar caché del navegador
@@ -27,10 +47,6 @@ export default function CacheWarningBanner() {
     // Refrescar la página
     window.location.reload();
   };
-
-  if (!isVisible) {
-    return null;
-  }
 
   return (
     <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-sm shadow-sm fade-in-smooth">
@@ -51,7 +67,7 @@ export default function CacheWarningBanner() {
           </p>
         </div>
         <button
-          onClick={() => setIsVisible(false)}
+          onClick={() => setDismissed(true)}
           className="flex-shrink-0 text-blue-600 hover:text-blue-800 transition-colors"
           title="Cerrar"
           aria-label="Cerrar mensaje"
@@ -62,3 +78,4 @@ export default function CacheWarningBanner() {
     </div>
   );
 }
+
