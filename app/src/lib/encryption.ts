@@ -8,9 +8,9 @@ const KEY_ENV = "CLICKUP_ENCRYPTION_KEY";
 const ALGORITHM = "AES-GCM";
 const IV_BYTE_LENGTH = 12; // 96-bit IV recommended for AES-GCM
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   if (hex.length % 2 !== 0) throw new Error("Invalid hex string");
-  const bytes = new Uint8Array(hex.length / 2);
+  const bytes = new Uint8Array(hex.length / 2) as Uint8Array<ArrayBuffer>;
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }

@@ -79,6 +79,7 @@ const STATUS_CATEGORY_MAP: Record<string, keyof ResolvedTimingBreakdown> = {
 /** Retrieve and decrypt the stored ClickUp API key. Returns null if not set. */
 async function getClickUpApiKey(): Promise<string | null> {
   const supabase = getServiceClient();
+  if (!supabase) return null;
   const { data, error } = await supabase
     .from("clickup_settings")
     .select("encrypted_key, key_iv")
@@ -197,6 +198,14 @@ export async function syncTaskTimings(
   clickupQaTaskId: string,
 ): Promise<SyncResult> {
   const supabase = getServiceClient();
+  if (!supabase) {
+    return {
+      taskId: internalTaskId,
+      clickupTaskId: clickupQaTaskId,
+      success: false,
+      error: "Service client unavailable",
+    };
+  }
 
   // Step 1: Get API key
   const apiKey = await getClickUpApiKey();
@@ -286,6 +295,7 @@ export async function syncTaskTimings(
  */
 export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
   const supabase = getServiceClient();
+  if (!supabase) throw new Error("Service client unavailable");
 
   const { data: syncRows, error } = await supabase
     .from("clickup_task_sync")

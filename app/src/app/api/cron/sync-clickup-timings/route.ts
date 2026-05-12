@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const durationMs = Date.now() - startTime;
 
-    console.info(
+    console.warn(
       `[cron/sync-clickup-timings] Done in ${durationMs}ms — ` +
         `total=${results.length} succeeded=${succeeded} failed=${failed} skipped=${skipped}`,
     );

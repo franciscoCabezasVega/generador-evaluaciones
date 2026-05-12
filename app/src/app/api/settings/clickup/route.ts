@@ -14,11 +14,14 @@ export async function GET(request: NextRequest) {
   }
 
   const { role } = authCtx;
-  if (!["admin", "gestor"].includes(role)) {
+  if (!role || !["admin", "gestor"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = getServiceClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
   const { data, error } = await supabase
     .from("clickup_settings")
     .select("id, updated_at")
@@ -91,6 +94,9 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = getServiceClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
 
   // Delete existing row then insert — ensures single-row invariant
   await supabase.from("clickup_settings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
@@ -129,6 +135,9 @@ export async function DELETE(request: NextRequest) {
   }
 
   const supabase = getServiceClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
 
   // Disable all syncs first
   await supabase
