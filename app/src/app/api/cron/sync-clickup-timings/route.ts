@@ -4,7 +4,8 @@ import { syncAllEnabledTasks } from "@/lib/services/clickupService";
 /**
  * GET /api/cron/sync-clickup-timings
  *
- * Triggered externally by cron-job.org (daily at 00:00 on the 1st of each month).
+ * Triggered externally by cron-job.org. The schedule (frequency, timezone)
+ * is configured in the cron-job.org console — not in this codebase.
  * Vercel Hobby plan does not support sub-daily crons; scheduling is delegated
  * to an external service. Can also be called manually for testing.
  *

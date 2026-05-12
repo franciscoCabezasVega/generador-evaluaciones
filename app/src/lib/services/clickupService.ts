@@ -84,8 +84,14 @@ async function getClickUpApiKey(): Promise<string | null> {
 
   try {
     return await decryptText(data.encrypted_key, data.key_iv);
-  } catch {
-    return null;
+  } catch (err) {
+    // Distinguish decryption failure from "not configured" so callers can
+    // surface a meaningful diagnostic instead of a generic "not configured".
+    throw new Error(
+      `ClickUp API key decryption failed — the stored ciphertext may be corrupt or CLICKUP_ENCRYPTION_KEY has changed. Original error: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }
 
@@ -195,7 +201,18 @@ export async function syncTaskTimings(
   }
 
   // Step 1: Get API key
-  const apiKey = await getClickUpApiKey();
+  let apiKey: string | null;
+  try {
+    apiKey = await getClickUpApiKey();
+  } catch (err) {
+    // Thrown only when a key IS stored but decryption fails (key rotation, env mismatch).
+    return {
+      taskId: internalTaskId,
+      clickupTaskId: clickupQaTaskId,
+      success: false,
+      error: err instanceof Error ? err.message : "ClickUp API key decryption failed",
+    };
+  }
   if (!apiKey) {
     return {
       taskId: internalTaskId,
@@ -234,7 +251,7 @@ export async function syncTaskTimings(
       // 4a. Find the existing task_timing row for this month/year.
       //     We do NOT create one here — that requires a user_id which only
       //     the QA member can supply via the UI.
-      const { data: timing } = await supabase
+      const { data: timing, error: timingError } = await supabase
         .from("task_timings")
         .select("id")
         .eq("task_id", internalTaskId)
@@ -242,12 +259,20 @@ export async function syncTaskTimings(
         .eq("year", year)
         .maybeSingle();
 
+      if (timingError) {
+        throw new Error(`DB error reading task_timings: ${timingError.message}`);
+      }
+
       if (timing) {
         // 4b. Find all QA-member entries for this timing record.
-        const { data: qaEntries } = await supabase
+        const { data: qaEntries, error: qaError } = await supabase
           .from("timing_qa_entries")
           .select("id")
           .eq("timing_id", timing.id);
+
+        if (qaError) {
+          throw new Error(`DB error reading timing_qa_entries: ${qaError.message}`);
+        }
 
         // Use only the FIRST qa_entry to avoid inflating totals.
         // If a task has multiple QA members the correct entry cannot be
@@ -257,10 +282,14 @@ export async function syncTaskTimings(
         const targetEntry = qaEntries?.[0];
         if (targetEntry) {
           // 4c. Resolve category IDs by slug.
-          const { data: categories } = await supabase
+          const { data: categories, error: catError } = await supabase
             .from("timing_categories")
             .select("id, slug")
             .in("slug", slugs);
+
+          if (catError) {
+            throw new Error(`DB error reading timing_categories: ${catError.message}`);
+          }
 
           const categoryMap = new Map<string, string>(
             (categories ?? []).map((c) => [c.slug as string, c.id as string]),

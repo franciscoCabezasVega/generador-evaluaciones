@@ -698,7 +698,7 @@ El hook `useCachedFetch` implementa un mecanismo de **auto-retry transparente** 
 
 - `isReconnecting: boolean` se expone en el return del hook para que los componentes puedan mostrar un indicador sutil si lo desean.
 - El timer de retry se cancela automáticamente si el usuario llama a `refresh()` manualmente, cambia filtros, o el componente se desmonta.
-- `CacheWarningBanner` ahora acepta una prop `show?: boolean` (por defecto `false`). Todas las páginas pasan `show={hasError}` — el banner nunca aparece durante la carga normal.
+- `CacheWarningBanner` ahora acepta una prop `show?: boolean` (por defecto `false`). Todas las páginas **excepto Timings** pasan `show={hasError}` — Timings está excluido por diseño (6 hooks en paralelo; mostrar 6 banners simultáneos sería visualmente caótico). El banner nunca aparece durante la carga normal.
 
 ---
 

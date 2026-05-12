@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Trash2, Eye, EyeOff } from "lucide-react";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 
 interface ClickUpStatus {
@@ -24,6 +24,7 @@ export default function ClickUpSettingsPanel() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showKey, setShowKey] = useState(false);
 
   // Fetch current status on mount
   useEffect(() => {
@@ -154,15 +155,25 @@ export default function ClickUpSettingsPanel() {
           >
             {status?.hasKey ? "Reemplazar API key de ClickUp" : "API key de ClickUp"}
           </label>
-          <input
+          <div className="relative">
+            <input
               id="clickup-api-key"
-              type="password"
+              type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="pk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               autoComplete="new-password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <button
+              type="button"
+              onClick={() => setShowKey((v) => !v)}
+              aria-label={showKey ? "Ocultar API key" : "Mostrar API key"}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+            >
+              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           <p className="text-xs text-gray-500 mt-1">
             Encuéntrala en ClickUp → Configuración → Apps → API token.
             La clave se almacena cifrada en la base de datos.
