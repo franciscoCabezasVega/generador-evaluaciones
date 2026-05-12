@@ -404,10 +404,9 @@ Ambas funciones usan `SECURITY INVOKER` y `set search_path = public`, respetando
 | Ajuste | Valor | Propósito |
 |--------|-------|-----------|
 | `SET LOCAL statement_timeout` (dentro de cada RPC) | 10 s | Corta queries largas dentro de la transacción RPC antes de agotar el `maxDuration` de Vercel |
-| `SET LOCAL idle_in_transaction_session_timeout` (dentro de cada RPC) | 5 s | Libera transacciones estancadas durante la ejecución de la RPC |
 | Índice `user_profiles_id_role_idx` | `(id) INCLUDE (role_id)` | Index-only scan en el lookup de rol por cada request autenticado |
 
-Los timeouts **no** se aplican a nivel del rol `authenticated` con `ALTER ROLE ... SET`; las migraciones los resetean y los aplican localmente con `SET LOCAL` dentro de cada RPC.
+El timeout documentado **no** se aplica a nivel del rol `authenticated` con `ALTER ROLE ... SET`; las migraciones lo resetean y lo aplican localmente con `SET LOCAL statement_timeout` dentro de cada RPC.
 
 ---
 
