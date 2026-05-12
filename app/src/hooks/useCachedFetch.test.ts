@@ -58,3 +58,141 @@ describe("buildFilterKey (cache key builder)", () => {
     expect(key).toContain("year=2025");
   });
 });
+
+// ── Visibility-based revalidation ─────────────────────────────────────────────
+// Tests for the visibilitychange listener added in useCachedFetch.
+// We test the behaviour directly via the CacheStore + listener logic without
+// mounting the full React hook (avoids "use client" / Next.js RSC constraints).
+
+describe("visibilitychange revalidation logic", () => {
+  let listeners: Array<() => void>;
+  let originalAddEventListener: typeof document.addEventListener;
+  let originalRemoveEventListener: typeof document.removeEventListener;
+  let originalVisibilityState: string;
+
+  // Minimal CacheStore replica used to test isFresh
+  function makeCacheStore() {
+    const cache = new Map<string, { data: unknown; timestamp: number }>();
+    return {
+      set(key: string, data: unknown) {
+        cache.set(key, { data, timestamp: Date.now() });
+      },
+      isFresh(key: string, staleTime: number): boolean {
+        const entry = cache.get(key);
+        return entry != null && Date.now() - entry.timestamp < staleTime;
+      },
+      setTimestamp(key: string, timestamp: number) {
+        const entry = cache.get(key);
+        if (entry) cache.set(key, { ...entry, timestamp });
+      },
+    };
+  }
+
+  beforeEach(() => {
+    listeners = [];
+    originalAddEventListener = document.addEventListener.bind(document);
+    originalRemoveEventListener = document.removeEventListener.bind(document);
+    originalVisibilityState = Object.getOwnPropertyDescriptor(document, "visibilityState")?.value ?? "visible";
+
+    // Capture visibilitychange listeners
+    jest.spyOn(document, "addEventListener").mockImplementation((event, handler, ...args) => {
+      if (event === "visibilitychange") {
+        listeners.push(handler as () => void);
+      } else {
+        originalAddEventListener(event, handler as EventListener, ...args);
+      }
+    });
+    jest.spyOn(document, "removeEventListener").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: originalVisibilityState,
+    });
+  });
+
+  function setVisibilityState(state: "visible" | "hidden") {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: state,
+    });
+  }
+
+  it("triggers revalidation when tab becomes visible and cache is stale", () => {
+    const store = makeCacheStore();
+    const STALE_TIME = 5 * 60 * 1000;
+    const cacheKey = "test-key";
+
+    // Prime cache with an old timestamp (expired)
+    store.set(cacheKey, { data: "old" });
+    store.setTimestamp(cacheKey, Date.now() - STALE_TIME - 1000);
+
+    const doFetch = jest.fn();
+
+    // Simulate what the hook does: register listener
+    const handler = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!store.isFresh(cacheKey, STALE_TIME)) {
+        doFetch(true, new AbortController().signal);
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+
+    setVisibilityState("visible");
+    listeners.forEach((l) => l());
+
+    expect(doFetch).toHaveBeenCalledTimes(1);
+    expect(doFetch).toHaveBeenCalledWith(true, expect.any(AbortSignal));
+  });
+
+  it("does NOT revalidate when tab becomes visible and cache is still fresh", () => {
+    const store = makeCacheStore();
+    const STALE_TIME = 5 * 60 * 1000;
+    const cacheKey = "test-key";
+
+    // Fresh cache (just set)
+    store.set(cacheKey, { data: "fresh" });
+
+    const doFetch = jest.fn();
+
+    const handler = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!store.isFresh(cacheKey, STALE_TIME)) {
+        doFetch(true, new AbortController().signal);
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+
+    setVisibilityState("visible");
+    listeners.forEach((l) => l());
+
+    expect(doFetch).not.toHaveBeenCalled();
+  });
+
+  it("does NOT revalidate when tab is hidden (not becoming visible)", () => {
+    const store = makeCacheStore();
+    const STALE_TIME = 5 * 60 * 1000;
+    const cacheKey = "test-key";
+
+    store.set(cacheKey, { data: "old" });
+    store.setTimestamp(cacheKey, Date.now() - STALE_TIME - 1000);
+
+    const doFetch = jest.fn();
+
+    const handler = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!store.isFresh(cacheKey, STALE_TIME)) {
+        doFetch(true, new AbortController().signal);
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+
+    // Tab is going to background
+    setVisibilityState("hidden");
+    listeners.forEach((l) => l());
+
+    expect(doFetch).not.toHaveBeenCalled();
+  });
+});

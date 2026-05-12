@@ -148,7 +148,12 @@ export default function TasksPage() {
       },
       [filters, debouncedSearch, safeFetch],
     ),
-    filters: { ...filters, search: debouncedSearch },
+    // effectiveFilters: cuando hay búsqueda global, la cache key solo incluye
+    // el término de búsqueda (el backend ignora los demás filtros en ese modo).
+    // Esto evita cache misses espurios al cambiar mes/año mientras se busca.
+    filters: debouncedSearch
+      ? { search: debouncedSearch }
+      : { ...filters, search: "" },
     enabled: !authLoading && !!user,
     initialData: [],
   });
