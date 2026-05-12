@@ -22,14 +22,15 @@ export async function GET(request: NextRequest) {
   if (!supabase) {
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
+  // maybeSingle() returns { data: null, error: null } for 0 rows,
+  // { data: row } for exactly 1 row, and { error } for multiple rows
+  // (which would signal a broken singleton constraint).
   const { data, error } = await supabase
     .from("clickup_settings")
     .select("id, updated_at")
-    .limit(1)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== "PGRST116") {
-    // PGRST116 = "No rows returned" — expected when no key is set
+  if (error) {
     console.error("Error fetching ClickUp settings:", error);
     return NextResponse.json(
       { error: "Error al obtener configuración" },

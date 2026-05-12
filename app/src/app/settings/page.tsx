@@ -164,8 +164,11 @@ export default function SettingsPage() {
   // ─── Fetch para el tab activo ──────────────────────────────────────────────
 
   const fetchTab = async (tab: TabId, retryCount = 0) => {
-    // El tab de integraciones gestiona su propio estado
+    // El tab de integraciones gestiona su propio estado.
+    // Reset loadingTab in case a previous fetch left it true when the user
+    // switched tabs before it completed.
     if (tab === "integrations") {
+      setLoadingTab(false);
       setTabError(null);
       return;
     }

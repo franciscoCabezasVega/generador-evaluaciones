@@ -74,16 +74,15 @@ const STATUS_CATEGORY_MAP: Record<string, string> = {
 async function getClickUpApiKey(): Promise<string | null> {
   const supabase = getServiceClient();
   if (!supabase) return null;
+  // maybeSingle() returns { data: null, error: null } for 0 rows (not configured),
+  // { data: row } for exactly 1 row, and { error } for multiple rows
+  // (broken singleton constraint — fail explicitly instead of silently returning null).
   const { data, error } = await supabase
     .from("clickup_settings")
     .select("encrypted_key, key_iv")
-    .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    // PGRST116 = "JSON object requested, multiple (or no) rows returned"
-    // i.e. no key has been configured yet — return null (not an error).
-    if (error.code === "PGRST116") return null;
     throw new Error(`DB error reading clickup_settings: ${error.message}`);
   }
   if (!data) return null;
@@ -115,9 +114,13 @@ export function extractClickUpTaskId(input: string): string {
   if (trimmed.includes("/")) {
     const match = trimmed.match(/\/t\/([a-zA-Z0-9]+)/);
     if (match) return match[1];
-    // Fallback: last path segment
+    // Fallback: last path segment — strip query string and fragment so that
+    // URLs like `.../abc123?foo=bar#section` don't return a contaminated ID.
     const parts = trimmed.split("/").filter(Boolean);
-    return parts[parts.length - 1] ?? trimmed;
+    const lastSegment = (parts[parts.length - 1] ?? trimmed)
+      .split("?")[0]
+      .split("#")[0];
+    return lastSegment;
   }
   return trimmed;
 }
@@ -351,10 +354,16 @@ export async function syncTaskTimings(
     // Step 5b: Nothing was written (no timing row, no qa entries, or no mapped
     // statuses). Record the attempt timestamp but signal skipped so callers
     // can distinguish "sync ran but had nothing to write" from success.
-    await supabase
+    const { error: skipUpdateError } = await supabase
       .from("clickup_task_sync")
       .update({ last_synced_at: new Date().toISOString() })
       .eq("task_id", internalTaskId);
+
+    if (skipUpdateError) {
+      throw new Error(
+        `DB error updating clickup_task_sync (skipped path): ${skipUpdateError.message}`,
+      );
+    }
 
     return {
       taskId: internalTaskId,
