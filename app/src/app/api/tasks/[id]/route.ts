@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { validateReturns, calculateTaskScore } from "@/lib/scoreCalculator";
 import { getAuthContext } from "@/lib/auth";
+import { checkIdempotency, cacheIdempotencyResponse } from "@/lib/idempotency";
 
 export async function GET(
   request: NextRequest,
@@ -68,6 +70,13 @@ export async function PATCH(
         { error: "You do not have permission to edit tasks" },
         { status: 403 },
       );
+    }
+
+    // Idempotency check: return cached response if key already seen
+    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "PATCH");
+    if (idempotentHit) {
+      return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
 
     const body = await request.json();
@@ -361,27 +370,30 @@ export async function PATCH(
       }
     }
 
-    try {
-      await supabase.from("audit_logs").insert({
-        user_id: user.id,
-        user_email: userEmail,
-        action: "UPDATE",
-        entity_type: "TASK",
-        entity_id: id,
-        entity_name: updatedTask.name,
-        changes,
-        old_values: existingTask,
-        new_values: { ...updatedTask, squads: updatedSquads || [] },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (auditError) {
-      console.error("Error logging audit action:", auditError);
-    }
-
-    return NextResponse.json({
-      ...updatedTask,
-      squads: updatedSquads || [],
+    // Audit log async: no bloquea la respuesta al cliente
+    const auditPayload = {
+      user_id: user.id,
+      user_email: userEmail,
+      action: "UPDATE",
+      entity_type: "TASK",
+      entity_id: id,
+      entity_name: updatedTask.name,
+      changes,
+      old_values: existingTask,
+      new_values: { ...updatedTask, squads: updatedSquads || [] },
+      timestamp: new Date().toISOString(),
+    };
+    after(async () => {
+      try {
+        await supabase.from("audit_logs").insert(auditPayload);
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
     });
+
+    const responseBody = { ...updatedTask, squads: updatedSquads || [] };
+    cacheIdempotencyResponse(idempotencyKey, user.id, "PATCH", 200, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     console.error("Error updating task:", error);
     return NextResponse.json(
@@ -410,6 +422,13 @@ export async function DELETE(
         { error: "You do not have permission to delete tasks" },
         { status: 403 },
       );
+    }
+
+    // Idempotency check: return cached response if key already seen
+    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "DELETE");
+    if (idempotentHit) {
+      return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
 
     // Verificar que la tarea existe (RLS ya aplica restricciones de acceso por rol)
@@ -443,27 +462,30 @@ export async function DELETE(
       );
     }
 
-    // Register audit log
+    // Register audit log async (no bloquea la respuesta al cliente)
     const userEmail = user.email || "unknown";
+    const auditPayload = {
+      user_id: user.id,
+      user_email: userEmail,
+      action: "DELETE",
+      entity_type: "TASK",
+      entity_id: id,
+      entity_name: existingTask.name,
+      old_values: {
+        ...existingTask,
+        squads: existingSquads || [],
+      },
+      timestamp: new Date().toISOString(),
+    };
+    after(async () => {
+      try {
+        await supabase.from("audit_logs").insert(auditPayload);
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
-    try {
-      await supabase.from("audit_logs").insert({
-        user_id: user.id,
-        user_email: userEmail,
-        action: "DELETE",
-        entity_type: "TASK",
-        entity_id: id,
-        entity_name: existingTask.name,
-        old_values: {
-          ...existingTask,
-          squads: existingSquads || [],
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (auditError) {
-      console.error("Error logging audit action:", auditError);
-    }
-
+    cacheIdempotencyResponse(idempotencyKey, user.id, "DELETE", 200, { success: true });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting task:", error);

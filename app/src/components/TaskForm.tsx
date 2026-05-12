@@ -31,9 +31,10 @@ import {
   Ruler,
   Tag,
 } from "lucide-react";
+import type { RetryInfo } from "@/hooks/useSafeAuthFetch";
 
 interface TaskFormProps {
-  onSubmit: (data: CreateTaskInput) => Promise<void>;
+  onSubmit: (data: CreateTaskInput, onRetry?: (info: RetryInfo | null) => void) => Promise<void>;
   onCancel?: () => void;
   initialData?: Record<string, unknown> | null;
   isLoading?: boolean;
@@ -107,6 +108,7 @@ function TaskFormComponent(
     null,
   );
   const [localSubmitting, setLocalSubmitting] = useState(false);
+  const [retryStatus, setRetryStatus] = useState<RetryInfo | null>(null);
   const [unsavedConfirm, setUnsavedConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -462,20 +464,10 @@ function TaskFormComponent(
       }
 
       setLocalSubmitting(true);
-      // Safety timeout: si la operación no se resuelve en 10s,
-      // forzar recuperación del botón para que el usuario pueda reintentar.
-      // Cubre edge-cases donde el fetch queda colgado (ej. navigator.locks
-      // bloqueado por cambio de pestañas del navegador).
-      const safetyTimer = setTimeout(() => {
-        setLocalSubmitting(false);
-        setErrors({
-          submit:
-            "La solicitud tardó demasiado. Verifica tu conexión e intenta de nuevo.",
-        });
-      }, 10000);
+      setRetryStatus(null);
 
       try {
-        await onSubmit(formData as CreateTaskInput);
+        await onSubmit(formData as CreateTaskInput, (info) => setRetryStatus(info));
       } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : "Error desconocido";
@@ -499,7 +491,7 @@ function TaskFormComponent(
           setErrors({ submit: errorMessage });
         }
       } finally {
-        clearTimeout(safetyTimer);
+        setRetryStatus(null);
         setLocalSubmitting(false);
       }
     },
@@ -1211,7 +1203,15 @@ function TaskFormComponent(
           type="submit"
           disabled={localSubmitting || isLoading || !isFormValid()}
         >
-          {localSubmitting || isLoading ? "Guardando..." : "Guardar Tarea"}
+          {localSubmitting || isLoading
+            ? retryStatus
+              ? `Reintentando ${retryStatus.attempt}/${retryStatus.max}...`
+              : initialData
+                ? "Actualizando..."
+                : "Guardando..."
+            : initialData
+              ? "Actualizar Tarea"
+              : "Guardar Tarea"}
         </Button>
 
         {unsavedConfirm && (

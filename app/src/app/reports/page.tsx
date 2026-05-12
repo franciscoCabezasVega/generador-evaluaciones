@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
@@ -148,20 +148,24 @@ export default function ReportsPage() {
   // Función para actualizar filtros y URL
   const updateFilters = (newFilters: Partial<typeof filters>) => {
     const updatedFilters = { ...filters, ...newFilters };
+
+    // Actualizar estado local de forma inmediata (no esperar al useEffect de searchParams)
     setFilters(updatedFilters);
 
-    // Actualizar URL params
+    // Actualizar URL en baja prioridad para no interrumpir el evento del dropdown
     if (isClient) {
-      const params = new URLSearchParams();
-      if (updatedFilters.month)
-        params.set("month", updatedFilters.month.toString());
-      if (updatedFilters.year)
-        params.set("year", updatedFilters.year.toString());
-      if (updatedFilters.productType)
-        params.set("productType", updatedFilters.productType);
-      if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
+      startTransition(() => {
+        const params = new URLSearchParams();
+        if (updatedFilters.month)
+          params.set("month", updatedFilters.month.toString());
+        if (updatedFilters.year)
+          params.set("year", updatedFilters.year.toString());
+        if (updatedFilters.productType)
+          params.set("productType", updatedFilters.productType);
+        if (updatedFilters.squad) params.set("squad", updatedFilters.squad);
 
-      router.push(`/reports?${params.toString()}`, { scroll: false });
+        router.replace(`/reports?${params.toString()}`, { scroll: false });
+      });
     }
   };
 

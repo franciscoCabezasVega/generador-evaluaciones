@@ -17,6 +17,29 @@ function getServiceClient(): SupabaseClient | null {
   return _serviceClient;
 }
 
+// ─── Auth context in-process cache (TTL 30s) ──────────────────────────────────
+// Keyed by SHA-256(token). Never stores the raw token as key.
+// Warm hit avoids 2 RTT (auth.getUser + user_profiles SELECT) per request.
+// Lambda isolation means this cache is per-process, which is acceptable:
+// even a cold start shares cache across requests in the same warm instance.
+
+interface AuthCacheEntry {
+  ctx: { user: User; role: string | null; token: string };
+  expiresAt: number;
+}
+
+const _authCache = new Map<string, AuthCacheEntry>();
+const _authCachePending = new Map<string, Promise<AuthCacheEntry | null>>();
+const AUTH_CACHE_TTL_MS = 30_000; // 30 seconds
+
+async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Extraer token del header Authorization
  */
@@ -85,7 +108,8 @@ export async function getUserRole(userId: string) {
 /**
  * Contexto de autenticación completo: usuario + rol + cliente autenticado
  * Combina getUserFromRequest + getUserRole + getAuthenticatedSupabase en 1 llamada
- * Reutiliza el mismo service-role client para JWT verification y role lookup
+ * Reutiliza el mismo service-role client para JWT verification y role lookup.
+ * Resultado cacheado en memoria por 30s (keyed por SHA-256 del token).
  */
 export async function getAuthContext(request: NextRequest): Promise<{
   user: User;
@@ -97,34 +121,64 @@ export async function getAuthContext(request: NextRequest): Promise<{
     const token = extractToken(request);
     if (!token) return null;
 
-    const serviceClient = getServiceClient();
-    if (!serviceClient) return null;
+    const cacheKey = await hashToken(token);
+    const now = Date.now();
 
-    // Verificar JWT y obtener rol en paralelo no es posible porque
-    // necesitamos el user.id para el rol. Pero reutilizamos el mismo cliente.
-    const {
-      data: { user },
-      error,
-    } = await serviceClient.auth.getUser(token);
-
-    if (error || !user) return null;
-
-    // Obtener rol usando el mismo service client (sin crear otro)
-    let role: string | null = null;
-    const { data: profileData } = await serviceClient
-      .from("user_profiles")
-      .select("role_id")
-      .eq("id", user.id)
-      .single();
-
-    if (profileData) {
-      role = await getRoleNameById(profileData.role_id, serviceClient);
+    // Cache hit — return immediately without hitting Supabase
+    const cached = _authCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      const supabase = getAuthenticatedSupabase(token);
+      return { ...cached.ctx, supabase };
     }
 
-    // Crear cliente autenticado con RLS
-    const supabase = getAuthenticatedSupabase(token);
+    // Deduplicate concurrent requests for the same token (Promise coalescing)
+    if (_authCachePending.has(cacheKey)) {
+      const entry = await _authCachePending.get(cacheKey)!;
+      if (!entry) return null;
+      const supabase = getAuthenticatedSupabase(token);
+      return { ...entry.ctx, supabase };
+    }
 
-    return { user, role, supabase, token };
+    const pendingPromise = (async (): Promise<AuthCacheEntry | null> => {
+      try {
+        const serviceClient = getServiceClient();
+        if (!serviceClient) return null;
+
+        const {
+          data: { user },
+          error,
+        } = await serviceClient.auth.getUser(token);
+
+        if (error || !user) return null;
+
+        let role: string | null = null;
+        const { data: profileData } = await serviceClient
+          .from("user_profiles")
+          .select("role_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileData) {
+          role = await getRoleNameById(profileData.role_id, serviceClient);
+        }
+
+        const entry: AuthCacheEntry = {
+          ctx: { user, role, token },
+          expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
+        };
+        _authCache.set(cacheKey, entry);
+        return entry;
+      } finally {
+        _authCachePending.delete(cacheKey);
+      }
+    })();
+
+    _authCachePending.set(cacheKey, pendingPromise);
+    const entry = await pendingPromise;
+    if (!entry) return null;
+
+    const supabase = getAuthenticatedSupabase(token);
+    return { ...entry.ctx, supabase };
   } catch (error) {
     console.error("Error in getAuthContext:", error);
     return null;

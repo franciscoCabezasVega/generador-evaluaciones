@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CreateTaskInput } from "@/lib/types";
 import { calculateTaskScore, validateReturns } from "@/lib/scoreCalculator";
 import { getAuthContext } from "@/lib/auth";
+import { checkIdempotency, cacheIdempotencyResponse } from "@/lib/idempotency";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,13 @@ export async function POST(request: NextRequest) {
         { error: "You do not have permission to create tasks" },
         { status: 403 },
       );
+    }
+
+    // Idempotency check: return cached response if key already seen
+    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "POST");
+    if (idempotentHit) {
+      return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
 
     const body = (await request.json()) as CreateTaskInput;
@@ -109,24 +117,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verificar si ya existe una tarea con el mismo link
-    const { data: existingTask, error: checkError } = await supabase
-      .from("tasks")
-      .select("id")
-      .eq("task_link", body.task_link)
-      .single();
-
-    if (existingTask) {
-      return NextResponse.json(
-        { error: "Este link ya existe en otra tarea. Usa un link diferente." },
-        { status: 409 },
-      );
-    }
-
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error("Error checking for duplicates:", checkError);
-    }
-
     // Crear tarea sin los campos de devoluciones (se guardan por squad)
     const { data: task, error: taskError } = await supabase
       .from("tasks")
@@ -213,10 +203,9 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json(
-      { ...task, squads: taskSquadRecords },
-      { status: 201 },
-    );
+    const responseBody = { ...task, squads: taskSquadRecords };
+    cacheIdempotencyResponse(idempotencyKey, user.id, "POST", 201, responseBody);
+    return NextResponse.json(responseBody, { status: 201 });
   } catch (error) {
     console.error("Error creating task:", error);
     return NextResponse.json(

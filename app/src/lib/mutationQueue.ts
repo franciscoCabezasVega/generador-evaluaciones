@@ -24,6 +24,8 @@ export interface MutationItem {
   error?: string;
   /** Claves de caché a invalidar cuando el ítem se complete con éxito */
   cacheKeys?: string[];
+  /** Clave de idempotencia enviada como header al servidor */
+  idempotencyKey?: string;
 }
 
 export interface EnqueueParams {
@@ -130,6 +132,10 @@ export class MutationQueue {
    */
   enqueue(params: EnqueueParams): string {
     const id = `mut_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const idempotencyKey =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : id;
 
     const item: MutationItem = {
       id,
@@ -141,6 +147,7 @@ export class MutationQueue {
       maxAttempts: params.maxAttempts ?? 3,
       createdAt: Date.now(),
       cacheKeys: params.cacheKeys,
+      idempotencyKey,
     };
 
     this.queue.push(item);
@@ -212,7 +219,7 @@ export class MutationQueue {
     return [...this.queue];
   }
 
-  getStatus(): { pending: number; processing: boolean; failed: number } {
+  getStatus(): { pending: number; processing: boolean; failed: number; retryingCount: number } {
     const pending = this.queue.filter(
       (i) => i.status === "pending" || i.status === "processing",
     ).length;
@@ -221,7 +228,10 @@ export class MutationQueue {
     const failed = this.queue.filter(
       (i) => i.status === "failed" || i.status === "permanent_failure",
     ).length;
-    return { pending, processing, failed };
+    const retryingCount = this.queue.filter(
+      (i) => i.status === "processing" && i.attempts > 1,
+    ).length;
+    return { pending, processing, failed, retryingCount };
   }
 
   destroy(): void {
@@ -248,7 +258,10 @@ export class MutationQueue {
     try {
       const response = await authenticatedFetch(item.url, {
         method: item.method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(item.idempotencyKey ? { "Idempotency-Key": item.idempotencyKey } : {}),
+        },
         body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
         signal: controller.signal,
       });
