@@ -67,7 +67,7 @@ describe("buildFilterKey (cache key builder)", () => {
 describe("visibilitychange revalidation logic", () => {
   let listeners: Array<() => void>;
   let originalAddEventListener: typeof document.addEventListener;
-  let originalVisibilityState: string;
+  let originalVisibilityDescriptor: PropertyDescriptor | undefined;
 
   // Minimal CacheStore replica used to test isFresh
   function makeCacheStore() {
@@ -90,7 +90,7 @@ describe("visibilitychange revalidation logic", () => {
   beforeEach(() => {
     listeners = [];
     originalAddEventListener = document.addEventListener.bind(document);
-    originalVisibilityState = Object.getOwnPropertyDescriptor(document, "visibilityState")?.value ?? "visible";
+    originalVisibilityDescriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
 
     // Capture visibilitychange listeners
     jest.spyOn(document, "addEventListener").mockImplementation((event, handler, ...args) => {
@@ -105,10 +105,11 @@ describe("visibilitychange revalidation logic", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      value: originalVisibilityState,
-    });
+    if (originalVisibilityDescriptor) {
+      Object.defineProperty(document, "visibilityState", originalVisibilityDescriptor);
+    } else {
+      delete (document as { visibilityState?: string }).visibilityState;
+    }
   });
 
   function setVisibilityState(state: "visible" | "hidden") {
