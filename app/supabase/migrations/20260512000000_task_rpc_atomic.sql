@@ -39,7 +39,7 @@ begin
   )
   returning * into v_task;
 
-  -- Insertar squads en batch
+  -- Insertar squads en batch (solo si squads es un array válido)
   insert into task_squad (task_id, squad, low_returns, medium_returns, high_returns, calculated_score, additional_notes)
   select
     v_task.id,
@@ -49,7 +49,12 @@ begin
     coalesce((sq->>'high_returns')::int, 0),
     coalesce((sq->>'calculated_score')::numeric, 10),
     coalesce(sq->>'additional_notes', '')
-  from jsonb_array_elements(p_input->'squads') as sq;
+  from jsonb_array_elements(
+    case
+      when jsonb_typeof(p_input->'squads') = 'array' then p_input->'squads'
+      else '[]'::jsonb
+    end
+  ) as sq;
 
   -- Recuperar squads insertados
   select jsonb_agg(ts) into v_squads
@@ -111,8 +116,8 @@ begin
   where id = p_id
   returning * into v_new_task;
 
-  -- Si se proveen squads, reemplazar set completo
-  if p_input->'squads' is not null then
+  -- Si se proveen squads como array válido, reemplazar set completo
+  if jsonb_typeof(p_input->'squads') = 'array' then
     -- Eliminar squads existentes
     delete from task_squad where task_id = p_id;
 

@@ -24,7 +24,7 @@ export interface QueueStatus {
   processing: boolean;
   /** Ítems que fallaron (incluyendo fallos permanentes) */
   failed: number;
-  /** Ìtems que están siendo reintentados (attempt > 1) */
+  /** Ítems que están siendo reintentados (attempt > 1) */
   retryingCount: number;
 }
 

@@ -66,6 +66,21 @@ export default function TasksPage() {
     squad: searchParams.get("squad") || "",
     status: searchParams.get("status") || "",
   }));
+
+  // Sincronizar filtros cuando la URL cambia externamente (back/forward, navegación externa)
+  useEffect(() => {
+    setFilters({
+      month: searchParams.get("month")
+        ? parseInt(searchParams.get("month")!)
+        : new Date().getMonth() + 1,
+      year: searchParams.get("year")
+        ? parseInt(searchParams.get("year")!)
+        : new Date().getFullYear(),
+      productType: searchParams.get("productType") || "",
+      squad: searchParams.get("squad") || "",
+      status: searchParams.get("status") || "",
+    });
+  }, [searchParams]);
   const { user, profile, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
   const { enqueue } = useMutationQueue();

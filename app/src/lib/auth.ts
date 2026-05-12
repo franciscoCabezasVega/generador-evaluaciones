@@ -126,9 +126,13 @@ export async function getAuthContext(request: NextRequest): Promise<{
 
     // Cache hit — return immediately without hitting Supabase
     const cached = _authCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      const supabase = getAuthenticatedSupabase(token);
-      return { ...cached.ctx, supabase };
+    if (cached) {
+      if (cached.expiresAt > now) {
+        const supabase = getAuthenticatedSupabase(token);
+        return { ...cached.ctx, supabase };
+      }
+      // Eliminar entradas expiradas de forma oportunista
+      _authCache.delete(cacheKey);
     }
 
     // Deduplicate concurrent requests for the same token (Promise coalescing)

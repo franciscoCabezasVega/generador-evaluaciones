@@ -74,7 +74,7 @@ export async function PATCH(
 
     // Idempotency check: return cached response if key already seen
     const idempotencyKey = request.headers.get("Idempotency-Key");
-    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "PATCH");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "PATCH", `/api/tasks/${id}`);
     if (idempotentHit) {
       return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
@@ -392,7 +392,7 @@ export async function PATCH(
     });
 
     const responseBody = { ...updatedTask, squads: updatedSquads || [] };
-    cacheIdempotencyResponse(idempotencyKey, user.id, "PATCH", 200, responseBody);
+    cacheIdempotencyResponse(idempotencyKey, user.id, "PATCH", 200, responseBody, `/api/tasks/${id}`);
     return NextResponse.json(responseBody);
   } catch (error) {
     console.error("Error updating task:", error);
@@ -426,7 +426,7 @@ export async function DELETE(
 
     // Idempotency check: return cached response if key already seen
     const idempotencyKey = request.headers.get("Idempotency-Key");
-    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "DELETE");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "DELETE", `/api/tasks/${id}`);
     if (idempotentHit) {
       return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
@@ -485,7 +485,7 @@ export async function DELETE(
       }
     });
 
-    cacheIdempotencyResponse(idempotencyKey, user.id, "DELETE", 200, { success: true });
+    cacheIdempotencyResponse(idempotencyKey, user.id, "DELETE", 200, { success: true }, `/api/tasks/${id}`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting task:", error);

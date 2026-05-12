@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Idempotency check: return cached response if key already seen
     const idempotencyKey = request.headers.get("Idempotency-Key");
-    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "POST");
+    const idempotentHit = checkIdempotency(idempotencyKey, user.id, "POST", "/api/tasks");
     if (idempotentHit) {
       return NextResponse.json(idempotentHit.body, { status: idempotentHit.status });
     }
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     });
 
     const responseBody = { ...task, squads: taskSquadRecords };
-    cacheIdempotencyResponse(idempotencyKey, user.id, "POST", 201, responseBody);
+    cacheIdempotencyResponse(idempotencyKey, user.id, "POST", 201, responseBody, "/api/tasks");
     return NextResponse.json(responseBody, { status: 201 });
   } catch (error) {
     console.error("Error creating task:", error);
