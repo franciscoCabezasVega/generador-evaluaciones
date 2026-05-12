@@ -17,6 +17,14 @@ interface CacheWarningBannerProps {
  */
 export default function CacheWarningBanner({ show = false }: CacheWarningBannerProps) {
   const [dismissed, setDismissed] = useState(false);
+  // Track the previous value of `show` so we can detect a false→true transition
+  // and reset the dismissed state. This follows the React docs "adjusting state
+  // when a prop changes" pattern (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const [prevShow, setPrevShow] = useState(show);
+  if (show !== prevShow) {
+    setPrevShow(show);
+    if (show) setDismissed(false);
+  }
 
   if (!show || dismissed) {
     return null;

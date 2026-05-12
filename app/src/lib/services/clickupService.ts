@@ -29,49 +29,43 @@ interface ClickUpTimeInStatusResponse {
   status_history: ClickUpTimeInStatus[];
 }
 
-/** Represents the resolved timing breakdown ready to upsert. */
-interface ResolvedTimingBreakdown {
-  testing_time_minutes: number;
-  waiting_env_minutes: number;
-  waiting_fixes_minutes: number;
-  retest_minutes: number;
-  clarification_minutes: number;
-}
+/** Maps a timing_categories slug to total hours computed from ClickUp. */
+type CategoryHours = Record<string, number>;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
 /**
- * Maps ClickUp status names (lowercase) to internal timing categories.
+ * Maps ClickUp status names (lowercase) to timing_categories slugs.
  * Adjust to match your team's actual ClickUp workflow statuses.
  */
-const STATUS_CATEGORY_MAP: Record<string, keyof ResolvedTimingBreakdown> = {
-  // Testing / QA active
-  "in testing": "testing_time_minutes",
-  "in qa": "testing_time_minutes",
-  testing: "testing_time_minutes",
-  qa: "testing_time_minutes",
-  // Waiting for environment
-  "waiting env": "waiting_env_minutes",
-  "waiting environment": "waiting_env_minutes",
-  "wait env": "waiting_env_minutes",
-  "espera ambiente": "waiting_env_minutes",
-  // Waiting for dev fixes
-  "waiting fixes": "waiting_fixes_minutes",
-  "waiting fix": "waiting_fixes_minutes",
-  "wait fix": "waiting_fixes_minutes",
-  "in review": "waiting_fixes_minutes",
-  "espera fixes": "waiting_fixes_minutes",
-  // Retest
-  retest: "retest_minutes",
-  "re-test": "retest_minutes",
-  retesting: "retest_minutes",
-  // Clarifications
-  clarification: "clarification_minutes",
-  clarifications: "clarification_minutes",
-  "in clarification": "clarification_minutes",
-  "clarificación": "clarification_minutes",
+const STATUS_CATEGORY_MAP: Record<string, string> = {
+  // Testing / QA active → effective_testing
+  "in testing": "effective_testing",
+  "in qa": "effective_testing",
+  testing: "effective_testing",
+  qa: "effective_testing",
+  // Waiting for environment → waiting_environment
+  "waiting env": "waiting_environment",
+  "waiting environment": "waiting_environment",
+  "wait env": "waiting_environment",
+  "espera ambiente": "waiting_environment",
+  // Waiting for dev fixes → waiting_development_fixes
+  "waiting fixes": "waiting_development_fixes",
+  "waiting fix": "waiting_development_fixes",
+  "wait fix": "waiting_development_fixes",
+  "in review": "waiting_development_fixes",
+  "espera fixes": "waiting_development_fixes",
+  // Retest → qa_retesting
+  retest: "qa_retesting",
+  "re-test": "qa_retesting",
+  retesting: "qa_retesting",
+  // Clarifications → clarification
+  clarification: "clarification",
+  clarifications: "clarification",
+  "in clarification": "clarification",
+  "clarificación": "clarification",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -140,27 +134,20 @@ async function fetchTimeInStatus(
 }
 
 /**
- * Map a list of ClickUp time-in-status entries to our internal timing breakdown.
- * Statuses not recognized are silently ignored.
+ * Map a list of ClickUp time-in-status entries to category hours.
+ * Returns a map of timing_categories slug → decimal hours.
+ * Statuses not recognised are silently ignored.
  */
-function mapStatusesToBreakdown(
+function mapStatusesToCategoryHours(
   history: ClickUpTimeInStatus[],
-): ResolvedTimingBreakdown {
-  const result: ResolvedTimingBreakdown = {
-    testing_time_minutes: 0,
-    waiting_env_minutes: 0,
-    waiting_fixes_minutes: 0,
-    retest_minutes: 0,
-    clarification_minutes: 0,
-  };
-
+): CategoryHours {
+  const result: CategoryHours = {};
   for (const entry of history) {
-    const key = STATUS_CATEGORY_MAP[entry.status.toLowerCase()];
-    if (key) {
-      result[key] += entry.total_time.by_minute;
+    const slug = STATUS_CATEGORY_MAP[entry.status.toLowerCase()];
+    if (slug) {
+      result[slug] = (result[slug] ?? 0) + entry.total_time.by_minute / 60;
     }
   }
-
   return result;
 }
 
@@ -224,32 +211,79 @@ export async function syncTaskTimings(
     // Step 2: Fetch from ClickUp
     const timeData = await fetchTimeInStatus(taskId, apiKey);
 
-    // Step 3: Map to breakdown
-    const breakdown = mapStatusesToBreakdown(
+    // Step 3: Map ClickUp statuses → { slug: hours }
+    const categoryHours = mapStatusesToCategoryHours(
       timeData.status_history ?? [],
     );
 
     // Determine the latest status (highest orderindex = most recent)
-    const latestStatus = timeData.status_history?.reduce(
-      (prev, curr) => (curr.orderindex > prev.orderindex ? curr : prev),
-      timeData.status_history[0],
-    )?.status ?? null;
+    const latestStatus =
+      timeData.status_history?.reduce(
+        (prev, curr) => (curr.orderindex > prev.orderindex ? curr : prev),
+        timeData.status_history[0],
+      )?.status ?? null;
 
-    // Step 4: Upsert TaskTiming
-    const { error: upsertError } = await supabase
-      .from("task_timings")
-      .upsert(
-        {
-          task_id: internalTaskId,
-          ...breakdown,
-          // Only update source fields; don't overwrite manually set notes/dates
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "task_id" },
-      );
+    // Step 4: Write hours into the correct schema hierarchy:
+    //   task_timings → timing_qa_entries → timing_qa_category_hours
+    const slugs = Object.keys(categoryHours);
+    if (slugs.length > 0) {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
 
-    if (upsertError) {
-      throw new Error(`DB upsert failed: ${upsertError.message}`);
+      // 4a. Find the existing task_timing row for this month/year.
+      //     We do NOT create one here — that requires a user_id which only
+      //     the QA member can supply via the UI.
+      const { data: timing } = await supabase
+        .from("task_timings")
+        .select("id")
+        .eq("task_id", internalTaskId)
+        .eq("month", month)
+        .eq("year", year)
+        .maybeSingle();
+
+      if (timing) {
+        // 4b. Find all QA-member entries for this timing record.
+        const { data: qaEntries } = await supabase
+          .from("timing_qa_entries")
+          .select("id")
+          .eq("timing_id", timing.id);
+
+        if (qaEntries?.length) {
+          // 4c. Resolve category IDs by slug.
+          const { data: categories } = await supabase
+            .from("timing_categories")
+            .select("id, slug")
+            .in("slug", slugs);
+
+          const categoryMap = new Map<string, string>(
+            (categories ?? []).map((c) => [c.slug as string, c.id as string]),
+          );
+
+          // 4d. Build upsert rows and write them.
+          const rows = qaEntries.flatMap((entry) =>
+            Object.entries(categoryHours)
+              .filter(([slug]) => categoryMap.has(slug))
+              .map(([slug, hours]) => ({
+                timing_qa_entry_id: entry.id as string,
+                category_id: categoryMap.get(slug)!,
+                hours: Math.round(hours * 100) / 100,
+              })),
+          );
+
+          if (rows.length > 0) {
+            const { error: upsertError } = await supabase
+              .from("timing_qa_category_hours")
+              .upsert(rows, {
+                onConflict: "timing_qa_entry_id,category_id",
+              });
+
+            if (upsertError) {
+              throw new Error(`DB upsert failed: ${upsertError.message}`);
+            }
+          }
+        }
+      }
     }
 
     // Step 5: Update sync record
@@ -273,12 +307,11 @@ export async function syncTaskTimings(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
 
-    // Record the error in the sync table for observability
-    await supabase
+    // Fire-and-forget: record the error timestamp without blocking the return.
+    void supabase
       .from("clickup_task_sync")
       .update({ last_synced_at: new Date().toISOString() })
-      .eq("task_id", internalTaskId)
-      .then(() => {/* fire-and-forget */});
+      .eq("task_id", internalTaskId);
 
     return {
       taskId: internalTaskId,

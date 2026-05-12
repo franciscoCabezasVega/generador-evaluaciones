@@ -98,12 +98,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
-  // Delete existing row then insert — ensures single-row invariant
-  await supabase.from("clickup_settings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
+  // Upsert on singleton_key ensures at most one row and is atomic.
   const { data, error } = await supabase
     .from("clickup_settings")
-    .insert({ encrypted_key: encrypted.ciphertext, key_iv: encrypted.iv })
+    .upsert(
+      { encrypted_key: encrypted.ciphertext, key_iv: encrypted.iv, singleton_key: true },
+      { onConflict: "singleton_key" },
+    )
     .select("id, updated_at")
     .single();
 
