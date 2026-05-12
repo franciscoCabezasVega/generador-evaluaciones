@@ -10,6 +10,9 @@
  * public interface. The hook itself depends on a fetchFn and enabled flag.
  */
 
+import { renderHook, act } from "@testing-library/react";
+import { useCachedFetch } from "./useCachedFetch";
+
 // ── Direct tests of the pure key-building logic ──────────────────────────────
 // We replicate the same logic here to unit-test it in isolation.
 
@@ -59,54 +62,31 @@ describe("buildFilterKey (cache key builder)", () => {
   });
 });
 
-// ── Visibility-based revalidation ─────────────────────────────────────────────
-// Tests for the visibilitychange listener added in useCachedFetch.
-// We test the behaviour directly via the CacheStore + listener logic without
-// mounting the full React hook (avoids "use client" / Next.js RSC constraints).
+// ── Visibility-based revalidation — integration with the real hook ────────────
+// These tests mount the actual useCachedFetch hook and dispatch real
+// visibilitychange events so that the hook's effect logic (abortRef handling,
+// fullKeyRef usage, enabled toggling) is fully exercised.
 
-describe("visibilitychange revalidation logic", () => {
-  let listeners: Array<() => void>;
-  let originalAddEventListener: typeof document.addEventListener;
+describe("useCachedFetch – visibilitychange integration", () => {
   let originalVisibilityDescriptor: PropertyDescriptor | undefined;
 
-  // Minimal CacheStore replica used to test isFresh
-  function makeCacheStore() {
-    const cache = new Map<string, { data: unknown; timestamp: number }>();
-    return {
-      set(key: string, data: unknown) {
-        cache.set(key, { data, timestamp: Date.now() });
-      },
-      isFresh(key: string, staleTime: number): boolean {
-        const entry = cache.get(key);
-        return entry != null && Date.now() - entry.timestamp < staleTime;
-      },
-      setTimestamp(key: string, timestamp: number) {
-        const entry = cache.get(key);
-        if (entry) cache.set(key, { ...entry, timestamp });
-      },
-    };
-  }
-
   beforeEach(() => {
-    listeners = [];
-    originalAddEventListener = document.addEventListener.bind(document);
-    originalVisibilityDescriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
-
-    // Capture visibilitychange listeners
-    jest.spyOn(document, "addEventListener").mockImplementation((event, handler, ...args) => {
-      if (event === "visibilitychange") {
-        listeners.push(handler as () => void);
-      } else {
-        originalAddEventListener(event, handler as Parameters<typeof document.addEventListener>[1], ...args);
-      }
-    });
-    jest.spyOn(document, "removeEventListener").mockImplementation(() => {});
+    jest.useFakeTimers();
+    originalVisibilityDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "visibilityState",
+    );
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
     if (originalVisibilityDescriptor) {
-      Object.defineProperty(document, "visibilityState", originalVisibilityDescriptor);
+      Object.defineProperty(
+        document,
+        "visibilityState",
+        originalVisibilityDescriptor,
+      );
     } else {
       delete (document as { visibilityState?: string }).visibilityState;
     }
@@ -119,79 +99,82 @@ describe("visibilitychange revalidation logic", () => {
     });
   }
 
-  it("triggers revalidation when tab becomes visible and cache is stale", () => {
-    const store = makeCacheStore();
-    const STALE_TIME = 5 * 60 * 1000;
-    const cacheKey = "test-key";
+  it("calls fetchFn when tab becomes visible and cache is stale", async () => {
+    const STALE_TIME = 1_000;
+    const cacheKey = `vis-stale-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
-    // Prime cache with an old timestamp (expired)
-    store.set(cacheKey, { data: "old" });
-    store.setTimestamp(cacheKey, Date.now() - STALE_TIME - 1000);
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+    );
 
-    const doFetch = jest.fn();
+    // Fire jitter timer so the initial fetch completes
+    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {});
 
-    // Simulate what the hook does: register listener
-    const handler = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!store.isFresh(cacheKey, STALE_TIME)) {
-        doFetch(true, new AbortController().signal);
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
 
-    setVisibilityState("visible");
-    listeners.forEach((l) => l());
+    // Expire the cache by advancing fake clock past staleTime
+    act(() => { jest.advanceTimersByTime(STALE_TIME + 100); });
 
-    expect(doFetch).toHaveBeenCalledTimes(1);
-    expect(doFetch).toHaveBeenCalledWith(true, expect.any(AbortSignal));
+    // Tab becomes visible → hook should trigger a background refetch
+    await act(async () => {
+      setVisibilityState("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(async () => {});
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
-  it("does NOT revalidate when tab becomes visible and cache is still fresh", () => {
-    const store = makeCacheStore();
-    const STALE_TIME = 5 * 60 * 1000;
-    const cacheKey = "test-key";
+  it("does NOT call fetchFn when tab becomes visible and cache is still fresh", async () => {
+    const STALE_TIME = 60_000;
+    const cacheKey = `vis-fresh-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
-    // Fresh cache (just set)
-    store.set(cacheKey, { data: "fresh" });
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+    );
 
-    const doFetch = jest.fn();
+    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {});
 
-    const handler = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!store.isFresh(cacheKey, STALE_TIME)) {
-        doFetch(true, new AbortController().signal);
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
 
-    setVisibilityState("visible");
-    listeners.forEach((l) => l());
+    // Cache is still fresh — tab visibility change should be a no-op
+    await act(async () => {
+      setVisibilityState("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(async () => {});
 
-    expect(doFetch).not.toHaveBeenCalled();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it("does NOT revalidate when tab is hidden (not becoming visible)", () => {
-    const store = makeCacheStore();
-    const STALE_TIME = 5 * 60 * 1000;
-    const cacheKey = "test-key";
+  it("does NOT call fetchFn when tab goes to background (hidden)", async () => {
+    const STALE_TIME = 100;
+    const cacheKey = `vis-hidden-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
-    store.set(cacheKey, { data: "old" });
-    store.setTimestamp(cacheKey, Date.now() - STALE_TIME - 1000);
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+    );
 
-    const doFetch = jest.fn();
+    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {});
 
-    const handler = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!store.isFresh(cacheKey, STALE_TIME)) {
-        doFetch(true, new AbortController().signal);
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
 
-    // Tab is going to background
-    setVisibilityState("hidden");
-    listeners.forEach((l) => l());
+    // Expire cache
+    act(() => { jest.advanceTimersByTime(STALE_TIME + 100); });
 
-    expect(doFetch).not.toHaveBeenCalled();
+    // Tab goes to background — hook must NOT refetch on hidden
+    await act(async () => {
+      setVisibilityState("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(async () => {});
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 });
