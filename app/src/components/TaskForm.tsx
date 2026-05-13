@@ -78,7 +78,7 @@ function TaskFormComponent(
         year: CURRENT_YEAR,
         effort_score_date: new Date().toISOString().split("T")[0],
         tshirt_size: "Estándar",
-        project_type: "Nueva funcionalidad",
+        project_type: "",
       };
     }
 
@@ -90,7 +90,7 @@ function TaskFormComponent(
       effort_score_date:
         parsed.effort_score_date || new Date().toISOString().split("T")[0],
       tshirt_size: parsed.tshirt_size || "Estándar",
-      project_type: parsed.project_type || "Nueva funcionalidad",
+      project_type: parsed.project_type || "",
     };
   };
 
@@ -173,6 +173,29 @@ function TaskFormComponent(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexities]);
+
+  // Sincronizar project_type con el primer tipo disponible si el valor no existe en la BD
+  useEffect(() => {
+    if (projectTypes.length > 0) {
+      const currentExists = projectTypes.some(
+        (pt) => pt.name === formData.project_type,
+      );
+      if (!currentExists) {
+        const newType = projectTypes[0].name as TaskProjectType;
+        setFormData((prev) => ({
+          ...prev,
+          project_type: newType,
+        }));
+        if (initialDataRef.current) {
+          initialDataRef.current = {
+            ...initialDataRef.current,
+            project_type: newType,
+          };
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTypes]);
 
   // Squads activos del producto seleccionado, filtrando los ya agregados
   const productObj = products.find((p) => p.name === formData.product_type);
@@ -600,6 +623,11 @@ function TaskFormComponent(
               onChange={handleInputChange}
               className={`w-full border rounded-lg px-4 py-2 ${errors.project_type ? "border-red-500 bg-red-950/40" : "border-gray-300"}`}
             >
+              {!formData.project_type && (
+                <option value="" disabled>
+                  Seleccionar tipo...
+                </option>
+              )}
               {projectTypes.map((pt) => (
                 <option key={pt.id} value={pt.name}>
                   {pt.name}

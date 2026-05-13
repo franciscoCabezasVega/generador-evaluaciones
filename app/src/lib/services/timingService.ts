@@ -937,9 +937,7 @@ export const timingService = {
       );
 
       // Obtener assigned_qa de todas las tareas involucradas
-      const involvedTaskIds = [
-        ...new Set(timingToTask.values()),
-      ];
+      const involvedTaskIds = Array.from(new Set(Array.from(timingToTask.values())));
       const { data: assignedQAData, error: assignedQAError } = await client
         .from("tasks")
         .select("id, assigned_qa")

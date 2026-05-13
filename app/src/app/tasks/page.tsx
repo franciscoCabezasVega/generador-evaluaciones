@@ -10,7 +10,7 @@ import React, {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import type { RetryInfo } from "@/hooks/useSafeAuthFetch";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useCachedFetch, invalidateCache } from "@/hooks/useCachedFetch";
 import { formatScore } from "@/lib/scoreCalculator";
 import { parseISO, format as formatDate, isValid } from "date-fns";
 import Navbar from "@/components/Navbar";
@@ -134,6 +134,8 @@ function ClickUpSyncPanel({
           return;
         }
         setHasTiming(true);
+        invalidateCache("timings");
+        invalidateCache("timings-tasks");
         setMsg({ type: "success", text: "Timing creado. Sincronizando con ClickUp..." });
       } catch {
         setMsg({ type: "error", text: "Error al crear el timing. Intenta de nuevo." });
@@ -173,6 +175,13 @@ function ClickUpSyncPanel({
           ? "Sincronizado. No había tiempos en ClickUp todavía — los datos se actualizarán al próximo sync."
           : "¡Tiempos sincronizados correctamente desde ClickUp!",
       });
+      // Invalidar caches de timings para que la página de tiempos refleje los datos al navegar
+      invalidateCache("timings");
+      invalidateCache("timings-tasks");
+      invalidateCache("timings-metrics");
+      invalidateCache("timings-qa-metrics");
+      invalidateCache("timings-all-comparison");
+      invalidateCache("timings-all-tasks-comparison");
     } catch (err) {
       const isTimeout = err instanceof Error &&
         (err.name === "TimeoutError" || err.message.includes("tardó más de"));
