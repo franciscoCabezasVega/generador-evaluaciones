@@ -15,7 +15,12 @@ DECLARE v_type text;
 BEGIN
   SELECT data_type INTO v_type FROM information_schema.columns
   WHERE table_schema='public' AND table_name='timing_qa_category_hours' AND column_name='hours';
-  IF v_type <> 'numeric' THEN
+  -- Use IS DISTINCT FROM instead of <> to correctly handle the NULL case:
+  -- NULL <> 'numeric' evaluates to NULL (falsy) in Postgres, which would
+  -- silently skip the ALTER if the column lookup returns no row.
+  -- NULL IS DISTINCT FROM 'numeric' evaluates to TRUE, causing the ALTER
+  -- to run (and fail loudly) so schema drift is never hidden.
+  IF v_type IS DISTINCT FROM 'numeric' THEN
     EXECUTE 'ALTER TABLE timing_qa_category_hours ALTER COLUMN hours TYPE NUMERIC(10,2) USING hours::NUMERIC(10,2)';
   END IF;
 END $$;
