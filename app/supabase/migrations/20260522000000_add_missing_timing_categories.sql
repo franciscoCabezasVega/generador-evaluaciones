@@ -13,12 +13,14 @@
 --
 -- Colors/labels mirror the palette used for existing QA categories.
 
+-- Note: columns `color` and `text_color` were dropped in 20260511045003;
+-- only `hex_color` remains as the canonical color source.
 INSERT INTO timing_categories
-  (slug, name, color, text_color, hex_color, display_order, is_system)
+  (slug, name, hex_color, display_order, is_system)
 VALUES
-  ('qa_retesting',     'QA - Retesting',     'bg-red-500/15',    'text-red-300',    '#EF4444', 6,  TRUE),
-  ('qa_on_hold',       'QA - On Hold',       'bg-amber-500/15',  'text-amber-300',  '#F59E0B', 7,  TRUE),
-  ('qa_fixed',         'QA - Fixed',         'bg-green-500/15',  'text-green-300',  '#22C55E', 8,  TRUE),
-  ('qa_sin_asignar',   'QA - Sin Asignar',   'bg-gray-500/15',   'text-gray-400',   '#9CA3AF', 9,  TRUE),
-  ('qa_review_client', 'QA - Review Client', 'bg-indigo-500/15', 'text-indigo-300', '#6366F1', 10, TRUE)
+  ('qa_retesting',     'QA - Retesting',     '#EF4444', 6,  TRUE),
+  ('qa_on_hold',       'QA - On Hold',       '#F59E0B', 7,  TRUE),
+  ('qa_fixed',         'QA - Fixed',         '#22C55E', 8,  TRUE),
+  ('qa_sin_asignar',   'QA - Sin Asignar',   '#9CA3AF', 9,  TRUE),
+  ('qa_review_client', 'QA - Review Client', '#6366F1', 10, TRUE)
 ON CONFLICT (slug) DO NOTHING;

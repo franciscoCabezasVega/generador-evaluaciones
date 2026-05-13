@@ -44,6 +44,10 @@ export function SessionChecker() {
         clearInterval(checkIntervalRef.current);
         checkIntervalRef.current = null;
       }
+      // Reset circuit breaker counter al cerrar sesión / perder user.
+      // Evita que un usuario que acumuló 1 fallo, hace logout y vuelve a
+      // entrar, dispare el forzar re-login antes de tiempo en su nueva sesión.
+      consecutiveFailuresRef.current = 0;
       return;
     }
 

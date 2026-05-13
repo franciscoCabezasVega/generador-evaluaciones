@@ -8,9 +8,17 @@
 -- NUMERIC(10,2) stores up to 10 digits with 2 decimal places — sufficient
 -- precision for time-in-status hours from the ClickUp API.
 
-ALTER TABLE timing_qa_category_hours
-  ALTER COLUMN hours TYPE NUMERIC(10, 2)
-    USING hours::NUMERIC(10, 2);
+-- Idempotent guard: skip the ALTER (which would force a table rewrite)
+-- if the column is already numeric in the target environment.
+DO $$
+DECLARE v_type text;
+BEGIN
+  SELECT data_type INTO v_type FROM information_schema.columns
+  WHERE table_schema='public' AND table_name='timing_qa_category_hours' AND column_name='hours';
+  IF v_type <> 'numeric' THEN
+    EXECUTE 'ALTER TABLE timing_qa_category_hours ALTER COLUMN hours TYPE NUMERIC(10,2) USING hours::NUMERIC(10,2)';
+  END IF;
+END $$;
 
 -- Keep the non-negative constraint consistent with the original CHECK.
 ALTER TABLE timing_qa_category_hours
