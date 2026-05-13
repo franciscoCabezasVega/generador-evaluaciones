@@ -84,11 +84,10 @@ export async function PUT(
       if (!Number.isFinite(value)) {
         throw new Error(`${fieldName} must be a finite number`);
       }
-      if (!Number.isInteger(value)) {
-        throw new Error(`${fieldName} must be a non-negative integer`);
-      }
+      // Allow decimals: ClickUp sync writes values like 20.88 or 9.41
+      // (hours-in-status divided among QA members). The DB column is NUMERIC(10,2).
       if (value < 0) {
-        throw new Error(`${fieldName} must be a non-negative integer`);
+        throw new Error(`${fieldName} must be a non-negative number`);
       }
     };
 
