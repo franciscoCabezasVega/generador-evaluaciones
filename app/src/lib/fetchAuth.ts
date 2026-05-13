@@ -104,21 +104,22 @@ class SessionManager {
       // Concurrent caller: comparte la promesa subyacente real pero aplica un
       // timeout propio. _refreshInflight apunta a la llamada real (no al race),
       // por lo que un timeout aquí NO la limpia ni inicia un refresh paralelo.
-      return Promise.race([
-        this._refreshInflight,
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new DOMException(
-                  "refreshSession timed out waiting for lock",
-                  "AbortError",
-                ),
+      let concurrentTimeoutId: ReturnType<typeof setTimeout> | undefined;
+      const concurrentTimeout = new Promise<never>((_, reject) => {
+        concurrentTimeoutId = setTimeout(
+          () =>
+            reject(
+              new DOMException(
+                "refreshSession timed out waiting for lock",
+                "AbortError",
               ),
-            10_000,
-          ),
-        ),
-      ]);
+            ),
+          10_000,
+        );
+      });
+      return Promise.race([this._refreshInflight, concurrentTimeout]).finally(
+        () => clearTimeout(concurrentTimeoutId),
+      );
     }
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
