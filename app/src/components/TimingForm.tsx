@@ -347,7 +347,17 @@ function TimingFormComponent(
   };
 
   const updateQAHours = (qaName: string, categoryId: string, value: string) => {
-    const filteredValue = value.replace(/[^0-9]/g, "");
+    // Allow digits and one decimal point (max 2 decimal places) so that
+    // ClickUp-synced values (e.g. 20.88) can be viewed and edited without
+    // losing the decimal part. The DB column is NUMERIC(10,2).
+    const filteredValue = value
+      .replace(/[^0-9.]/g, "")         // strip non-digit/non-dot
+      .replace(/(\.[0-9]{0,2}).*/, "$1") // keep at most 2 decimal places
+      .replace(/^\./, "");              // strip leading dot
+    // Prevent multiple dots: if user types a second dot, ignore it
+    const normalized = filteredValue.split(".").length > 2
+      ? filteredValue.slice(0, filteredValue.lastIndexOf("."))
+      : filteredValue;
     const key = `${qaName}_${categoryId}`;
 
     if (filteredValue !== "") {
@@ -361,7 +371,7 @@ function TimingFormComponent(
     }
 
     setErrors((prev) => ({ ...prev, [key]: "" }));
-    const hours = filteredValue === "" ? 0 : parseInt(filteredValue, 10);
+    const hours = normalized === "" ? 0 : parseFloat(normalized);
 
     setFormData((prev) => ({
       ...prev,
@@ -895,7 +905,7 @@ function TimingFormComponent(
                                 id={fieldId}
                                 name={fieldId}
                                 type="text"
-                                inputMode="numeric"
+                                inputMode="decimal"
                                 value={catHours === 0 ? "" : catHours}
                                 onChange={(ev) =>
                                   updateQAHours(
@@ -905,8 +915,10 @@ function TimingFormComponent(
                                   )
                                 }
                                 onKeyPress={(ev) => {
-                                  if (!/[0-9]/.test(ev.key))
-                                    ev.preventDefault();
+                                  // Allow digits and one decimal point
+                                  if (!/[0-9.]/.test(ev.key)) ev.preventDefault();
+                                  // Block second dot
+                                  if (ev.key === "." && (ev.currentTarget as HTMLInputElement).value.includes(".")) ev.preventDefault();
                                 }}
                                 onBlur={(ev) => {
                                   if (ev.target.value === "") {

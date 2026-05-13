@@ -132,7 +132,9 @@ export async function POST(request: NextRequest) {
           entryTotal += hours as number;
         }
 
-        if (entryTotal === 0 && !body.for_sync) {
+        if (entryTotal === 0 && body.for_sync !== true) {
+          // body.for_sync must be strictly boolean true; a string "true" or any
+          // other truthy value does NOT bypass the zero-hours validation.
           throw new Error(
             `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
           );
