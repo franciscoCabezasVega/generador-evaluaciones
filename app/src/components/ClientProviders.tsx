@@ -17,9 +17,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handler = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
+      // DOMException (lanzado por fetchAuth.ts para lock timeouts) no hereda
+      // de Error en todos los entornos — comprobamos ambos tipos.
       const message =
-        reason instanceof Error
-          ? reason.message
+        reason instanceof Error || reason instanceof DOMException
+          ? (reason as { message: string }).message
           : typeof reason === "string"
             ? reason
             : "";

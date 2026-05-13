@@ -165,23 +165,19 @@ function TimingFormComponent(
 
   // Agregar QA al timing y sincronizar con la tarea
   const addQA = async (qaName: string) => {
+    // Compute everything from formData BEFORE calling setFormData so no
+    // mutable side-effects run inside the updater (updaters can double-fire
+    // in React StrictMode / concurrent rendering).
     if (formData.qa_entries.some((e) => e.qa_name === qaName)) return;
-    let taskIdToSync: string | null = null;
-    let nextQaNames: string[] | null = null;
-    let didAdd = false;
-    setFormData((prev) => {
-      if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
-      const nextEntries = [
-        ...prev.qa_entries,
-        { qa_name: qaName, hours_by_category: {}, isExpanded: true },
-      ];
-      didAdd = true;
-      taskIdToSync = prev.task_id || null;
-      nextQaNames = nextEntries.map((e) => e.qa_name);
-      return { ...prev, qa_entries: nextEntries };
-    });
+    const taskIdToSync = formData.task_id || null;
+    const nextEntries = [
+      ...formData.qa_entries,
+      { qa_name: qaName, hours_by_category: {}, isExpanded: true },
+    ];
+    const nextQaNames = nextEntries.map((e) => e.qa_name);
+    setFormData((prev) => ({ ...prev, qa_entries: nextEntries }));
     setQaDropdownOpen(false);
-    if (onQAChange && didAdd && taskIdToSync && nextQaNames) {
+    if (onQAChange && taskIdToSync) {
       setSyncingQA(true);
       try {
         await onQAChange(taskIdToSync, nextQaNames);
@@ -200,35 +196,26 @@ function TimingFormComponent(
 
   // Quitar QA del timing y sincronizar con la tarea
   const removeQA = async (qaName: string) => {
-    let taskIdToSync: string | null = null;
-    let nextQaNames: string[] | null = null;
-    let removedEntry: { qa_name: string; hours_by_category: Record<string, number>; isExpanded: boolean } | null = null;
-    let removedIndex = -1;
-    let didRemove = false;
-    setFormData((prev) => {
-      removedIndex = prev.qa_entries.findIndex((e) => e.qa_name === qaName);
-      if (removedIndex === -1) return prev;
-      removedEntry = prev.qa_entries[removedIndex];
-      const nextEntries = prev.qa_entries.filter((e) => e.qa_name !== qaName);
-      didRemove = true;
-      taskIdToSync = prev.task_id || null;
-      nextQaNames = nextEntries.map((e) => e.qa_name);
-      return { ...prev, qa_entries: nextEntries };
-    });
-    if (onQAChange && didRemove && taskIdToSync && nextQaNames) {
+    // Same compute-first pattern as addQA — no side-effects inside updater.
+    const removedIndex = formData.qa_entries.findIndex((e) => e.qa_name === qaName);
+    if (removedIndex === -1) return;
+    const removedEntry = formData.qa_entries[removedIndex];
+    const taskIdToSync = formData.task_id || null;
+    const nextEntries = formData.qa_entries.filter((e) => e.qa_name !== qaName);
+    const nextQaNames = nextEntries.map((e) => e.qa_name);
+    setFormData((prev) => ({ ...prev, qa_entries: nextEntries }));
+    if (onQAChange && taskIdToSync) {
       setSyncingQA(true);
       try {
         await onQAChange(taskIdToSync, nextQaNames);
       } catch (error) {
         // Rollback if backend rejected the change
-        if (removedEntry && removedIndex >= 0) {
-          setFormData((prev) => {
-            if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
-            const restored = [...prev.qa_entries];
-            restored.splice(removedIndex, 0, removedEntry!);
-            return { ...prev, qa_entries: restored };
-          });
-        }
+        setFormData((prev) => {
+          if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
+          const restored = [...prev.qa_entries];
+          restored.splice(removedIndex, 0, removedEntry);
+          return { ...prev, qa_entries: restored };
+        });
         throw error;
       } finally {
         setSyncingQA(false);

@@ -157,15 +157,19 @@ export function useSafeAuthFetch() {
           throw error instanceof Error ? error : new Error(String(error));
         }
 
-        // Normalizar: tanto DOMException como Error con name="AbortError"
+        // Normalizar: tanto DOMException como Error con name="AbortError".
+        // DOMException no hereda de Error en todos los entornos (Node <18, JSDOM),
+        // por lo que comprobamos ambos tipos explícitamente.
+        const isErrorLike = error instanceof Error || error instanceof DOMException;
         const isAbortError =
-          error instanceof Error && error.name === "AbortError";
+          isErrorLike && (error as { name: string }).name === "AbortError";
 
         // getSession lock timeout — verificar ANTES del check de caller abort
         // para que el mensaje crudo nunca llegue a la UI.
+        // fetchAuth.ts lanza: new DOMException("getSession timed out...", "AbortError")
         if (
-          error instanceof Error &&
-          error.message.includes("getSession timed out")
+          isErrorLike &&
+          (error as { message: string }).message?.includes("getSession timed out")
         ) {
           const SESSION_LOCK_MAX_RETRIES = 3;
           if (retryCount < SESSION_LOCK_MAX_RETRIES) {
