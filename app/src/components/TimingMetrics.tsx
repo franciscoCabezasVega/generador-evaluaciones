@@ -887,6 +887,128 @@ interface QAEfficiencyChartProps extends QATimingMetricsProps {
   tasks?: Task[];
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Análisis de cumplimiento vs talla camiseta + justificación por categorías
+// ──────────────────────────────────────────────────────────────────────────
+
+type ComplianceLevel = "ok" | "over";
+
+interface TaskComplianceAnalysis {
+  level: ComplianceLevel;
+  badgeLabel: string;
+  badgeClass: string;
+  summary: string;
+  reasons: string[];
+}
+
+/**
+ * Construye el análisis de cumplimiento de una tarea respecto al rango
+ * esperado de su talla camiseta y enumera los factores (on hold, retesting,
+ * waiting dev fixes, clarificaciones, etc.) que ayudan a explicar el tiempo
+ * invertido por el QA.
+ */
+function buildTaskAnalysis(
+  totalHours: number,
+  hoursByCategory: Record<string, number>,
+  expectedMin: number,
+  expectedMax: number,
+  slugToId: Record<string, string>,
+  categoryNameById: Record<string, string>,
+): TaskComplianceAnalysis {
+  // 1) Cumplimiento vs talla
+  let level: ComplianceLevel;
+  let badgeLabel: string;
+  let badgeClass: string;
+  let summary: string;
+
+  const hasEstimate = expectedMax > 0;
+  const fmt = (h: number) => formatTime(h);
+  const rangeLabel = hasEstimate
+    ? `${fmt(expectedMin)}–${fmt(expectedMax)}`
+    : "sin rango configurado";
+
+  if (!hasEstimate || totalHours <= expectedMax) {
+    level = "ok";
+    badgeLabel = "Dentro de lo estimado";
+    badgeClass = "bg-green-50 text-green-700 border-green-200";
+    summary = hasEstimate
+      ? `Cumplió con la estimación: invirtió ${fmt(totalHours)} dentro del rango esperado de ${rangeLabel}.`
+      : `No hay rango de horas configurado para esta talla; el QA invirtió ${fmt(totalHours)}.`;
+  } else {
+    level = "over";
+    badgeLabel = "Excede lo estimado";
+    badgeClass = "bg-red-50 text-red-700 border-red-200";
+    summary = `Excede el estimado: invirtió ${fmt(totalHours)} contra un máximo esperado de ${fmt(expectedMax)} (excedió ${fmt(totalHours - expectedMax)}).`;
+  }
+
+  // 2) Justificación por categorías no productivas
+  // Etiqueta amigable por slug; si la categoría existe en el catálogo, se
+  // antepone en la explicación.
+  const factors: { slug: string; explanation: (h: string, name: string) => string }[] = [
+    {
+      slug: "qa_on_hold",
+      explanation: (h, name) =>
+        `Permaneció ${h} en "${name}" — la tarea estuvo en pausa esperando definición o desbloqueo.`,
+    },
+    {
+      slug: "waiting_development_fixes",
+      explanation: (h, name) =>
+        `${h} en "${name}" — el QA estuvo a la espera de correcciones del equipo de desarrollo.`,
+    },
+    {
+      slug: "qa_retesting",
+      explanation: (h, name) =>
+        `${h} en "${name}" — requirió ciclos adicionales de re-test, lo que incrementó el tiempo total.`,
+    },
+    {
+      slug: "qa_ready_for_testing",
+      explanation: (h, name) =>
+        `${h} en "${name}" — la tarea estuvo re-encolada esperando que el QA pudiera retomarla.`,
+    },
+    {
+      slug: "clarification",
+      explanation: (h, name) =>
+        `${h} en "${name}" — se invirtió tiempo aclarando requisitos o criterios de aceptación.`,
+    },
+    {
+      slug: "waiting_environment",
+      explanation: (h, name) =>
+        `${h} en "${name}" — hubo demoras por disponibilidad de ambientes.`,
+    },
+    {
+      slug: "qa_fixed",
+      explanation: (h, name) =>
+        `${h} en "${name}" — tiempo asociado a correcciones aplicadas tras el reporte de QA.`,
+    },
+  ];
+
+  const reasons: string[] = [];
+  // Umbral mínimo para reportar (evita ruido por minutos sueltos)
+  const MIN_REPORTABLE_HOURS = 0.5;
+
+  for (const f of factors) {
+    const id = slugToId[f.slug];
+    if (!id) continue;
+    const hours = Number(hoursByCategory?.[id] ?? 0);
+    if (hours < MIN_REPORTABLE_HOURS) continue;
+    const name = categoryNameById[id] ?? f.slug;
+    reasons.push(f.explanation(fmt(hours), name));
+  }
+
+  // Si no hubo desviación y tampoco hay factores, agregamos un mensaje neutro
+  if (reasons.length === 0 && level === "ok") {
+    reasons.push(
+      "No se registraron tiempos relevantes en estados no productivos (on hold, retesting, etc.).",
+    );
+  } else if (reasons.length === 0 && level === "over") {
+    reasons.push(
+      "No se registró tiempo en estados no productivos que justifique el exceso; revisar la complejidad asignada o la cobertura de pruebas.",
+    );
+  }
+
+  return { level, badgeLabel, badgeClass, summary, reasons };
+}
+
 export function QAEfficiencyChart({
   qaMetrics,
   loading = false,
@@ -894,11 +1016,19 @@ export function QAEfficiencyChart({
   tasks = [],
 }: QAEfficiencyChartProps) {
   const [expandedQA, setExpandedQA] = useState<string | null>(null);
-  const { timingCategories } = useCatalogData();
+  const { timingCategories, complexities } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
   const slugToId = timingCategories.reduce(
     (a, c) => {
       a[c.slug] = c.id;
+      return a;
+    },
+    {} as Record<string, string>,
+  );
+  const complexityMap = new Map(complexities.map((c) => [c.name, c]));
+  const categoryNameById = timingCategories.reduce(
+    (a, c) => {
+      a[c.id] = c.name;
       return a;
     },
     {} as Record<string, string>,
@@ -1141,14 +1271,26 @@ export function QAEfficiencyChart({
                                 </tr>
                               </thead>
                               <tbody>
-                                {taskDetails.map((detail, taskIdx) => (
+                                {taskDetails.map((detail, taskIdx) => {
+                                  const complexity = complexityMap.get(
+                                    detail.tshirtSize,
+                                  );
+                                  const analysis = buildTaskAnalysis(
+                                    detail.total,
+                                    detail.hours_by_category,
+                                    complexity?.min_hours ?? 0,
+                                    complexity?.max_hours ?? 0,
+                                    slugToId,
+                                    categoryNameById,
+                                  );
+                                  const rowBg =
+                                    taskIdx % 2 === 0
+                                      ? "bg-[#1a2235]"
+                                      : "bg-[#151e2f]";
+                                  return (
+                                  <React.Fragment key={detail.taskId}>
                                   <tr
-                                    key={detail.taskId}
-                                    className={
-                                      taskIdx % 2 === 0
-                                        ? "bg-[#1a2235] text-slate-200 border-b border-white/5"
-                                        : "bg-[#151e2f] text-slate-200 border-b border-white/5"
-                                    }
+                                    className={`${rowBg} text-slate-200 border-b border-white/5`}
                                   >
                                     <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
                                       {taskIdx + 1}
@@ -1203,7 +1345,39 @@ export function QAEfficiencyChart({
                                       {formatTime(Number(detail.total))}
                                     </td>
                                   </tr>
-                                ))}
+                                  <tr className={`${rowBg} border-b-2 border-slate-800/60`}>
+                                    <td
+                                      colSpan={5 + activeCategories.length}
+                                      className="px-4 pb-3 pt-1"
+                                    >
+                                      <div className="rounded-md border border-slate-700/60 bg-black/40 px-3 py-2">
+                                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                          <span className="text-[11px] uppercase tracking-wide text-slate-300/80 font-semibold">
+                                            Cumplimiento de talla
+                                            {detail.tshirtSize ? ` (${detail.tshirtSize})` : ""}:
+                                          </span>
+                                          <span
+                                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${analysis.badgeClass}`}
+                                          >
+                                            {analysis.badgeLabel}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-slate-200 leading-relaxed">
+                                          {analysis.summary}
+                                        </p>
+                                        {analysis.reasons.length > 0 && (
+                                          <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-300/90 list-disc pl-5">
+                                            {analysis.reasons.map((r, i) => (
+                                              <li key={i}>{r}</li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  </React.Fragment>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -1437,35 +1611,22 @@ interface SizeGroupData {
 
 function getDeviationLevel(
   totalHours: number,
-  expectedMin: number,
+  _expectedMin: number,
   expectedMax: number,
-): "under" | "normal" | "over" | "critical" {
-  if (totalHours < expectedMin * 0.5) return "under";
-  if (totalHours <= expectedMax) return "normal";
-  if (totalHours <= expectedMax * 1.5) return "over";
-  return "critical";
+): "ok" | "over" {
+  return totalHours <= expectedMax ? "ok" : "over";
 }
 
-function getDeviationBadge(level: "under" | "normal" | "over" | "critical") {
+function getDeviationBadge(level: "ok" | "over") {
   switch (level) {
-    case "under":
+    case "ok":
       return {
-        label: "Bajo esperado",
-        cls: "bg-blue-100 text-blue-700 border-blue-200",
-      };
-    case "normal":
-      return {
-        label: "Normal",
+        label: "Dentro de lo estimado",
         cls: "bg-green-100 text-green-700 border-green-200",
       };
     case "over":
       return {
-        label: "Sobre esperado",
-        cls: "bg-yellow-100 text-yellow-700 border-yellow-200",
-      };
-    case "critical":
-      return {
-        label: "Exceso significativo",
+        label: "Excede lo estimado",
         cls: "bg-red-100 text-red-700 border-red-200",
       };
   }
@@ -1596,7 +1757,7 @@ export function TshirtSizeComparison({
   if (groups.length === 0) return null;
 
   // Summary stats
-  const deviationCounts = { under: 0, normal: 0, over: 0, critical: 0 };
+  const deviationCounts = { ok: 0, over: 0 };
   for (const g of groups) {
     for (const e of g.entries) {
       deviationCounts[
@@ -1604,10 +1765,7 @@ export function TshirtSizeComparison({
       ]++;
     }
   }
-  const totalEntries = Object.values(deviationCounts).reduce(
-    (a, b) => a + b,
-    0,
-  );
+  const totalEntries = deviationCounts.ok + deviationCounts.over;
 
   return (
     <div className="space-y-6">
@@ -1623,30 +1781,18 @@ export function TshirtSizeComparison({
       </div>
 
       {/* Resumen general */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-center">
-          <p className="text-2xl font-bold text-blue-700">
-            {deviationCounts.under}
-          </p>
-          <p className="text-xs text-blue-600">Bajo esperado</p>
-        </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
           <p className="text-2xl font-bold text-green-700">
-            {deviationCounts.normal}
+            {deviationCounts.ok}
           </p>
-          <p className="text-xs text-green-600">Normal</p>
-        </div>
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-center">
-          <p className="text-2xl font-bold text-yellow-700">
-            {deviationCounts.over}
-          </p>
-          <p className="text-xs text-yellow-600">Sobre esperado</p>
+          <p className="text-xs text-green-600">Dentro de lo estimado</p>
         </div>
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center">
           <p className="text-2xl font-bold text-red-700">
-            {deviationCounts.critical}
+            {deviationCounts.over}
           </p>
-          <p className="text-xs text-red-600">Exceso significativo</p>
+          <p className="text-xs text-red-600">Excede lo estimado</p>
         </div>
       </div>
 
@@ -1660,26 +1806,13 @@ export function TshirtSizeComparison({
             <>
               <div
                 style={{
-                  width: `${(deviationCounts.under / totalEntries) * 100}%`,
-                }}
-                className="bg-blue-400 cursor-pointer hover:opacity-80 transition-opacity"
-                onMouseEnter={(e) =>
-                  handleBarTooltipShow(
-                    e,
-                    `Bajo esperado: ${deviationCounts.under} registros`,
-                  )
-                }
-                onMouseLeave={handleBarTooltipHide}
-              />
-              <div
-                style={{
-                  width: `${(deviationCounts.normal / totalEntries) * 100}%`,
+                  width: `${(deviationCounts.ok / totalEntries) * 100}%`,
                 }}
                 className="bg-green-400 cursor-pointer hover:opacity-80 transition-opacity"
                 onMouseEnter={(e) =>
                   handleBarTooltipShow(
                     e,
-                    `Normal: ${deviationCounts.normal} registros`,
+                    `Dentro de lo estimado: ${deviationCounts.ok} registros`,
                   )
                 }
                 onMouseLeave={handleBarTooltipHide}
@@ -1688,24 +1821,11 @@ export function TshirtSizeComparison({
                 style={{
                   width: `${(deviationCounts.over / totalEntries) * 100}%`,
                 }}
-                className="bg-yellow-400 cursor-pointer hover:opacity-80 transition-opacity"
-                onMouseEnter={(e) =>
-                  handleBarTooltipShow(
-                    e,
-                    `Sobre esperado: ${deviationCounts.over} registros`,
-                  )
-                }
-                onMouseLeave={handleBarTooltipHide}
-              />
-              <div
-                style={{
-                  width: `${(deviationCounts.critical / totalEntries) * 100}%`,
-                }}
                 className="bg-red-400 cursor-pointer hover:opacity-80 transition-opacity"
                 onMouseEnter={(e) =>
                   handleBarTooltipShow(
                     e,
-                    `Exceso significativo: ${deviationCounts.critical} registros`,
+                    `Excede lo estimado: ${deviationCounts.over} registros`,
                   )
                 }
                 onMouseLeave={handleBarTooltipHide}
@@ -1714,10 +1834,8 @@ export function TshirtSizeComparison({
           )}
         </div>
         <div className="flex justify-between mt-1 text-xs text-gray-500">
-          <span>Bajo esperado</span>
-          <span>Normal</span>
-          <span>Sobre esperado</span>
-          <span>Exceso significativo</span>
+          <span>Dentro de lo estimado</span>
+          <span>Excede lo estimado</span>
         </div>
       </div>
 
@@ -1827,13 +1945,7 @@ export function TshirtSizeComparison({
                         group.expectedMax,
                       );
                       const barColor =
-                        devLevel === "normal"
-                          ? "bg-green-500"
-                          : devLevel === "under"
-                            ? "bg-blue-500"
-                            : devLevel === "over"
-                              ? "bg-yellow-500"
-                              : "bg-red-500";
+                        devLevel === "ok" ? "bg-green-500" : "bg-red-500";
 
                       return (
                         <div key={qa.name} className="flex items-center gap-3">
@@ -1935,8 +2047,7 @@ export function TshirtSizeComparison({
                             este tipo de tarea.
                           </p>
                         )}
-                        {groupDevLevel === "over" ||
-                        groupDevLevel === "critical" ? (
+                        {groupDevLevel === "over" ? (
                           <p>
                             ⚠️ El promedio general{" "}
                             <strong className="text-red-700">
@@ -1945,14 +2056,6 @@ export function TshirtSizeComparison({
                             para complejidad {group.tshirtSize}. Considerar si
                             la complejidad asignada es correcta o si hay
                             factores que incrementan el tiempo de QA.
-                          </p>
-                        ) : groupDevLevel === "under" ? (
-                          <p>
-                            ✅ El equipo está completando estas tareas{" "}
-                            <strong className="text-blue-700">
-                              por debajo del tiempo estimado
-                            </strong>
-                            .
                           </p>
                         ) : (
                           <p>
@@ -1970,17 +2073,17 @@ export function TshirtSizeComparison({
 
                 {/* Tabla de detalle */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="min-w-max w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th
-                          className="text-left py-2 px-2 font-semibold text-gray-600"
+                          className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap"
                           title="Nombre del QA asignado a la tarea"
                         >
                           QA
                         </th>
                         <th
-                          className="text-left py-2 px-2 font-semibold text-gray-600"
+                          className="text-left py-2 px-3 font-semibold text-gray-600 whitespace-nowrap"
                           title="Nombre de la tarea con enlace al ticket"
                         >
                           Tarea
@@ -1988,20 +2091,20 @@ export function TshirtSizeComparison({
                         {activeCategories.map((cat) => (
                           <th
                             key={cat.id}
-                            className="text-center py-2 px-2 font-semibold text-gray-600"
+                            className="text-center py-2 px-3 font-semibold text-gray-600 whitespace-nowrap"
                             title={cat.name}
                           >
                             {cat.name}
                           </th>
                         ))}
                         <th
-                          className="text-center py-2 px-2 font-semibold text-gray-600"
+                          className="text-center py-2 px-3 font-semibold text-gray-600 whitespace-nowrap"
                           title="Total de horas invertidas por el QA en esta tarea"
                         >
                           Total
                         </th>
                         <th
-                          className="text-center py-2 px-2 font-semibold text-gray-600"
+                          className="text-center py-2 px-3 font-semibold text-gray-600 whitespace-nowrap"
                           title="Desviación respecto al rango esperado para esta complejidad"
                         >
                           Estado
@@ -2029,10 +2132,10 @@ export function TshirtSizeComparison({
                                 i % 2 === 0 ? "bg-gray-50" : "bg-white"
                               }
                             >
-                              <td className="py-1.5 px-2 font-medium text-gray-700">
+                              <td className="py-1.5 px-3 font-medium text-gray-700 whitespace-nowrap">
                                 {entry.qaName}
                               </td>
-                              <td className="py-1.5 px-2">
+                              <td className="py-1.5 px-3 whitespace-nowrap">
                                 {entry.taskLink ? (
                                   <a
                                     href={entry.taskLink}
@@ -2051,7 +2154,7 @@ export function TshirtSizeComparison({
                               {activeCategories.map((cat) => (
                                 <td
                                   key={cat.id}
-                                  className="py-1.5 px-2 text-center font-medium"
+                                  className="py-1.5 px-3 text-center font-medium whitespace-nowrap"
                                   style={{ color: cat.hex_color }}
                                 >
                                   {formatTime(Number(
@@ -2059,12 +2162,12 @@ export function TshirtSizeComparison({
                                   ))}
                                 </td>
                               ))}
-                              <td className="py-1.5 px-2 text-center font-bold text-gray-800">
+                              <td className="py-1.5 px-3 text-center font-bold text-gray-800 whitespace-nowrap">
                                 {formatTime(Number(entry.totalHours))}
                               </td>
-                              <td className="py-1.5 px-2 text-center">
+                              <td className="py-1.5 px-3 text-center whitespace-nowrap">
                                 <span
-                                  className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs font-semibold ${badge.cls}`}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.cls}`}
                                 >
                                   {badge.label}
                                 </span>
