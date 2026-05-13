@@ -20,6 +20,10 @@ export function SessionChecker() {
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCheckRef = useRef<number>(0);
   const isMountedRef = useRef(true);
+  // Circuit breaker: si el refresh falla N veces consecutivas, forzamos
+  // logout + redirect en vez de quedarnos en bucle infinito.
+  const consecutiveFailuresRef = useRef<number>(0);
+  const MAX_CONSECUTIVE_FAILURES = 2;
 
   useEffect(() => {
     return () => {
@@ -75,11 +79,41 @@ export function SessionChecker() {
           const refreshed = await authService.silentRefreshToken();
 
           if (!refreshed && isMountedRef.current) {
-            console.warn("SessionChecker: Token refresh failed, session lost");
+            consecutiveFailuresRef.current += 1;
+            console.warn(
+              `SessionChecker: Token refresh failed, session lost (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_FAILURES})`,
+            );
+
+            // Circuit breaker: tras N fallos consecutivos asumimos que la
+            // sesión está irrecuperable (lock atascado, refresh token
+            // revocado, red cortada permanentemente, etc.). Forzamos
+            // logout local + redirect al login para sacar al usuario del
+            // estado bloqueado en vez de seguir reintentando.
+            if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+              console.warn(
+                "SessionChecker: Max consecutive refresh failures reached, forcing re-login",
+              );
+              consecutiveFailuresRef.current = 0;
+              try {
+                await authService.clearSession("error");
+              } catch (signOutErr) {
+                console.error(
+                  "SessionChecker: signOut during recovery failed",
+                  signOutErr,
+                );
+              }
+              if (isMountedRef.current) {
+                router.push(
+                  "/auth/login?sessionExpired=true&reason=refresh_failed",
+                );
+              }
+            }
           } else if (refreshed && isMountedRef.current) {
+            consecutiveFailuresRef.current = 0;
             console.warn("SessionChecker: Token refreshed successfully");
           }
         } else if (isMountedRef.current) {
+          consecutiveFailuresRef.current = 0;
           console.warn("SessionChecker: Token validation passed");
         }
       } catch (error) {
@@ -108,7 +142,7 @@ export function SessionChecker() {
         checkIntervalRef.current = null;
       }
     };
-  }, [user?.id]);
+  }, [user?.id, router]);
 
   // Listener para detectar cuando storage es borrado (incluye limpieza manual del navegador)
   useEffect(() => {
