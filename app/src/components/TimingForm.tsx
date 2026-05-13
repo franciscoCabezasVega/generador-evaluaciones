@@ -166,44 +166,70 @@ function TimingFormComponent(
   // Agregar QA al timing y sincronizar con la tarea
   const addQA = async (qaName: string) => {
     if (formData.qa_entries.some((e) => e.qa_name === qaName)) return;
-    // Usar prev para evitar pisados por closures stale
+    let taskIdToSync: string | null = null;
+    let nextQaNames: string[] | null = null;
+    let didAdd = false;
     setFormData((prev) => {
       if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
-      return {
-        ...prev,
-        qa_entries: [
-          ...prev.qa_entries,
-          { qa_name: qaName, hours_by_category: {}, isExpanded: true },
-        ],
-      };
+      const nextEntries = [
+        ...prev.qa_entries,
+        { qa_name: qaName, hours_by_category: {}, isExpanded: true },
+      ];
+      didAdd = true;
+      taskIdToSync = prev.task_id || null;
+      nextQaNames = nextEntries.map((e) => e.qa_name);
+      return { ...prev, qa_entries: nextEntries };
     });
     setQaDropdownOpen(false);
-    if (onQAChange && formData.task_id) {
-      const currentNames = formData.qa_entries.map((e) => e.qa_name);
-      if (!currentNames.includes(qaName)) {
-        setSyncingQA(true);
-        try {
-          await onQAChange(formData.task_id, [...currentNames, qaName]);
-        } finally {
-          setSyncingQA(false);
-        }
+    if (onQAChange && didAdd && taskIdToSync && nextQaNames) {
+      setSyncingQA(true);
+      try {
+        await onQAChange(taskIdToSync, nextQaNames);
+      } catch (error) {
+        // Rollback if backend rejected the change
+        setFormData((prev) => ({
+          ...prev,
+          qa_entries: prev.qa_entries.filter((e) => e.qa_name !== qaName),
+        }));
+        throw error;
+      } finally {
+        setSyncingQA(false);
       }
     }
   };
 
   // Quitar QA del timing y sincronizar con la tarea
   const removeQA = async (qaName: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      qa_entries: prev.qa_entries.filter((e) => e.qa_name !== qaName),
-    }));
-    if (onQAChange && formData.task_id) {
-      const newNames = formData.qa_entries
-        .filter((e) => e.qa_name !== qaName)
-        .map((e) => e.qa_name);
+    let taskIdToSync: string | null = null;
+    let nextQaNames: string[] | null = null;
+    let removedEntry: { qa_name: string; hours_by_category: Record<string, number>; isExpanded: boolean } | null = null;
+    let removedIndex = -1;
+    let didRemove = false;
+    setFormData((prev) => {
+      removedIndex = prev.qa_entries.findIndex((e) => e.qa_name === qaName);
+      if (removedIndex === -1) return prev;
+      removedEntry = prev.qa_entries[removedIndex];
+      const nextEntries = prev.qa_entries.filter((e) => e.qa_name !== qaName);
+      didRemove = true;
+      taskIdToSync = prev.task_id || null;
+      nextQaNames = nextEntries.map((e) => e.qa_name);
+      return { ...prev, qa_entries: nextEntries };
+    });
+    if (onQAChange && didRemove && taskIdToSync && nextQaNames) {
       setSyncingQA(true);
       try {
-        await onQAChange(formData.task_id, newNames);
+        await onQAChange(taskIdToSync, nextQaNames);
+      } catch (error) {
+        // Rollback if backend rejected the change
+        if (removedEntry && removedIndex >= 0) {
+          setFormData((prev) => {
+            if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
+            const restored = [...prev.qa_entries];
+            restored.splice(removedIndex, 0, removedEntry!);
+            return { ...prev, qa_entries: restored };
+          });
+        }
+        throw error;
       } finally {
         setSyncingQA(false);
       }
@@ -978,7 +1004,8 @@ function TimingFormComponent(
           disabled={
             isLoading ||
             activeCategories.length === 0 ||
-            formData.qa_entries.length === 0
+            formData.qa_entries.length === 0 ||
+            grandTotal === 0
           }
           className="flex-1 bg-blue-500 hover:bg-blue-600"
           title={

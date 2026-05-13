@@ -1,9 +1,15 @@
--- Migration: auto-transfer timing entries when removing a QA from a task
--- Previously the RPC blocked deletion of task_qa rows that had timing_qa_entries.
--- Now it auto-transfers those entries to the first remaining QA when possible.
--- If no QA remains, the related timing_qa_category_hours and timing_qa_entries
--- are deleted, so removing a QA always succeeds but may delete timing data.
+-- Migration: add unique constraint on timing_qa_entries(timing_id, task_qa_id)
+-- Ensures idempotency when the RPC inserts entries for newly added QA members.
+-- Without this constraint, concurrent RPC calls could create duplicate rows.
+-- Also rewrites the affected INSERT in update_task_with_squads to use
+-- ON CONFLICT DO NOTHING instead of NOT EXISTS for true atomic idempotency.
 
+ALTER TABLE timing_qa_entries
+  ADD CONSTRAINT timing_qa_entries_timing_task_qa_unique
+  UNIQUE (timing_id, task_qa_id);
+
+-- Redefine the RPC to replace NOT EXISTS with ON CONFLICT DO NOTHING
+-- for the timing_qa_entries insert, making it concurrency-safe.
 CREATE OR REPLACE FUNCTION public.update_task_with_squads(p_id uuid, p_input jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -65,6 +71,19 @@ begin
     where not exists (
       select 1 from task_qa tq where tq.task_id = p_id and tq.qa_name = qa_name_val
     );
+
+    -- 1b. For newly added QA that are now in task_qa, create timing_qa_entries
+    --     for every existing task_timings row so ClickUp sync can write hours.
+    --     ON CONFLICT DO NOTHING uses the unique constraint added in this migration
+    --     to make the insert truly idempotent under concurrent calls.
+    insert into timing_qa_entries (timing_id, task_qa_id)
+    select tt.id, tq.id
+    from task_timings tt
+    cross join task_qa tq
+    where tt.task_id = p_id
+      and tq.task_id = p_id
+      and tq.qa_name = any(v_new_qa_names)
+    on conflict (timing_id, task_qa_id) do nothing;
 
     -- 2. For each QA being removed that still has timing entries:
     --    transfer their entries to the first remaining QA, or delete if none.

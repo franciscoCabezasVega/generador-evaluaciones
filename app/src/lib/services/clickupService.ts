@@ -38,10 +38,6 @@ const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
 /**
  * Maps ClickUp status names (lowercase) to timing_categories slugs.
- * Adjust to match your team's actual ClickUp workflow statuses.
- */
-/**
- * Maps ClickUp status names (lowercase) to timing_categories slugs.
  * Only QA-prefixed statuses are mapped — these match the actual workflow
  * statuses used in ClickUp QA boards.
  */

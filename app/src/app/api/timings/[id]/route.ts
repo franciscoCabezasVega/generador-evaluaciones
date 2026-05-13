@@ -84,8 +84,11 @@ export async function PUT(
       if (!Number.isFinite(value)) {
         throw new Error(`${fieldName} must be a finite number`);
       }
+      if (!Number.isInteger(value)) {
+        throw new Error(`${fieldName} must be a non-negative integer`);
+      }
       if (value < 0) {
-        throw new Error(`${fieldName} must be a non-negative number`);
+        throw new Error(`${fieldName} must be a non-negative integer`);
       }
     };
 

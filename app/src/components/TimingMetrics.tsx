@@ -401,7 +401,7 @@ export function TimingMetricsComparisonChart({
       <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
         {metrics.map((metric) => {
           const effectiveId = slugToId["effective_testing"];
-          const retestId = slugToId["retest"];
+          const retestId = slugToId["qa_ready_for_testing"];
           const avgEffective = effectiveId
             ? (metric.averages_by_category?.[effectiveId] ?? 0)
             : 0;
@@ -475,7 +475,7 @@ export function SquadTimingSummaryCard({
   );
 
   const effectiveTestingId = slugToId["effective_testing"];
-  const retestId = slugToId["retest"];
+  const retestId = slugToId["qa_ready_for_testing"];
   const totalEffective = effectiveTestingId
     ? (metric.totals_by_category?.[effectiveTestingId] ?? 0)
     : 0;
@@ -1058,8 +1058,8 @@ export function QAEfficiencyChart({
                         )}
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-red-600 whitespace-nowrap">
-                        {formatTime(slugToId["retest"]
-                          ? (qa.totals_by_category?.[slugToId["retest"]] ?? 0)
+                        {formatTime(slugToId["qa_ready_for_testing"]
+                          ? (qa.totals_by_category?.[slugToId["qa_ready_for_testing"]] ?? 0)
                           : 0
                         )}
                       </td>

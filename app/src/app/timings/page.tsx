@@ -648,11 +648,19 @@ export default function TimingsPage() {
           safeFetch={safeFetch}
           lockedTask={registeringTask ?? undefined}
           onQAChange={async (taskId: string, qaNames: string[]) => {
-            await safeFetch(`/api/tasks/${taskId}`, {
+            const response = await safeFetch(`/api/tasks/${taskId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ assigned_qa: qaNames }),
             });
+            if (!response.ok) {
+              let errorMessage = "No se pudo actualizar el QA asignado.";
+              try {
+                const errorData = await response.json() as { error?: string };
+                if (errorData?.error) errorMessage = errorData.error;
+              } catch { /* ignore parse error */ }
+              throw new Error(errorMessage);
+            }
           }}
           onCreateForSync={!editingTiming ? handleCreateForSync : undefined}
         />

@@ -17,6 +17,16 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Verify the task exists and belongs to this user (RLS-enforced)
+  const { data: taskRow, error: taskErr } = await authCtx.supabase
+    .from("tasks")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+  if (taskErr || !taskRow) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
+
   const supabase = getServiceClient();
   if (!supabase) {
     return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
@@ -58,6 +68,16 @@ export async function POST(
   const authCtx = await getAuthContext(request);
   if (!authCtx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Verify the task exists and belongs to this user (RLS-enforced)
+  const { data: taskRowPost, error: taskErrPost } = await authCtx.supabase
+    .from("tasks")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+  if (taskErrPost || !taskRowPost) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
   let body: unknown;
