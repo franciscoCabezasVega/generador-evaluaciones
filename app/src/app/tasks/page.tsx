@@ -65,7 +65,10 @@ function ClickUpSyncPanel({
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<ClickUpSyncInfo | null>(null);
-  const [hasTiming, setHasTiming] = useState(false);
+  // null = timing check not yet resolved (loading or network failure)
+  // true  = timing row confirmed to exist for this task/month/year
+  // false = confirmed no timing row exists
+  const [hasTiming, setHasTiming] = useState<boolean | null>(null);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -90,9 +93,16 @@ function ClickUpSyncPanel({
           if (res.ok) {
             const data = await res.json() as unknown[];
             setHasTiming(Array.isArray(data) && data.length > 0);
+          } else {
+            // Non-2xx: leave as null (unknown) — handleSync will guard
+            setHasTiming(null);
           }
         })
-        .catch(() => null),
+        .catch(() => {
+          // Network/timeout failure: keep null so handleSync blocks auto-create
+          // rather than attempting to create a potentially duplicate timing.
+          if (!cancelled) setHasTiming(null);
+        }),
     ]).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,6 +114,14 @@ function ClickUpSyncPanel({
 
     setSyncing(true);
     setMsg(null);
+
+    // Guard: if the timing-existence check didn't resolve (network failure),
+    // block auto-create to avoid generating a duplicate timing row.
+    if (hasTiming === null) {
+      setMsg({ type: "error", text: "No se pudo verificar si existe un registro de timing. Recarga la página e intenta de nuevo." });
+      setSyncing(false);
+      return;
+    }
 
     // Si no hay timing, crearlo automáticamente con las horas en 0 (for_sync)
     if (!hasTiming) {

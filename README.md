@@ -554,7 +554,11 @@ app/
 │           ├── 20260516000000_clickup_singleton_and_cleanup.sql  # Singleton constraint en clickup_settings + drop índice duplicado
 │           ├── 20260517000000_rename_retest_slug.sql              # Renombra slug `retest` → `qa_ready_for_testing` (semántica correcta)
 │           ├── 20260518000000_rpc_qa_auto_transfer_on_remove.sql  # RPC: al quitar un QA, transfiere sus timing_qa_entries al primer QA restante
-│           └── 20260519000000_rpc_create_timing_qa_entries_on_qa_add.sql # RPC: al añadir un QA, crea entradas en timings existentes para sync ClickUp
+│           ├── 20260519000000_rpc_create_timing_qa_entries_on_qa_add.sql # RPC: al añadir un QA, crea entradas en timings existentes para sync ClickUp
+│           ├── 20260520000000_unique_constraint_timing_qa_entries.sql    # UNIQUE(timing_id, task_qa_id) + fix transfer de horas al quitar QA con reemplazo
+│           ├── 20260521000000_alter_timing_hours_to_numeric.sql          # ALTER COLUMN hours TYPE NUMERIC(10,2) para preservar decimales de ClickUp sync
+│           ├── 20260522000000_add_missing_timing_categories.sql          # Categorías faltantes: qa_retesting, qa_on_hold, qa_fixed, qa_sin_asignar, qa_review_client
+│           └── 20260523000000_fix_timings_view_total_hours_numeric.sql   # Recrear view task_timings_with_totals sin cast ::INTEGER (preserva decimales)
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright

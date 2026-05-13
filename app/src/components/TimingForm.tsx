@@ -740,7 +740,7 @@ function TimingFormComponent(
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => addQA(m.name)}
+                          onClick={() => { void addQA(m.name); }}
                           className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         >
                           {m.name}
@@ -762,7 +762,7 @@ function TimingFormComponent(
                   {entry.qa_name}
                   <button
                     type="button"
-                    onClick={() => removeQA(entry.qa_name)}
+                    onClick={() => { void removeQA(entry.qa_name); }}
                     className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
                     title={`Quitar ${entry.qa_name}`}
                     aria-label={`Quitar ${entry.qa_name} de los QA asignados`}
