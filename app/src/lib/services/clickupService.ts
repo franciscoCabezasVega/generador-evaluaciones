@@ -51,8 +51,10 @@ const STATUS_CATEGORY_MAP: Record<string, string> = {
   "qa - sin asignar":         "qa_sin_asignar",
   "qa - review client":       "qa_review_client",
   "qa - returned to dev":     "waiting_development_fixes",
-  "qa - clarification":       "clarification",
-  "qa - waiting environment": "waiting_environment",
+  "qa - clarification":         "clarification",
+  "qa - clarificaciones":       "clarification",
+  "qa - waiting environment":   "waiting_environment",
+  "qa - en espera de ambiente": "waiting_environment",
 
   // ── Tareas sin prefijo (statuses bare) ────────────────────────────────────
   "in testing":               "effective_testing",
