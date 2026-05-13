@@ -94,7 +94,8 @@ export const authService = {
 
   /**
    * Limpiar sesión completamente y redirigir
-   * @param reason - Razón por la que se expira: 'timeout' | 'inactive' | 'error' | 'user-logout' | false (legacy)
+   * @param reason - Razón por la que se expira:
+   *   'timeout' | 'inactive' | 'error' | 'user-logout' | 'refresh_failed' | boolean (legacy, true = inactive)
    * @returns Promise que se resuelve después de la limpieza (antes del redirect)
    */
   async clearSession(

@@ -12,6 +12,7 @@ type SessionExpiredReason =
   | "inactive"
   | "error"
   | "refresh_failed"
+  | "storage_cleared"
   | "unknown";
 
 const REMEMBER_ME_KEY = "login_remembered_email";

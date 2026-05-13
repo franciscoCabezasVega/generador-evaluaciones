@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/lib/services/authService";
 
+// Circuit breaker: número máximo de fallos consecutivos de refresh antes de
+// forzar re-login. Definido en scope de módulo para evitar closure stale
+// dentro del useEffect.
+const MAX_CONSECUTIVE_FAILURES = 2;
+
 /**
  * Componente que valida la sesión periódicamente en background
  * No renderiza nada, solo mantiene tokens frescos
@@ -20,10 +25,8 @@ export function SessionChecker() {
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCheckRef = useRef<number>(0);
   const isMountedRef = useRef(true);
-  // Circuit breaker: si el refresh falla N veces consecutivas, forzamos
-  // logout + redirect en vez de quedarnos en bucle infinito.
+  // Contador de fallos consecutivos de refresh (circuit breaker).
   const consecutiveFailuresRef = useRef<number>(0);
-  const MAX_CONSECUTIVE_FAILURES = 2;
 
   useEffect(() => {
     return () => {
@@ -98,14 +101,9 @@ export function SessionChecker() {
                 "SessionChecker: Max consecutive refresh failures reached, forcing re-login",
               );
               consecutiveFailuresRef.current = 0;
-              try {
-                await authService.clearSession("refresh_failed");
-              } catch (signOutErr) {
-                console.error(
-                  "SessionChecker: clearSession during recovery failed",
-                  signOutErr,
-                );
-              }
+              // clearSession ya atrapa sus propios errores y fuerza el
+              // redirect — no necesitamos un try/catch adicional aquí.
+              await authService.clearSession("refresh_failed");
             }
           } else if (refreshed && isMountedRef.current) {
             consecutiveFailuresRef.current = 0;
