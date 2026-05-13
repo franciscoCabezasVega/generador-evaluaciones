@@ -253,20 +253,38 @@ export async function syncTaskTimings(
     //   task_timings → timing_qa_entries → timing_qa_category_hours
     const slugs = Object.keys(categoryHours);
     if (slugs.length > 0) {
-      // 4a. Find the MOST RECENT timing row for this task.
-      //     ClickUp time_in_status is a cumulative total (not per-month), so
-      //     writing to ALL timing rows would multiply the same total across
-      //     every month record, duplicating hours in the UI.
-      const { data: latestTiming, error: timingError } = await supabase
-        .from("task_timings")
-        .select("id")
-        .eq("task_id", internalTaskId)
-        .order("created_at", { ascending: false })
-        .limit(1)
+      // 4a. Find the timing row for this task's evaluation month/year.
+      //     ClickUp time_in_status is cumulative (not per-month), so we must
+      //     write to exactly one row. We use the task's own month/year rather
+      //     than "most recently created" to avoid writing to the wrong row
+      //     when a user backfills timings out of chronological order.
+      //     (oldest matching row preferred: preserves the original over backfill)
+      const { data: taskMeta, error: taskMetaError } = await supabase
+        .from("tasks")
+        .select("month, year")
+        .eq("id", internalTaskId)
         .maybeSingle();
 
-      if (timingError) {
-        throw new Error(`DB error reading task_timings: ${timingError.message}`);
+      if (taskMetaError) {
+        throw new Error(`DB error reading task: ${taskMetaError.message}`);
+      }
+
+      let latestTiming: { id: string } | null = null;
+      if (taskMeta) {
+        const { data: tData, error: tError } = await supabase
+          .from("task_timings")
+          .select("id")
+          .eq("task_id", internalTaskId)
+          .eq("month", taskMeta.month)
+          .eq("year", taskMeta.year)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (tError) {
+          throw new Error(`DB error reading task_timings: ${tError.message}`);
+        }
+        latestTiming = tData;
       }
 
       if (latestTiming) {

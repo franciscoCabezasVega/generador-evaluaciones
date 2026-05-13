@@ -165,17 +165,25 @@ function TimingFormComponent(
 
   // Agregar QA al timing y sincronizar con la tarea
   const addQA = async (qaName: string) => {
-    // Compute everything from formData BEFORE calling setFormData so no
-    // mutable side-effects run inside the updater (updaters can double-fire
-    // in React StrictMode / concurrent rendering).
     if (formData.qa_entries.some((e) => e.qa_name === qaName)) return;
     const taskIdToSync = formData.task_id || null;
-    const nextEntries = [
-      ...formData.qa_entries,
-      { qa_name: qaName, hours_by_category: {}, isExpanded: true },
-    ];
-    const nextQaNames = nextEntries.map((e) => e.qa_name);
-    setFormData((prev) => ({ ...prev, qa_entries: nextEntries }));
+    // nextQaNames for onQAChange: derived from snapshot. Safe because the
+    // dropdown closes after each add, so concurrent rapid adds via UI are
+    // not possible and the async await serialises calls naturally.
+    const nextQaNames = [...formData.qa_entries.map((e) => e.qa_name), qaName];
+    // State update uses prev.qa_entries (not the closed-over snapshot) so
+    // it composes correctly under React state batching (Round 4 fix).
+    // No mutable variables are assigned inside the updater (Round 3 fix).
+    setFormData((prev) => {
+      if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
+      return {
+        ...prev,
+        qa_entries: [
+          ...prev.qa_entries,
+          { qa_name: qaName, hours_by_category: {}, isExpanded: true },
+        ],
+      };
+    });
     setQaDropdownOpen(false);
     if (onQAChange && taskIdToSync) {
       setSyncingQA(true);
@@ -201,9 +209,14 @@ function TimingFormComponent(
     if (removedIndex === -1) return;
     const removedEntry = formData.qa_entries[removedIndex];
     const taskIdToSync = formData.task_id || null;
-    const nextEntries = formData.qa_entries.filter((e) => e.qa_name !== qaName);
-    const nextQaNames = nextEntries.map((e) => e.qa_name);
-    setFormData((prev) => ({ ...prev, qa_entries: nextEntries }));
+    // Same snapshot/prev hybrid pattern as addQA (see comments there).
+    const nextQaNames = formData.qa_entries
+      .filter((e) => e.qa_name !== qaName)
+      .map((e) => e.qa_name);
+    setFormData((prev) => ({
+      ...prev,
+      qa_entries: prev.qa_entries.filter((e) => e.qa_name !== qaName),
+    }));
     if (onQAChange && taskIdToSync) {
       setSyncingQA(true);
       try {
