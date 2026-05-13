@@ -765,8 +765,9 @@ function TimingFormComponent(
                     onClick={() => removeQA(entry.qa_name)}
                     className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
                     title={`Quitar ${entry.qa_name}`}
+                    aria-label={`Quitar ${entry.qa_name} de los QA asignados`}
                   >
-                    <X size={11} />
+                    <X size={11} aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -1131,8 +1132,16 @@ function ClickUpSyncInline({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Separate effect: when clickupIdFromLink becomes available after async task
+  // load and there is no DB-registered sync ID, pre-fill the input.
+  // This handles the case where taskLink arrives after the first fetch runs.
+  useEffect(() => {
+    if (clickupIdFromLink && syncInfo && !syncInfo.clickup_qa_task_id && !clickupId) {
+      setClickupId(clickupIdFromLink);
+    }
+  }, [clickupIdFromLink, syncInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSync = async () => {
     const id = clickupId.trim();

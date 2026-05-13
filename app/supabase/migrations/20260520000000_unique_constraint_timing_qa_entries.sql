@@ -1,15 +1,33 @@
 -- Migration: add unique constraint on timing_qa_entries(timing_id, task_qa_id)
 -- Ensures idempotency when the RPC inserts entries for newly added QA members.
 -- Without this constraint, concurrent RPC calls could create duplicate rows.
--- Also rewrites the affected INSERT in update_task_with_squads to use
--- ON CONFLICT DO NOTHING instead of NOT EXISTS for true atomic idempotency.
+-- Also rewrites update_task_with_squads to use ON CONFLICT DO NOTHING for inserts
+-- and fixes the QA-removal transfer logic so it never violates the new constraint.
 
+-- Step 1: Remove duplicate (timing_id, task_qa_id) pairs that may exist due to
+-- race conditions before this constraint was in place. We keep the row with the
+-- lowest id (oldest) per pair; the CASCADE on timing_qa_category_hours ensures
+-- the orphaned category-hours rows are also removed.
+DELETE FROM timing_qa_entries
+WHERE id NOT IN (
+  SELECT MIN(id)
+  FROM timing_qa_entries
+  GROUP BY timing_id, task_qa_id
+);
+
+-- Step 2: Add the unique constraint now that duplicates have been cleaned up.
 ALTER TABLE timing_qa_entries
   ADD CONSTRAINT timing_qa_entries_timing_task_qa_unique
   UNIQUE (timing_id, task_qa_id);
 
--- Redefine the RPC to replace NOT EXISTS with ON CONFLICT DO NOTHING
--- for the timing_qa_entries insert, making it concurrency-safe.
+-- Step 3: Redefine the RPC to:
+--   a) Use ON CONFLICT DO NOTHING for timing_qa_entries inserts (idempotent).
+--   b) Fix the QA-removal transfer to avoid violating the new UNIQUE constraint.
+--      When the replacement QA already has an entry for the same timing_id,
+--      a simple UPDATE task_qa_id would conflict. The correct behaviour:
+--        • timings where replacement already has an entry → delete the removed
+--          QA's entry (replacement already owns its own hours for that timing).
+--        • timings where replacement has NO entry → UPDATE task_qa_id (safe).
 CREATE OR REPLACE FUNCTION public.update_task_with_squads(p_id uuid, p_input jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -102,6 +120,31 @@ begin
       limit 1;
 
       if v_replacement_qa_id is not null then
+        -- 2a. For timings where the replacement QA already has its own entry,
+        --     the replacement already owns hours for that timing. Deleting the
+        --     removed QA's entries is correct — the hours were divided at sync
+        --     time, so both entries already reflect the correct split.
+        --     Attempting UPDATE here would violate UNIQUE(timing_id, task_qa_id).
+        delete from timing_qa_category_hours
+        where timing_qa_entry_id in (
+          select tqe_rem.id
+          from timing_qa_entries tqe_rem
+          join timing_qa_entries tqe_rep
+            on tqe_rep.timing_id   = tqe_rem.timing_id
+           and tqe_rep.task_qa_id  = v_replacement_qa_id
+          where tqe_rem.task_qa_id = v_removed_tq_id
+        );
+
+        delete from timing_qa_entries
+        where task_qa_id = v_removed_tq_id
+          and exists (
+            select 1 from timing_qa_entries tqe_rep
+            where tqe_rep.timing_id  = timing_qa_entries.timing_id
+              and tqe_rep.task_qa_id = v_replacement_qa_id
+          );
+
+        -- 2b. For timings where the replacement has NO entry yet, transfer safely.
+        --     No conflict possible here.
         update timing_qa_entries
         set task_qa_id = v_replacement_qa_id
         where task_qa_id = v_removed_tq_id;
