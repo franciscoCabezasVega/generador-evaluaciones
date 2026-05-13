@@ -100,7 +100,26 @@ class SessionManager {
    * Timeout de 10s para evitar bloqueos de navigator.lock.
    */
   refreshSession(): Promise<RefreshSessionResult> {
-    if (this._refreshInflight) return this._refreshInflight;
+    if (this._refreshInflight) {
+      // Concurrent caller: comparte la promesa subyacente real pero aplica un
+      // timeout propio. _refreshInflight apunta a la llamada real (no al race),
+      // por lo que un timeout aquí NO la limpia ni inicia un refresh paralelo.
+      return Promise.race([
+        this._refreshInflight,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new DOMException(
+                  "refreshSession timed out waiting for lock",
+                  "AbortError",
+                ),
+              ),
+            10_000,
+          ),
+        ),
+      ]);
+    }
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -116,10 +135,12 @@ class SessionManager {
       );
     });
 
-    this._refreshInflight = Promise.race([
-      supabase.auth.refreshSession(),
-      timeoutPromise,
-    ])
+    // _refreshInflight apunta a la promesa REAL de supabase.auth.refreshSession(),
+    // no al resultado del race. Así, si el timeout vence para este caller,
+    // _refreshInflight sigue apuntando a la llamada real y los callers
+    // concurrentes pueden coalescerse en ella en vez de iniciar un refresh
+    // paralelo que re-contendería navigator.lock provocando timeouts en cascada.
+    const realRefresh = supabase.auth.refreshSession()
       .then(
         (result) => {
           clearTimeout(timeoutId);
@@ -139,7 +160,10 @@ class SessionManager {
         this._refreshInflight = null;
       });
 
-    return this._refreshInflight;
+    this._refreshInflight = realRefresh;
+
+    // Retorna una vista con timeout para este caller; _refreshInflight permanece.
+    return Promise.race([realRefresh, timeoutPromise]);
   }
 
   /**
@@ -261,8 +285,18 @@ export function invalidateSessionCache() {
 export async function getSessionViaManager() {
   try {
     return await SessionManager.getInstance().getSession();
-  } catch {
-    return { data: { session: null }, error: null };
+  } catch (err) {
+    // Retorna el error real para que los callers puedan distinguir un fallo
+    // transitorio (ej. lock timeout) de un "sin sesión" genuino.
+    // Retornar error: null hacía ambos casos indistinguibles.
+    return {
+      data: { session: null },
+      error: (
+        err instanceof Error || err instanceof DOMException
+          ? err
+          : new Error(String(err))
+      ) as unknown as NonNullable<GetSessionResult["error"]>,
+    };
   }
 }
 

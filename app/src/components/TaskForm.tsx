@@ -180,7 +180,9 @@ function TaskFormComponent(
       const currentExists = projectTypes.some(
         (pt) => pt.name === formData.project_type,
       );
-      if (!currentExists) {
+      // Solo auto-corregir si hay un valor seleccionado que ya no existe en el
+      // catálogo (legacy). Si está vacío (modo creación) se respeta el placeholder.
+      if (!currentExists && formData.project_type !== "") {
         const newType = projectTypes[0].name as TaskProjectType;
         setFormData((prev) => ({
           ...prev,

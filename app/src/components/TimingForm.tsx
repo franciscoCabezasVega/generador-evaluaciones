@@ -723,7 +723,8 @@ function TimingFormComponent(
               <button
                 type="button"
                 onClick={() => setQaDropdownOpen((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors"
+                disabled={syncingQA}
+                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={13} /> Añadir QA
               </button>
@@ -741,7 +742,8 @@ function TimingFormComponent(
                           key={m.id}
                           type="button"
                           onClick={() => { void addQA(m.name); }}
-                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          disabled={syncingQA}
+                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {m.name}
                         </button>
@@ -763,7 +765,8 @@ function TimingFormComponent(
                   <button
                     type="button"
                     onClick={() => { void removeQA(entry.qa_name); }}
-                    className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                    disabled={syncingQA}
+                    className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
                     title={`Quitar ${entry.qa_name}`}
                     aria-label={`Quitar ${entry.qa_name} de los QA asignados`}
                   >
@@ -1074,7 +1077,7 @@ function ClickUpSyncInline({
   // Extraer el ID del último segmento de la URL de ClickUp
   // ej: https://app.clickup.com/t/86e0pxw4d → "86e0pxw4d"
   const clickupIdFromLink = taskLink
-    ? (taskLink.split("/").pop()?.split("?")[0] ?? "")
+    ? (taskLink.split("/").filter(Boolean).pop()?.split("?")[0]?.split("#")[0] ?? "")
     : "";
 
   const [clickupId, setClickupId] = useState("");

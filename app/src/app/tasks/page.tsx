@@ -60,7 +60,7 @@ function ClickUpSyncPanel({
   taskLink?: string;
   safeFetch: ReturnType<typeof useSafeAuthFetch>["safeFetch"];
 }) {
-  const idFromLink = taskLink ? (taskLink.split("/").pop()?.split("?")[0] ?? "") : "";
+  const idFromLink = taskLink ? (taskLink.split("/").filter(Boolean).pop()?.split("?")[0]?.split("#")[0] ?? "") : "";
   const [clickupId, setClickupId] = useState(idFromLink);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
