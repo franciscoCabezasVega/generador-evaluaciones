@@ -38,34 +38,30 @@ const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
 /**
  * Maps ClickUp status names (lowercase) to timing_categories slugs.
- * Adjust to match your team's actual ClickUp workflow statuses.
+ * Only QA-prefixed statuses are mapped — these match the actual workflow
+ * statuses used in ClickUp QA boards.
  */
 const STATUS_CATEGORY_MAP: Record<string, string> = {
-  // Testing / QA active → effective_testing
-  "in testing": "effective_testing",
-  "in qa": "effective_testing",
-  testing: "effective_testing",
-  qa: "effective_testing",
-  // Waiting for environment → waiting_environment
-  "waiting env": "waiting_environment",
-  "waiting environment": "waiting_environment",
-  "wait env": "waiting_environment",
-  "espera ambiente": "waiting_environment",
-  // Waiting for dev fixes → waiting_development_fixes
-  "waiting fixes": "waiting_development_fixes",
-  "waiting fix": "waiting_development_fixes",
-  "wait fix": "waiting_development_fixes",
-  "in review": "waiting_development_fixes",
-  "espera fixes": "waiting_development_fixes",
-  // Retest → qa_retesting
-  retest: "qa_retesting",
-  "re-test": "qa_retesting",
-  retesting: "qa_retesting",
-  // Clarifications → clarification
-  clarification: "clarification",
-  clarifications: "clarification",
-  "in clarification": "clarification",
-  "clarificación": "clarification",
+  // ── Tareas con prefijo "QA - " ─────────────────────────────────────────────
+  "qa - testing":             "effective_testing",
+  "qa - ready for testing":   "qa_ready_for_testing",
+  "qa - retesting":           "qa_retesting",
+  "qa - on hold":             "qa_on_hold",
+  "qa - fixed":               "qa_fixed",
+  "qa - sin asignar":         "qa_sin_asignar",
+  "qa - review client":       "qa_review_client",
+  "qa - returned to dev":     "waiting_development_fixes",
+  "qa - clarification":       "clarification",
+  "qa - waiting environment": "waiting_environment",
+
+  // ── Tareas sin prefijo (statuses bare) ────────────────────────────────────
+  "in testing":               "effective_testing",
+  "retesting":                "qa_retesting",
+  "on hold":                  "qa_on_hold",
+  "fixed":                    "qa_fixed",
+  "review client":            "qa_review_client",
+  "clarificaciones":          "clarification",
+  "en espera de ambiente":    "waiting_environment",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -136,7 +132,8 @@ async function fetchTimeInStatus(
   const url = `${CLICKUP_API_BASE}/task/${taskId}/time_in_status`;
   const response = await fetch(url, {
     headers: { Authorization: apiKey },
-    signal: AbortSignal.timeout(30_000),
+    // 45s: da margen suficiente antes del timeout de 60s del cliente
+    signal: AbortSignal.timeout(45_000),
   });
 
   if (!response.ok) {
@@ -161,7 +158,9 @@ function mapStatusesToCategoryHours(
   for (const entry of history) {
     const slug = STATUS_CATEGORY_MAP[entry.status.toLowerCase()];
     if (slug) {
-      result[slug] = (result[slug] ?? 0) + entry.total_time.by_minute / 60;
+      // ClickUp by_minute is calendar time (24 h/day). Convert to work-hours
+      // using an 8 h/day factor (÷60 min→h, ÷3 to go from 24 h→8 h day).
+      result[slug] = (result[slug] ?? 0) + entry.total_time.by_minute / 180;
     }
   }
   return result;
@@ -254,43 +253,52 @@ export async function syncTaskTimings(
     //   task_timings → timing_qa_entries → timing_qa_category_hours
     const slugs = Object.keys(categoryHours);
     if (slugs.length > 0) {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-
-      // 4a. Find the existing task_timing row for this month/year.
-      //     We do NOT create one here — that requires a user_id which only
-      //     the QA member can supply via the UI.
-      const { data: timing, error: timingError } = await supabase
-        .from("task_timings")
-        .select("id")
-        .eq("task_id", internalTaskId)
-        .eq("month", month)
-        .eq("year", year)
+      // 4a. Find the timing row for this task's evaluation month/year.
+      //     ClickUp time_in_status is cumulative (not per-month), so we must
+      //     write to exactly one row. We use the task's own month/year rather
+      //     than "most recently created" to avoid writing to the wrong row
+      //     when a user backfills timings out of chronological order.
+      //     (oldest matching row preferred: preserves the original over backfill)
+      const { data: taskMeta, error: taskMetaError } = await supabase
+        .from("tasks")
+        .select("month, year")
+        .eq("id", internalTaskId)
         .maybeSingle();
 
-      if (timingError) {
-        throw new Error(`DB error reading task_timings: ${timingError.message}`);
+      if (taskMetaError) {
+        throw new Error(`DB error reading task: ${taskMetaError.message}`);
       }
 
-      if (timing) {
-        // 4b. Find all QA-member entries for this timing record.
+      let latestTiming: { id: string } | null = null;
+      if (taskMeta) {
+        const { data: tData, error: tError } = await supabase
+          .from("task_timings")
+          .select("id")
+          .eq("task_id", internalTaskId)
+          .eq("month", taskMeta.month)
+          .eq("year", taskMeta.year)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (tError) {
+          throw new Error(`DB error reading task_timings: ${tError.message}`);
+        }
+        latestTiming = tData;
+      }
+
+      if (latestTiming) {
+        // 4b. Find all QA entries for this (single) timing row only.
         const { data: qaEntries, error: qaError } = await supabase
           .from("timing_qa_entries")
           .select("id")
-          .eq("timing_id", timing.id);
+          .eq("timing_id", latestTiming.id);
 
         if (qaError) {
           throw new Error(`DB error reading timing_qa_entries: ${qaError.message}`);
         }
 
-        // Use only the FIRST qa_entry to avoid inflating totals.
-        // If a task has multiple QA members the correct entry cannot be
-        // determined from time_in_status alone (it has no per-assignee
-        // breakdown). Writing to all entries would multiply the hours by N.
-        // A future improvement: resolve the entry via clickup_user_id.
-        const targetEntry = qaEntries?.[0];
-        if (targetEntry) {
+        if (qaEntries && qaEntries.length > 0) {
           // 4c. Resolve category IDs by slug.
           const { data: categories, error: catError } = await supabase
             .from("timing_categories")
@@ -305,14 +313,36 @@ export async function syncTaskTimings(
             (categories ?? []).map((c) => [c.slug as string, c.id as string]),
           );
 
-          // 4d. Build upsert rows and write them.
-          const rows = Object.entries(categoryHours)
-            .filter(([slug]) => categoryMap.has(slug))
-            .map(([slug, hours]) => ({
-              timing_qa_entry_id: targetEntry.id as string,
-              category_id: categoryMap.get(slug)!,
-              hours: Math.round(hours * 100) / 100,
-            }));
+          // 4d. Divide hours equally among all QA entries so no member gets
+          //     the full total when multiple QAs share the task.
+          //     We first DELETE existing rows for these entries/categories so
+          //     the sync always reflects the latest ClickUp data (no stale
+          //     leftovers from previous syncs).
+          const qaCount = qaEntries.length;
+          const entryIds = qaEntries.map((e) => e.id as string);
+          const categoryIds = Array.from(categoryMap.values());
+
+          if (categoryIds.length > 0) {
+            const { error: deleteError } = await supabase
+              .from("timing_qa_category_hours")
+              .delete()
+              .in("timing_qa_entry_id", entryIds)
+              .in("category_id", categoryIds);
+
+            if (deleteError) {
+              throw new Error(`DB delete failed: ${deleteError.message}`);
+            }
+          }
+
+          const rows = qaEntries.flatMap((entry) =>
+            Object.entries(categoryHours)
+              .filter(([slug]) => categoryMap.has(slug))
+              .map(([slug, hours]) => ({
+                timing_qa_entry_id: entry.id as string,
+                category_id: categoryMap.get(slug)!,
+                hours: Math.round((hours / qaCount) * 100) / 100,
+              })),
+          );
 
           if (rows.length > 0) {
             const { error: upsertError } = await supabase
@@ -391,19 +421,38 @@ export async function syncTaskTimings(
 
 /**
  * Fetch all tasks that have sync enabled and run syncTaskTimings on each.
+ * Only syncs tasks in status "Pendiente" that belong to the current month/year,
+ * so that Completada/Deprecada tasks and past-month tasks are not re-synced
+ * automatically. Manual syncs (via the API route) always bypass this filter.
  * Returns an array of SyncResult for observability / logging.
  */
 export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
   const supabase = getServiceClient();
   if (!supabase) throw new Error("Service client unavailable");
 
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // getMonth() is 0-indexed
+  const currentYear = now.getFullYear();
+
+  // Join with tasks to filter: only Pendiente tasks for the current month/year.
+  // tasks!inner ensures rows without a matching task are excluded.
   const { data: syncRows, error } = await supabase
     .from("clickup_task_sync")
-    .select("task_id, clickup_qa_task_id")
-    .eq("sync_enabled", true);
+    .select("task_id, clickup_qa_task_id, tasks!inner(status, month, year)")
+    .eq("sync_enabled", true)
+    .eq("tasks.status", "Pendiente")
+    .eq("tasks.month", currentMonth)
+    .eq("tasks.year", currentYear);
 
   if (error) {
     throw new Error(`Failed to fetch sync rows: ${error.message}`);
+  }
+
+  if (syncRows && syncRows.length > 0) {
+    console.warn(
+      `[syncAllEnabledTasks] Found ${syncRows.length} Pendiente task(s) ` +
+        `for ${currentMonth}/${currentYear} with sync enabled.`,
+    );
   }
 
   if (!syncRows || syncRows.length === 0) return [];

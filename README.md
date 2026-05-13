@@ -114,6 +114,18 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 - **Exportación**: Markdown y CSV (compatibles con Notion)
 - **Copiar Contenido**: Posibilidad de copiar manualmente para Notion
 
+### Integración con ClickUp
+- **Sync en un clic**: Desde el panel expandido de una tarea, autocompleta el ID de subtarea ClickUp tomando el último segmento del link de la tarea
+- **Auto-creación de timing**: Si la tarea no tiene un registro de timing para su mes/año, se crea automáticamente con horas en 0 (`for_sync: true`) usando los QA asignados
+- **Validación previa**: Bloquea el sync si la tarea no tiene QA asignados, con mensaje guía
+- **Timeout extendido (60 s)**: La llamada al endpoint de sync admite hasta 60 s porque ClickUp puede tardar ~30 s en responder
+- **Mensajes de error contextuales**: Distingue entre `TimeoutError` (ClickUp lento) y errores de red genéricos
+- **Sync bidireccional QA ↔ tarea**: Agregar o quitar un QA desde el formulario de Timings propaga el cambio a la tarea (`PATCH /api/tasks/{id}`)
+- **Preservación de horas registradas**: La RPC `update_task_with_squads` transfiere los `timing_qa_entries` del QA removido al primer QA restante; si no queda ninguno, hace cascade delete controlado
+- **Creación automática de entries al añadir QA**: Si se agrega un QA a una tarea con timings ya creados, la RPC genera las `timing_qa_entries` correspondientes para que el sync de ClickUp pueda escribir horas
+- **Slug semántico**: Categoría `retest` renombrada a `qa_ready_for_testing` para reflejar el estado real "QA - Ready for Testing" (la categoría `qa_retesting` ya existía para el re-test real)
+- **Cron job con logging**: El endpoint `/api/cron/sync-clickup-timings` registra fecha/hora de ejecución y filtra solo tareas en estado `Pendiente` del mes/año actual
+
 ### Inteligencia Artificial
 - Comentarios automáticos generados por OpenAI (GPT)
 - Basados en tareas, devoluciones y notas adicionales del usuario
@@ -539,7 +551,14 @@ app/
 │           ├── 20260511060000_normalize_timing_category_slugs.sql # Normalización de slugs semánticos en timing_categories
 │           ├── 20260511120000_protect_system_timing_categories.sql # RLS: bloquear UPDATE/DELETE de categorías del sistema
 │           ├── 20260515000000_clickup_integration.sql             # Tablas clickup_settings, clickup_task_sync + columna qa_members.clickup_user_id
-│           └── 20260516000000_clickup_singleton_and_cleanup.sql  # Singleton constraint en clickup_settings + drop índice duplicado
+│           ├── 20260516000000_clickup_singleton_and_cleanup.sql  # Singleton constraint en clickup_settings + drop índice duplicado
+│           ├── 20260517000000_rename_retest_slug.sql              # Renombra slug `retest` → `qa_ready_for_testing` (semántica correcta)
+│           ├── 20260518000000_rpc_qa_auto_transfer_on_remove.sql  # RPC: al quitar un QA, transfiere sus timing_qa_entries al primer QA restante
+│           ├── 20260519000000_rpc_create_timing_qa_entries_on_qa_add.sql # RPC: al añadir un QA, crea entradas en timings existentes para sync ClickUp
+│           ├── 20260520000000_unique_constraint_timing_qa_entries.sql    # UNIQUE(timing_id, task_qa_id) + fix transfer de horas al quitar QA con reemplazo
+│           ├── 20260521000000_alter_timing_hours_to_numeric.sql          # ALTER COLUMN hours TYPE NUMERIC(10,2) para preservar decimales de ClickUp sync
+│           ├── 20260522000000_add_missing_timing_categories.sql          # Categorías faltantes: qa_retesting, qa_on_hold, qa_fixed, qa_sin_asignar, qa_review_client
+│           └── 20260523000000_fix_timings_view_total_hours_numeric.sql   # Recrear view task_timings_with_totals sin cast ::INTEGER (preserva decimales)
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright
@@ -568,6 +587,15 @@ app/
 4. Pre-flight check: `GET /api/tasks/check-link` verifica que el link no esté duplicado antes de enviar
 5. POST a `/api/tasks` → validación backend + almacenamiento
 6. Auditoría se registra de forma asíncrona (no bloquea la respuesta)
+
+### Flujo de Sincronización con ClickUp (un clic)
+1. Usuario expande una tarea en `/tasks` → panel **ClickUp Sync**
+2. El campo de ID de subtarea se autocompleta con el último segmento del link de la tarea
+3. Si la tarea aún no tiene un registro de timing para su mes/año, el sistema lo crea automáticamente con horas en 0 (`for_sync: true`) usando los QA asignados
+4. Si no hay QA asignados, se muestra un error pidiendo asignarlos antes de sincronizar
+5. POST a `/api/tasks/{id}/clickup-sync` con timeout de 60 s (ClickUp puede tardar ~30 s)
+6. Mensajes de error específicos para timeout (`TimeoutError`) vs. fallos de conexión
+7. Desde el formulario de Timings, agregar/quitar un QA propaga el cambio a la tarea (`PATCH /api/tasks/{id}` con `assigned_qa`); las RPCs `update_task_with_squads` transfieren o crean `timing_qa_entries` para no perder horas registradas
 
 ### Flujo de Generación de Reportes
 1. Usuario navega a `/reports`

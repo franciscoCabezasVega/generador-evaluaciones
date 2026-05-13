@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getCurrentUserViaManager } from "@/lib/fetchAuth";
 import { Task, CreateTaskInput, TaskSquad } from "@/lib/types";
 
 export const taskService = {
@@ -97,7 +98,7 @@ export const taskService = {
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getCurrentUserViaManager();
 
     if (authError || !user) throw new Error("User not authenticated");
 

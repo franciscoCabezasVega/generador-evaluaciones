@@ -96,9 +96,8 @@ export async function POST(request: NextRequest) {
       if (!Number.isFinite(value)) {
         throw new Error(`${fieldName} must be a finite number`);
       }
-      if (!Number.isInteger(value)) {
-        throw new Error(`${fieldName} must be an integer (no decimals)`);
-      }
+      // Allow decimals: ClickUp sync writes values like 20.88 or 9.41
+      // (hours-in-status divided among QA members). The DB column is NUMERIC(10,2).
       if (value < 0) {
         throw new Error(`${fieldName} must be a non-negative number`);
       }
@@ -133,7 +132,9 @@ export async function POST(request: NextRequest) {
           entryTotal += hours as number;
         }
 
-        if (entryTotal === 0) {
+        if (entryTotal === 0 && body.for_sync !== true) {
+          // body.for_sync must be strictly boolean true; a string "true" or any
+          // other truthy value does NOT bypass the zero-hours validation.
           throw new Error(
             `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
           );

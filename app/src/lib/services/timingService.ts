@@ -863,7 +863,7 @@ export const timingService = {
       const catIds = categories.map((c) => c.id);
       const slugToId = buildSlugToIdMap(categories);
       const effectiveTestingId = slugToId["effective_testing"];
-      const retestId = slugToId["retest"];
+      const retestId = slugToId["qa_ready_for_testing"];
 
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
@@ -937,9 +937,7 @@ export const timingService = {
       );
 
       // Obtener assigned_qa de todas las tareas involucradas
-      const involvedTaskIds = [
-        ...new Set(timingToTask.values()),
-      ];
+      const involvedTaskIds = Array.from(new Set(Array.from(timingToTask.values())));
       const { data: assignedQAData, error: assignedQAError } = await client
         .from("tasks")
         .select("id, assigned_qa")

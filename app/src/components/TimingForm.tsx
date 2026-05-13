@@ -22,7 +22,15 @@ import {
   ChevronUp,
   Users,
   ExternalLink,
+  Loader2,
+  Zap,
+  CheckCircle2,
+  XCircle,
+  Plus,
+  X,
 } from "lucide-react";
+import { formatTime } from "@/lib/timingUtils";
+import { TimeoutError } from "@/lib/withTimeout";
 
 interface TimingFormProps {
   onSubmit: (
@@ -38,6 +46,11 @@ interface TimingFormProps {
   /** Cuando se pasa, la tarea queda bloqueada (no se muestran los selectores).
    *  Se usa desde la vista virtual de Tiempos al hacer "Registrar tiempo". */
   lockedTask?: Task;
+  /** Callback para sincronizar QA hacia la tarea cuando se añaden/quitan desde el form de timing */
+  onQAChange?: (taskId: string, qaNames: string[]) => Promise<void>;
+  /** Guarda el timing (sin cerrar el modal) y retorna el nuevo timingId.
+   *  Usado por ClickUpSyncInline para el flujo de un solo clic. */
+  onCreateForSync?: (data: CreateTaskTimingInput) => Promise<string | null>;
 }
 
 interface QAFormData {
@@ -65,6 +78,8 @@ function TimingFormComponent(
     selectedTaskIds = [],
     safeFetch,
     lockedTask,
+    onQAChange,
+    onCreateForSync,
   }: TimingFormProps,
   ref: React.Ref<{ handleCancelWithConfirm: () => void }>,
 ) {
@@ -126,14 +141,17 @@ function TimingFormComponent(
   const [formData, setFormData] = useState<FormDataState>(initialFormData);
   const initialDataRef = useRef<FormDataState>(initialFormData);
 
-  const { products, timingCategories } = useCatalogData();
+  const { products, timingCategories, qaMembers } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeQAMembers = qaMembers.filter((q) => q.is_active);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [unsavedConfirm, setUnsavedConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [dynamicTasks, setDynamicTasks] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [qaDropdownOpen, setQaDropdownOpen] = useState(false);
+  const [syncingQA, setSyncingQA] = useState(false);
 
   // Exponer handleCancelWithConfirm a través de ref
   useImperativeHandle(ref, () => ({
@@ -143,6 +161,79 @@ function TimingFormComponent(
   // Detectar cambios no guardados
   const hasUnsavedChanges = () => {
     return JSON.stringify(formData) !== JSON.stringify(initialDataRef.current);
+  };
+
+  // Agregar QA al timing y sincronizar con la tarea
+  const addQA = async (qaName: string) => {
+    if (formData.qa_entries.some((e) => e.qa_name === qaName)) return;
+    const taskIdToSync = formData.task_id || null;
+    // nextQaNames for onQAChange: derived from snapshot. Safe because the
+    // dropdown closes after each add, so concurrent rapid adds via UI are
+    // not possible and the async await serialises calls naturally.
+    const nextQaNames = [...formData.qa_entries.map((e) => e.qa_name), qaName];
+    // State update uses prev.qa_entries (not the closed-over snapshot) so
+    // it composes correctly under React state batching (Round 4 fix).
+    // No mutable variables are assigned inside the updater (Round 3 fix).
+    setFormData((prev) => {
+      if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
+      return {
+        ...prev,
+        qa_entries: [
+          ...prev.qa_entries,
+          { qa_name: qaName, hours_by_category: {}, isExpanded: true },
+        ],
+      };
+    });
+    setQaDropdownOpen(false);
+    if (onQAChange && taskIdToSync) {
+      setSyncingQA(true);
+      try {
+        await onQAChange(taskIdToSync, nextQaNames);
+      } catch (error) {
+        // Rollback if backend rejected the change
+        setFormData((prev) => ({
+          ...prev,
+          qa_entries: prev.qa_entries.filter((e) => e.qa_name !== qaName),
+        }));
+        throw error;
+      } finally {
+        setSyncingQA(false);
+      }
+    }
+  };
+
+  // Quitar QA del timing y sincronizar con la tarea
+  const removeQA = async (qaName: string) => {
+    // Same compute-first pattern as addQA — no side-effects inside updater.
+    const removedIndex = formData.qa_entries.findIndex((e) => e.qa_name === qaName);
+    if (removedIndex === -1) return;
+    const removedEntry = formData.qa_entries[removedIndex];
+    const taskIdToSync = formData.task_id || null;
+    // Same snapshot/prev hybrid pattern as addQA (see comments there).
+    const nextQaNames = formData.qa_entries
+      .filter((e) => e.qa_name !== qaName)
+      .map((e) => e.qa_name);
+    setFormData((prev) => ({
+      ...prev,
+      qa_entries: prev.qa_entries.filter((e) => e.qa_name !== qaName),
+    }));
+    if (onQAChange && taskIdToSync) {
+      setSyncingQA(true);
+      try {
+        await onQAChange(taskIdToSync, nextQaNames);
+      } catch (error) {
+        // Rollback if backend rejected the change
+        setFormData((prev) => {
+          if (prev.qa_entries.some((e) => e.qa_name === qaName)) return prev;
+          const restored = [...prev.qa_entries];
+          restored.splice(removedIndex, 0, removedEntry);
+          return { ...prev, qa_entries: restored };
+        });
+        throw error;
+      } finally {
+        setSyncingQA(false);
+      }
+    }
   };
 
   const handleCancelWithConfirm = () => {
@@ -196,8 +287,8 @@ function TimingFormComponent(
     if (value === "" || value === "0") return "";
     const num = parseFloat(value);
     if (isNaN(num)) return `${fieldName} debe ser un número válido`;
-    if (!Number.isInteger(num))
-      return `${fieldName} debe ser un número entero (sin decimales)`;
+    // Allow decimals up to 2 dp (DB column is NUMERIC(10,2); ClickUp sync
+    // writes values like 20.88). Integer-only check removed in Round 6b.
     if (num < 0) return `${fieldName} no puede ser negativo`;
     return "";
   };
@@ -256,7 +347,17 @@ function TimingFormComponent(
   };
 
   const updateQAHours = (qaName: string, categoryId: string, value: string) => {
-    const filteredValue = value.replace(/[^0-9]/g, "");
+    // Allow digits and one decimal point (max 2 decimal places) so that
+    // ClickUp-synced values (e.g. 20.88) can be viewed and edited without
+    // losing the decimal part. The DB column is NUMERIC(10,2).
+    const filteredValue = value
+      .replace(/[^0-9.]/g, "")         // strip non-digit/non-dot
+      .replace(/(\.[0-9]{0,2}).*/, "$1") // keep at most 2 decimal places
+      .replace(/^\./, "");              // strip leading dot
+    // Prevent multiple dots: if user types a second dot, ignore it
+    const normalized = filteredValue.split(".").length > 2
+      ? filteredValue.slice(0, filteredValue.lastIndexOf("."))
+      : filteredValue;
     const key = `${qaName}_${categoryId}`;
 
     if (filteredValue !== "") {
@@ -270,7 +371,7 @@ function TimingFormComponent(
     }
 
     setErrors((prev) => ({ ...prev, [key]: "" }));
-    const hours = filteredValue === "" ? 0 : parseInt(filteredValue, 10);
+    const hours = normalized === "" ? 0 : parseFloat(normalized);
 
     setFormData((prev) => ({
       ...prev,
@@ -365,6 +466,26 @@ function TimingFormComponent(
   const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
 
   const grandTotal = getGrandTotal();
+
+  /** Guarda el timing en background sin cerrar el modal (para flujo de sync en un clic).
+   *  Salta la validación de horas mínimas — el sync las llenará. */
+  const saveForSync = async (): Promise<string | null> => {
+    if (!onCreateForSync) return null;
+    if (formData.qa_entries.length === 0) return null;
+    const taskId = lockedTask?.id ?? formData.task_id;
+    if (!taskId) return null;
+    const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map((e) => ({
+      qa_name: e.qa_name,
+      hours_by_category: e.hours_by_category,
+    }));
+    return onCreateForSync({
+      task_id: taskId,
+      month: Number(formData.month),
+      year: Number(formData.year),
+      qa_entries: qaEntries,
+      for_sync: true,
+    });
+  };
 
   // Color palette for QA members
   const QA_COLORS = [
@@ -598,39 +719,80 @@ function TimingFormComponent(
           );
         })()}
 
-      {/* QA Asignados — solo lectura (se toma de la tarea) */}
-      {formData.qa_entries.length > 0 && (
-        <div className="space-y-1">
+      {/* QA Asignados — selector editable */}
+      {formData.task_id && (
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700">
+            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-200">
               <Users size={18} className="text-blue-600" />
               QA Asignados
+              {syncingQA && <Loader2 size={14} className="animate-spin text-blue-500" />}
             </span>
-            <span className="text-xs text-gray-500">
-              {formData.qa_entries.length} QA
-              {formData.qa_entries.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {formData.qa_entries.map((entry, idx) => (
-              <span
-                key={entry.qa_name}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium border ${QA_COLORS[idx % QA_COLORS.length]}`}
+            {/* Dropdown para añadir QA */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setQaDropdownOpen((v) => !v)}
+                disabled={syncingQA}
+                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {entry.qa_name}
-              </span>
-            ))}
+                <Plus size={13} /> Añadir QA
+              </button>
+              {qaDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                  {activeQAMembers.filter(
+                    (m) => !formData.qa_entries.some((e) => e.qa_name === m.name)
+                  ).length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-500">Todos los QA ya están asignados</p>
+                  ) : (
+                    activeQAMembers
+                      .filter((m) => !formData.qa_entries.some((e) => e.qa_name === m.name))
+                      .map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => { void addQA(m.name); }}
+                          disabled={syncingQA}
+                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {m.name}
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {formData.qa_entries.length === 0 && formData.task_id && (
-        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
-          <p className="text-sm text-yellow-800 flex items-center gap-2">
-            <AlertCircle size={16} />
-            La tarea seleccionada no tiene QA asignados. Edita la tarea para
-            asignar QA.
-          </p>
+          {formData.qa_entries.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {formData.qa_entries.map((entry, idx) => (
+                <span
+                  key={entry.qa_name}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium border ${QA_COLORS[idx % QA_COLORS.length]}`}
+                >
+                  {entry.qa_name}
+                  <button
+                    type="button"
+                    onClick={() => { void removeQA(entry.qa_name); }}
+                    disabled={syncingQA}
+                    className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
+                    title={`Quitar ${entry.qa_name}`}
+                    aria-label={`Quitar ${entry.qa_name} de los QA asignados`}
+                  >
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/40 p-3">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
+                <AlertCircle size={16} />
+                No hay QA asignados. Usa &quot;Añadir QA&quot; para asignarlos.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -639,6 +801,36 @@ function TimingFormComponent(
           <AlertCircle size={16} />
           {errors.qa_entries}
         </p>
+      )}
+
+      {/* ClickUp Sync panel — visible cuando hay tarea seleccionada y safeFetch disponible */}
+      {formData.task_id && safeFetch && (
+        <ClickUpSyncInline
+          taskId={formData.task_id}
+          timingId={initialData?.id ? String(initialData.id) : undefined}
+          taskLink={
+            (lockedTask?.task_link) ??
+            [...dynamicTasks, ...availableTasks].find((t) => t.id === formData.task_id)?.task_link
+          }
+          safeFetch={safeFetch}
+          onSaveFirst={!isEditing && !initialData?.id && formData.qa_entries.length > 0 ? saveForSync : undefined}
+          onSyncSuccess={(freshQaEntries) => {
+            setFormData((prev) => ({
+              ...prev,
+              // Solo actualizar horas de QA que ya están en el form.
+              // No agregar QA nuevos desde el sync — el usuario puede haber
+              // quitado intencionalmente a alguien.
+              qa_entries: prev.qa_entries.map((entry) => {
+                const fresh = freshQaEntries.find(
+                  (e) => e.qa_name === entry.qa_name,
+                );
+                return fresh
+                  ? { ...entry, hours_by_category: fresh.hours_by_category }
+                  : entry;
+              }),
+            }));
+          }}
+        />
       )}
 
       {/* Per-QA Hour Entries */}
@@ -666,9 +858,6 @@ function TimingFormComponent(
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold">
-                      {qaTotal.toFixed(0)}h
-                    </span>
                     {entry.isExpanded ? (
                       <ChevronUp size={16} />
                     ) : (
@@ -706,12 +895,17 @@ function TimingFormComponent(
                             >
                               {cat.name}
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
+                              {catHours > 0 && (
+                                <span className="text-xs font-semibold opacity-80" style={{ color: cat.hex_color }}>
+                                  {formatTime(catHours)}
+                                </span>
+                              )}
                               <input
                                 id={fieldId}
                                 name={fieldId}
                                 type="text"
-                                inputMode="numeric"
+                                inputMode="decimal"
                                 value={catHours === 0 ? "" : catHours}
                                 onChange={(ev) =>
                                   updateQAHours(
@@ -721,8 +915,10 @@ function TimingFormComponent(
                                   )
                                 }
                                 onKeyPress={(ev) => {
-                                  if (!/[0-9]/.test(ev.key))
-                                    ev.preventDefault();
+                                  // Allow digits and one decimal point
+                                  if (!/[0-9.]/.test(ev.key)) ev.preventDefault();
+                                  // Block second dot
+                                  if (ev.key === "." && (ev.currentTarget as HTMLInputElement).value.includes(".")) ev.preventDefault();
                                 }}
                                 onBlur={(ev) => {
                                   if (ev.target.value === "") {
@@ -750,7 +946,7 @@ function TimingFormComponent(
                         Subtotal {entry.qa_name}:
                       </span>
                       <span className="text-sm font-bold">
-                        {qaTotal.toFixed(0)}h
+                        {formatTime(qaTotal)}
                       </span>
                     </div>
                   </div>
@@ -773,7 +969,7 @@ function TimingFormComponent(
             )}
           </div>
           <span className="text-xl font-bold text-gray-900">
-            {grandTotal.toFixed(2)} h
+            {formatTime(grandTotal)}
           </span>
         </div>
         {/* Per-QA summary bar */}
@@ -807,8 +1003,8 @@ function TimingFormComponent(
                       }}
                     />
                   </div>
-                  <span className="w-14 text-right font-semibold">
-                    {qaTotal.toFixed(0)}h ({pct.toFixed(0)}%)
+                  <span className="w-20 text-right font-semibold">
+                    {formatTime(qaTotal)} ({pct.toFixed(0)}%)
                   </span>
                 </div>
               );
@@ -824,8 +1020,8 @@ function TimingFormComponent(
           disabled={
             isLoading ||
             activeCategories.length === 0 ||
-            grandTotal === 0 ||
-            formData.qa_entries.length === 0
+            formData.qa_entries.length === 0 ||
+            grandTotal === 0
           }
           className="flex-1 bg-blue-500 hover:bg-blue-600"
           title={
@@ -851,3 +1047,297 @@ function TimingFormComponent(
 }
 
 export default forwardRef(TimingFormComponent);
+
+// ─── ClickUp Sync inline panel (for use inside TimingForm) ───────────────────
+
+interface ClickUpSyncInlineProps {
+  taskId: string;
+  timingId?: string;
+  /** Si se pasa, el botón Sincronizar guardará el timing primero (sin cerrar el modal)
+   *  y usará el ID devuelto para el sync — flujo de un solo clic. */
+  onSaveFirst?: () => Promise<string | null>;
+  /** task_link de la tarea (ej: https://app.clickup.com/t/86e0pxw4d) — se usa
+   *  para pre-rellenar el input cuando aún no hay un clickup_qa_task_id guardado. */
+  taskLink?: string;
+  safeFetch: (
+    url: string,
+    options?: RequestInit,
+    retryCount?: number,
+    timeoutMs?: number,
+  ) => Promise<Response>;
+  onSyncSuccess?: (
+    qaEntries: Array<{ qa_name: string; hours_by_category: Record<string, number> }>,
+  ) => void;
+}
+
+interface ClickUpSyncInfo {
+  registered: boolean;
+  sync_enabled: boolean;
+  clickup_qa_task_id: string | null;
+  last_synced_at: string | null;
+  last_clickup_status: string | null;
+}
+
+function ClickUpSyncInline({
+  taskId,
+  timingId,
+  taskLink,
+  safeFetch,
+  onSyncSuccess,
+  onSaveFirst,
+}: ClickUpSyncInlineProps) {
+  // Extraer el ID del último segmento de la URL de ClickUp
+  // ej: https://app.clickup.com/t/86e0pxw4d → "86e0pxw4d"
+  const clickupIdFromLink = taskLink
+    ? (taskLink.split("/").filter(Boolean).pop()?.split("?")[0]?.split("#")[0] ?? "")
+    : "";
+
+  const [clickupId, setClickupId] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [syncInfo, setSyncInfo] = useState<ClickUpSyncInfo | null>(null);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  // Cuando onSaveFirst crea el timing, guardamos el ID aquí para usarlo en el sync
+  const [localTimingId, setLocalTimingId] = useState<string | undefined>(timingId);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    safeFetch(`/api/tasks/${taskId}/clickup-sync`)
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          const data = (await res.json()) as ClickUpSyncInfo;
+          setSyncInfo(data);
+          // Prioridad: ID guardado en DB > ID extraído de task_link
+          if (data.clickup_qa_task_id) {
+            setClickupId(data.clickup_qa_task_id);
+          } else if (clickupIdFromLink) {
+            setClickupId(clickupIdFromLink);
+          }
+
+          // Auto-hidratación: si el sync está registrado y hay un timingId,
+          // leer el timing fresco desde la BD (sin llamar a ClickUp) para que
+          // el form refleje siempre el último valor escrito por el cron,
+          // evitando que el caché de página muestre datos desactualizados.
+          if (data.registered && timingId && onSyncSuccess) {
+            try {
+              const freshRes = await safeFetch(`/api/timings/${timingId}`);
+              if (!cancelled && freshRes.ok) {
+                const freshTiming = (await freshRes.json()) as {
+                  qa_entries?: Array<{
+                    qa_name: string;
+                    hours_by_category: Record<string, number>;
+                  }>;
+                };
+                if (freshTiming.qa_entries) {
+                  onSyncSuccess(freshTiming.qa_entries);
+                }
+              }
+            } catch {
+              // silencioso — el form sigue con los datos pasados como initialData
+            }
+          }
+        }
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Separate effect: when clickupIdFromLink becomes available after async task
+  // load and there is no DB-registered sync ID, pre-fill the input.
+  // This handles the case where taskLink arrives after the first fetch runs.
+  useEffect(() => {
+    if (clickupIdFromLink && syncInfo && !syncInfo.clickup_qa_task_id && !clickupId) {
+      setClickupId(clickupIdFromLink);
+    }
+  }, [clickupIdFromLink, syncInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSync = async () => {
+    const id = clickupId.trim();
+    if (!id) {
+      setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." });
+      return;
+    }
+    // Si el timing aún no fue guardado y hay onSaveFirst, guardar automáticamente
+    // antes de sincronizar (flujo de un solo clic).
+    let effectiveTimingId = localTimingId;
+    if (!effectiveTimingId) {
+      if (!onSaveFirst) {
+        setMsg({
+          type: "error",
+          text: "Guarda el timing primero (botón Crear) y luego sincroniza.",
+        });
+        return;
+      }
+      setSyncing(true);
+      setMsg({ type: "success", text: "Guardando timing..." });
+      try {
+        const newId = await onSaveFirst();
+        if (!newId) {
+          setMsg({ type: "error", text: "Error al guardar el timing. Intenta de nuevo." });
+          setSyncing(false);
+          return;
+        }
+        setLocalTimingId(newId);
+        effectiveTimingId = newId;
+        setMsg({ type: "success", text: "Timing guardado. Sincronizando con ClickUp..." });
+      } catch (saveErr) {
+        setMsg({ type: "error", text: saveErr instanceof Error ? saveErr.message : "Error al guardar el timing. Intenta de nuevo." });
+        setSyncing(false);
+        return;
+      }
+    }
+    setSyncing(true);
+    setMsg(null);
+    try {
+      // Timeout de 60s: el servidor llama a ClickUp (puede tardar ~30s) + operaciones DB
+      const res = await safeFetch(
+        `/api/tasks/${taskId}/clickup-sync`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clickup_qa_task_id: id }),
+        },
+        0,
+        60_000,
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        skipped?: boolean;
+        error?: string;
+        clickup_qa_task_id?: string;
+      };
+      if (!res.ok) {
+        setMsg({ type: "error", text: data.error ?? "Error al sincronizar" });
+        return;
+      }
+      setSyncInfo((prev) => ({
+        ...prev,
+        registered: true,
+        sync_enabled: true,
+        clickup_qa_task_id: data.clickup_qa_task_id ?? id,
+        last_synced_at: new Date().toISOString(),
+        last_clickup_status: prev?.last_clickup_status ?? null,
+      }));
+
+      // Re-hidratar el form con las horas frescas del sync
+      if (!data.skipped && effectiveTimingId && onSyncSuccess) {
+        try {
+          const freshRes = await safeFetch(`/api/timings/${effectiveTimingId}`);
+          if (freshRes.ok) {
+            const freshTiming = (await freshRes.json()) as {
+              qa_entries?: Array<{
+                qa_name: string;
+                hours_by_category: Record<string, number>;
+              }>;
+            };
+            if (freshTiming.qa_entries) {
+              onSyncSuccess(freshTiming.qa_entries);
+            }
+          }
+        } catch {
+          // silencioso — el form ya mostrará el mensaje de éxito del sync
+        }
+      }
+
+      setMsg({
+        type: "success",
+        text: data.skipped
+          ? "Sincronizado. No había registros de timing todavía — los tiempos se cargarán cuando existan entradas QA."
+          : "¡Tiempos sincronizados correctamente desde ClickUp!",
+      });
+    } catch (err) {
+      console.error("[ClickUp sync error]", err);
+      if (err instanceof TimeoutError || (err instanceof Error && err.name === "TimeoutError")) {
+        setMsg({ type: "error", text: "ClickUp tardó demasiado en responder. Espera unos segundos e intenta de nuevo." });
+      } else if (err instanceof Error && err.message.includes("sesión")) {
+        setMsg({ type: "error", text: err.message });
+      } else if (err instanceof Error && err.name === "AbortError") {
+        setMsg({ type: "error", text: "La solicitud fue cancelada. Intenta de nuevo." });
+      } else {
+        setMsg({
+          type: "error",
+          text: err instanceof Error && err.message
+            ? `Error: ${err.message}`
+            : "Error de conexión. Intenta de nuevo.",
+        });
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>Cargando sync ClickUp...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+        <Zap className="w-3.5 h-3.5" />
+        Sincronizar tiempos desde ClickUp
+        {syncInfo?.registered && (
+          <span className="ml-auto text-violet-500 font-normal">
+            Registrado
+            {syncInfo.last_synced_at
+              ? ` · Último sync: ${new Date(syncInfo.last_synced_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}`
+              : ""}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={clickupId}
+          onChange={(e) => setClickupId(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSync();
+          }}
+          placeholder="ID de subtarea ClickUp (ej: abc123xy)"
+          className="flex-1 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+          disabled={syncing}
+        />
+        <button
+          type="button"
+          onClick={() => void handleSync()}
+          disabled={syncing || !clickupId.trim()}
+          className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+        >
+          {syncing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Zap className="w-3.5 h-3.5" />
+          )}
+          {syncing ? "Sincronizando..." : "Sincronizar"}
+        </button>
+      </div>
+      {msg && (
+        <div
+          className={`flex items-start gap-1.5 text-xs rounded px-2 py-1.5 ${
+            msg.type === "success"
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
+          }`}
+        >
+          {msg.type === "success" ? (
+            <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          ) : (
+            <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          )}
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -190,6 +190,14 @@ export function useCachedFetch<T>({
       fetchIdRef.current += 1;
       const myId = fetchIdRef.current;
 
+      // Capturar la clave AL INICIO del fetch. Si fullKey cambia durante el
+      // await (porque el usuario cambió un filtro o escribió una búsqueda),
+      // el resultado pertenece a la clave original — no a la actual.
+      // Cachearlo bajo la clave actual envenenaría la caché del nuevo filtro
+      // con datos del filtro anterior y haría que el fast-path de cache
+      // sirva resultados incorrectos sin disparar una request real.
+      const fetchKey = fullKeyRef.current;
+
       if (isBackground) {
         setIsRefreshing(true);
       } else {
@@ -203,8 +211,15 @@ export function useCachedFetch<T>({
         if (!isMountedRef.current || signal.aborted) return;
         if (fetchIdRef.current !== myId) return;
 
-        setDataState(result);
-        cacheStore.set(fullKeyRef.current, result);
+        // Siempre cachear bajo la clave para la que se hizo la request
+        cacheStore.set(fetchKey, result);
+
+        // Solo aplicar al estado visible si la clave actual sigue siendo la
+        // misma — si el usuario ya cambió el filtro/búsqueda, este resultado
+        // ya no corresponde a lo que se está mostrando.
+        if (fullKeyRef.current === fetchKey) {
+          setDataState(result);
+        }
         // Si llegamos aquí desde un auto-retry, limpiar el estado de reconexión
         setIsReconnecting(false);
       } catch (err: unknown) {
@@ -307,6 +322,15 @@ export function useCachedFetch<T>({
     return () => {
       clearTimeout(timer);
       controller.abort();
+      // También abortar cualquier fetch externo (subscribe / visibilitychange)
+      // que haya tomado abortRef.current desde la última corrida del effect.
+      // Sin esto, un fetch BG con la URL del filtro anterior seguiría volando
+      // y al resolver escribiría datos viejos bajo la clave del filtro nuevo,
+      // envenenando la caché y causando "no results" sin request en la
+      // siguiente búsqueda.
+      if (abortRef.current && abortRef.current !== controller) {
+        abortRef.current.abort();
+      }
       abortRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,6 +341,9 @@ export function useCachedFetch<T>({
     if (!enabled) return;
     return cacheStore.subscribe(cacheKey, () => {
       if (!isMountedRef.current) return;
+      // Abortar cualquier fetch previo antes de iniciar uno nuevo, para evitar
+      // dejar un fetch huérfano cuyo resultado pueda escribir en la caché.
+      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       doFetch(true, controller.signal);

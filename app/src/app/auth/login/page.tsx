@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { invalidateSessionCache } from "@/lib/fetchAuth";
+import { invalidateSessionCache, getSessionViaManager } from "@/lib/fetchAuth";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, X } from "lucide-react";
 
@@ -77,7 +77,7 @@ export default function LoginPage() {
         try {
           const {
             data: { session },
-          } = await supabase.auth.getSession();
+          } = await getSessionViaManager();
           if (session?.user?.id) {
             window.location.href = "/";
             return;

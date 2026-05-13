@@ -39,6 +39,12 @@ export async function GET(request: NextRequest) {
   }
 
   const startTime = Date.now();
+  const now = new Date();
+  console.warn(
+    `[cron/sync-clickup-timings] Triggered at ${now.toISOString()} ` +
+      `(month=${now.getMonth() + 1}, year=${now.getFullYear()}) — ` +
+      `filtering only Pendiente tasks for current month/year.`,
+  );
 
   try {
     const results = await syncAllEnabledTasks();

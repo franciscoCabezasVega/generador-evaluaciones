@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getCurrentUserViaManager } from "@/lib/fetchAuth";
 import { UserProfile, UserRole } from "@/lib/types";
 import { getRoleNameById } from "@/lib/cache/rolesCache";
 
@@ -9,7 +10,7 @@ export const userProfileService = {
       const {
         data: { user },
         error: authError,
-      } = await supabase.auth.getUser();
+      } = await getCurrentUserViaManager();
 
       if (authError || !user) {
         return null;
@@ -71,7 +72,7 @@ export const userProfileService = {
       const {
         data: { user },
         error: authError,
-      } = await supabase.auth.getUser();
+      } = await getCurrentUserViaManager();
 
       if (authError || !user) throw new Error("Not authenticated");
 
