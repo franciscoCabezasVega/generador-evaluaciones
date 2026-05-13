@@ -9,6 +9,7 @@ import {
   TimingQAEntry,
   CatalogTimingCategory,
 } from "@/lib/types";
+import { QA_NON_CONTROLLABLE_CATEGORY_SLUGS } from "@/lib/timingUtils";
 
 // Row shapes
 interface TimingParentRow {
@@ -653,6 +654,12 @@ export const timingService = {
       const client = await getClient(token);
       const categories = await getTimingCategories(client);
       const catIds = categories.map((c) => c.id);
+      // Categorías excluidas de los KPIs (mismo criterio que getQATimingMetrics).
+      const excludedCatIds = new Set(
+        QA_NON_CONTROLLABLE_CATEGORY_SLUGS.map(
+          (slug) => categories.find((c) => c.slug === slug)?.id,
+        ).filter((id): id is string => Boolean(id)),
+      );
 
       let timingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
@@ -737,6 +744,11 @@ export const timingService = {
         string,
         { timings: Set<string>; totals_by_category: Record<string, number> }
       > = {};
+      // Llevamos también el total de horas controlables por timing para
+      // poder descartar timings cuyo único registro está en categorías
+      // no controlables (ej. solo "On Hold"/"Sin Asignar"). Esos timings
+      // inflarían task_count sin aportar valor a los KPIs de QA.
+      const controllableHoursByTiming: Record<string, number> = {};
       for (const ch of categoryHoursData) {
         const timingId = entryToTiming[ch.timing_qa_entry_id];
         if (!timingId) continue;
@@ -750,6 +762,10 @@ export const timingService = {
         byProductType[pt].totals_by_category[ch.category_id] =
           (byProductType[pt].totals_by_category[ch.category_id] ?? 0) +
           ch.hours;
+        if (!excludedCatIds.has(ch.category_id)) {
+          controllableHoursByTiming[timingId] =
+            (controllableHoursByTiming[timingId] ?? 0) + ch.hours;
+        }
       }
       for (const t of filteredTimings) {
         const pt = timingToProduct[t.id] || "Unknown";
@@ -761,37 +777,49 @@ export const timingService = {
         byProductType[pt].timings.add(t.id);
       }
 
-      return Object.entries(byProductType).map(([product_type, agg]) => {
-        const task_count = agg.timings.size;
-        const totals_by_category = agg.totals_by_category;
-        const total_hours = Object.values(totals_by_category).reduce(
-          (s, v) => s + v,
-          0,
-        );
-        const averages_by_category = catIds.reduce(
-          (a, id) => {
-            a[id] =
+      return Object.entries(byProductType)
+        .map(([product_type, agg]) => {
+          // Eliminar categorías no controlables del payload (no se muestran
+          // ni se computan en totales/promedios).
+          const totals_by_category = { ...agg.totals_by_category };
+          for (const id of excludedCatIds) {
+            delete totals_by_category[id];
+          }
+          // task_count solo cuenta timings con al menos 1 hora controlable.
+          const task_count = Array.from(agg.timings).filter(
+            (id) => (controllableHoursByTiming[id] ?? 0) > 0,
+          ).length;
+          const total_hours = Object.values(totals_by_category).reduce(
+            (s, v) => s + v,
+            0,
+          );
+          const averages_by_category = catIds
+            .filter((id) => !excludedCatIds.has(id))
+            .reduce(
+              (a, id) => {
+                a[id] =
+                  task_count > 0
+                    ? Math.round(
+                        ((totals_by_category[id] ?? 0) / task_count) * 100,
+                      ) / 100
+                    : 0;
+                return a;
+              },
+              {} as Record<string, number>,
+            );
+          return {
+            product_type,
+            totals_by_category,
+            averages_by_category,
+            total_hours: Math.round(total_hours * 100) / 100,
+            avg_total_hours:
               task_count > 0
-                ? Math.round(
-                    ((totals_by_category[id] ?? 0) / task_count) * 100,
-                  ) / 100
-                : 0;
-            return a;
-          },
-          {} as Record<string, number>,
-        );
-        return {
-          product_type,
-          totals_by_category,
-          averages_by_category,
-          total_hours: Math.round(total_hours * 100) / 100,
-          avg_total_hours:
-            task_count > 0
-              ? Math.round((total_hours / task_count) * 100) / 100
-              : 0,
-          task_count,
-        };
-      }) as SquadTimingMetrics[];
+                ? Math.round((total_hours / task_count) * 100) / 100
+                : 0,
+            task_count,
+          };
+        })
+        .filter((m) => m.task_count > 0) as SquadTimingMetrics[];
     } catch (error) {
       console.error("Error in getSquadTimingMetrics:", error);
       throw error;
@@ -864,6 +892,14 @@ export const timingService = {
       const slugToId = buildSlugToIdMap(categories);
       const effectiveTestingId = slugToId["effective_testing"];
       const retestId = slugToId["qa_ready_for_testing"];
+      // Categorías que NO están bajo el control de QA y deben excluirse de
+      // los KPIs de QA (totales, eficiencia, promedios). Los datos crudos se
+      // siguen guardando en BD; aquí solo se filtran a la hora de reportar.
+      const excludedQAIds = new Set(
+        QA_NON_CONTROLLABLE_CATEGORY_SLUGS.map((slug) => slugToId[slug]).filter(
+          (id): id is string => Boolean(id),
+        ),
+      );
 
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
@@ -1033,19 +1069,40 @@ export const timingService = {
       const metrics: QATimingMetrics[] = Object.entries(byQA).map(
         ([qaName, entries]) => {
           const totals_by_category = initTotals();
+          // Total controlable por QA: excluye categorías como "QA - On Hold"
+          // o "QA - Sin Asignar" que están fuera del control del equipo y
+          // distorsionan los KPIs de eficiencia/promedios.
           let total_hours = 0;
           const uniqueTaskIds = new Set<string>();
           for (const e of entries) {
+            // Calcular horas controlables de esta entrada
+            let controllableHoursInEntry = 0;
+            for (const [catId, hours] of Object.entries(e.hours_by_category)) {
+              if (!excludedQAIds.has(catId)) {
+                controllableHoursInEntry += hours;
+              }
+            }
+            // Si la entrada solo registra horas en categorías no controlables
+            // (ej. solo "On Hold" / "Sin Asignar"), se descarta por completo:
+            // no suma a totales, no aporta task_count y no aparece en el
+            // detalle expandible de la tarea.
+            if (controllableHoursInEntry <= 0) continue;
+
             for (const [catId, hours] of Object.entries(e.hours_by_category)) {
               totals_by_category[catId] =
                 (totals_by_category[catId] ?? 0) + hours;
             }
-            total_hours += e.total_hours;
+            total_hours += controllableHoursInEntry;
             const taskId = timingToTask.get(e.timing_id);
             if (taskId) uniqueTaskIds.add(taskId);
           }
-          const count = uniqueTaskIds.size || entries.length;
-          const averages_by_category = catIds.reduce(
+          // Eliminar las categorías excluidas del payload para que NO
+          // aparezcan en columnas, leyendas, gráficos ni reportes de QA.
+          for (const excludedId of excludedQAIds) {
+            delete totals_by_category[excludedId];
+          }
+          const count = uniqueTaskIds.size;
+          const averages_by_category = Object.keys(totals_by_category).reduce(
             (a, id) => {
               a[id] =
                 count > 0
@@ -1080,7 +1137,7 @@ export const timingService = {
               ) / 100,
           };
         },
-      );
+      ).filter((m) => m.task_count > 0);
 
       return metrics.sort((a, b) => b.total_hours - a.total_hours);
     } catch (error) {

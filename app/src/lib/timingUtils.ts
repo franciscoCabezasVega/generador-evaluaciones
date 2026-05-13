@@ -7,6 +7,30 @@ const WORK_HOURS_PER_DAY = 8;
 const WORK_DAYS_PER_MONTH = 22; // Días laborales promedio
 
 /**
+ * Slugs de categorías de timing que NO están bajo el control del equipo de QA
+ * y por lo tanto deben excluirse de los reportes y métricas de QA
+ * (totales, eficiencia, promedios, leyendas, columnas y comparativas).
+ *
+ * - qa_on_hold:    la tarea está en pausa por definiciones/bloqueos externos.
+ * - qa_sin_asignar: la tarea aún no fue tomada por ningún QA.
+ *
+ * Los datos crudos siguen guardándose en BD; este filtro aplica solo a la
+ * presentación y al cálculo de KPIs de QA.
+ */
+export const QA_NON_CONTROLLABLE_CATEGORY_SLUGS: readonly string[] = [
+  "qa_on_hold",
+  "qa_sin_asignar",
+];
+
+/**
+ * Indica si un slug de categoría debe excluirse de las métricas de QA.
+ */
+export function isQANonControllableSlug(slug: string | null | undefined): boolean {
+  if (!slug) return false;
+  return QA_NON_CONTROLLABLE_CATEGORY_SLUGS.includes(slug);
+}
+
+/**
  * Formatea horas a un string legible
  * Ejemplo: 176 horas -> "1m 1d" (1 mes laborales = 176 horas)
  * @param hours Número de horas
