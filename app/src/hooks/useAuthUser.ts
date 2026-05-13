@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { getSessionViaManager } from "@/lib/fetchAuth";
 import { userProfileService } from "@/lib/services/userProfileService";
 import { UserProfile, AuthUser } from "@/lib/types";

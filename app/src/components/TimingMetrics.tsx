@@ -77,6 +77,12 @@ export function TimingMetricsDistributionChart({
     content: "",
   });
 
+  useEffect(() => {
+    const hide = () => setTooltip((t) => ({ ...t, visible: false }));
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-80 bg-gray-50 rounded-lg border border-gray-200">
@@ -108,12 +114,6 @@ export function TimingMetricsDistributionChart({
   const handleTooltipHide = () => {
     setTooltip({ ...tooltip, visible: false });
   };
-
-  useEffect(() => {
-    const hide = () => setTooltip((t) => ({ ...t, visible: false }));
-    window.addEventListener("scroll", hide, true);
-    return () => window.removeEventListener("scroll", hide, true);
-  }, []);
 
   return (
     <div className="rounded-lg bg-white p-6">

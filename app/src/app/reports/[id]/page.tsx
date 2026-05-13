@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { getSessionViaManager } from "@/lib/fetchAuth";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import Navbar from "@/components/Navbar";

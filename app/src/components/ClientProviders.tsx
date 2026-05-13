@@ -28,7 +28,6 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
         message.includes("refreshSession timed out") ||
         message.includes("silentRefreshToken timeout")
       ) {
-        // eslint-disable-next-line no-console
         console.warn("[auth] swallowed lock timeout:", message);
         event.preventDefault();
       }
