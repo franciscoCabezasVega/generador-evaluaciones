@@ -287,8 +287,8 @@ function TimingFormComponent(
     if (value === "" || value === "0") return "";
     const num = parseFloat(value);
     if (isNaN(num)) return `${fieldName} debe ser un número válido`;
-    if (!Number.isInteger(num))
-      return `${fieldName} debe ser un número entero (sin decimales)`;
+    // Allow decimals up to 2 dp (DB column is NUMERIC(10,2); ClickUp sync
+    // writes values like 20.88). Integer-only check removed in Round 6b.
     if (num < 0) return `${fieldName} no puede ser negativo`;
     return "";
   };
