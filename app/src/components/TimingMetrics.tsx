@@ -10,7 +10,19 @@ import {
   TshirtSize,
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
-import { formatTime } from "@/lib/timingUtils";
+import {
+  formatTime,
+  QA_NON_CONTROLLABLE_CATEGORY_SLUGS,
+} from "@/lib/timingUtils";
+
+// Categorías de timing que NO están bajo el control del equipo de QA y deben
+// ocultarse de las pestañas "Métricas" y "QA". La fuente única está en
+// `timingUtils` para mantener coherencia con el backend.
+const QA_NON_CONTROLLABLE_SLUG_SET = new Set<string>(
+  QA_NON_CONTROLLABLE_CATEGORY_SLUGS,
+);
+const isCategoryVisibleForQA = (cat: { is_active: boolean; slug: string }) =>
+  cat.is_active && !QA_NON_CONTROLLABLE_SLUG_SET.has(cat.slug);
 
 interface TimingMetricsProps {
   metrics: SquadTimingMetrics[];
@@ -282,7 +294,7 @@ export function TimingMetricsComparisonChart({
   loading = false,
 }: TimingMetricsProps) {
   const { timingCategories } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
   const slugToId = timingCategories.reduce(
     (a, c) => {
       a[c.slug] = c.id;
@@ -465,7 +477,7 @@ export function SquadTimingSummaryCard({
   metric: SquadTimingMetrics;
 }) {
   const { timingCategories } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
   const slugToId = timingCategories.reduce(
     (a, c) => {
       a[c.slug] = c.id;
@@ -678,7 +690,7 @@ export function QAHoursBarChart({
     content: "",
   });
   const { timingCategories } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
 
   useEffect(() => {
     const hide = () => setTooltip((t) => ({ ...t, visible: false }));
@@ -1017,7 +1029,7 @@ export function QAEfficiencyChart({
 }: QAEfficiencyChartProps) {
   const [expandedQA, setExpandedQA] = useState<string | null>(null);
   const { timingCategories, complexities } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
   const slugToId = timingCategories.reduce(
     (a, c) => {
       a[c.slug] = c.id;
@@ -1067,14 +1079,30 @@ export function QAEfficiencyChart({
       const qaData = redistribution.get(qaName);
       if (!qaData) continue;
 
+      // Excluir categorías fuera del control del QA (ej. on_hold/sin_asignar)
+      // tanto del total como del detalle visible. Coherente con el backend.
+      const excludedIds = QA_NON_CONTROLLABLE_CATEGORY_SLUGS
+        .map((s) => slugToId[s])
+        .filter(Boolean);
+      const cleanHours: Record<string, number> = {};
+      let controllableHours = 0;
+      for (const [catId, h] of Object.entries(qaData.hours_by_category)) {
+        if (excludedIds.includes(catId)) continue;
+        const value = Number(h) || 0;
+        cleanHours[catId] = value;
+        controllableHours += value;
+      }
+      // Si la tarea solo registró horas en categorías excluidas, se descarta.
+      if (controllableHours <= 0) continue;
+
       taskDetails.push({
         taskId: timing.task_id,
         taskName: task.name || "Tarea desconocida",
         taskLink: task.task_link || "",
         tshirtSize: task.tshirt_size || "",
         project_type: task.project_type || "",
-        hours_by_category: qaData.hours_by_category,
-        total: qaData.totalHours,
+        hours_by_category: cleanHours,
+        total: controllableHours,
       });
     }
 
@@ -1411,7 +1439,7 @@ export function QASummaryCards({
   loading = false,
 }: QATimingMetricsProps) {
   const { timingCategories } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
   const [tooltip, setTooltip] = useState<Tooltip>({
     visible: false,
     x: 0,
@@ -1645,7 +1673,12 @@ export function TshirtSizeComparison({
     content: "",
   });
   const { complexities, timingCategories } = useCatalogData();
-  const activeCategories = timingCategories.filter((c) => c.is_active);
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
+  // IDs de categorías excluidas, para descontarlas de los totales y descartar
+  // tareas cuyo único registro está en categorías fuera del control del QA.
+  const excludedCategoryIds = timingCategories
+    .filter((c) => QA_NON_CONTROLLABLE_SLUG_SET.has(c.slug))
+    .map((c) => c.id);
 
   useEffect(() => {
     const hide = () => setBarTooltip((t) => ({ ...t, visible: false }));
@@ -1726,13 +1759,25 @@ export function TshirtSizeComparison({
     const redistribution = redistributeTimingHours(timing.qa_entries, assignedQAs);
 
     for (const [qaName, data] of redistribution) {
+      // Excluir categorías fuera del control del QA del detalle y total.
+      const cleanHours: Record<string, number> = {};
+      let controllableTotal = 0;
+      for (const [catId, h] of Object.entries(data.hours_by_category ?? {})) {
+        if (excludedCategoryIds.includes(catId)) continue;
+        const value = Number(h) || 0;
+        cleanHours[catId] = value;
+        controllableTotal += value;
+      }
+      // Si la tarea solo tiene horas en categorías excluidas, no aporta a
+      // los KPIs y se descarta del agrupamiento.
+      if (controllableTotal <= 0) continue;
       group.entries.push({
         qaName,
         taskId: timing.task_id,
         taskName: task.name,
         taskLink: task.task_link || "",
-        totalHours: data.totalHours,
-        hours_by_category: data.hours_by_category,
+        totalHours: controllableTotal,
+        hours_by_category: cleanHours,
       });
     }
   }
