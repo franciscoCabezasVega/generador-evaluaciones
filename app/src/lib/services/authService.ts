@@ -1,5 +1,5 @@
 import { supabase } from "../supabase";
-import { invalidateSessionCache } from "../fetchAuth";
+import { invalidateSessionCache, getSessionViaManager, refreshSessionViaManager } from "../fetchAuth";
 
 /**
  * Limpiar datos de sesión sin hacer redirect
@@ -46,11 +46,11 @@ async function cleanSessionData() {
  */
 export const authService = {
   /**
-   * Obtener sesión actual con manejo de errores de refresh token
+   * Obtener sesión actual a través del SessionManager (con caché, sin competir por lock).
    */
   async getSession() {
     try {
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await getSessionViaManager();
 
       if (error?.message?.includes("Refresh Token")) {
         console.warn("Refresh token error, clearing session");
@@ -70,10 +70,11 @@ export const authService = {
 
   /**
    * Obtener usuario actual con manejo robusto
+   * Deriva del SessionManager para evitar adquirir navigator.lock dos veces.
    */
   async getUser() {
     try {
-      const { data, error } = await supabase.auth.getUser();
+      const { data, error } = await getSessionViaManager();
 
       if (error?.message?.includes("Refresh Token")) {
         console.warn("Refresh token error getting user, clearing session");
@@ -81,7 +82,7 @@ export const authService = {
         return null;
       }
 
-      return data.user || null;
+      return data.session?.user || null;
     } catch (error: unknown) {
       if (error instanceof Error && error.message?.includes("Refresh Token")) {
         console.warn("Caught refresh token error, clearing session");
@@ -146,7 +147,7 @@ export const authService = {
    */
   async refreshToken() {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      const { data, error } = await refreshSessionViaManager();
 
       if (error?.message?.includes("Refresh Token")) {
         console.warn("Cannot refresh token, session expired");
@@ -176,24 +177,11 @@ export const authService = {
    * bloquee indefinidamente después de inactividad prolongada.
    */
   async silentRefreshToken() {
-    const REFRESH_TIMEOUT_MS = 10_000;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
     try {
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("silentRefreshToken timeout")),
-          REFRESH_TIMEOUT_MS,
-        );
-      });
-
-      const { data, error } = await Promise.race([
-        supabase.auth.refreshSession(),
-        timeoutPromise,
-      ]);
-
-      // Siempre limpiar el timer para no dejar referencias colgadas
-      clearTimeout(timeoutId);
+      // Pasa por SessionManager.refreshSession() — coalesce + timeout 10s integrados.
+      // Sin coalesce, múltiples retries simultáneos disparaban N refreshes en paralelo,
+      // todos compitiendo por navigator.lock → timeouts en cascada.
+      const { data, error } = await refreshSessionViaManager();
 
       if (error?.message?.includes("Refresh Token")) {
         console.warn("Silent refresh failed: session expired");
@@ -210,7 +198,6 @@ export const authService = {
 
       return null;
     } catch (error) {
-      clearTimeout(timeoutId);
       // Log silencioso para no alertar al usuario
       // eslint-disable-next-line no-console
       console.debug("Silent token refresh error:", error);
@@ -250,7 +237,7 @@ export const authService = {
    */
   async isTokenValid(bufferSeconds: number = 60): Promise<boolean> {
     try {
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await getSessionViaManager();
 
       if (error || !data.session?.user) {
         return false;

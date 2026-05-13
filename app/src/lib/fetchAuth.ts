@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 
 type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
+type RefreshSessionResult = Awaited<ReturnType<typeof supabase.auth.refreshSession>>;
 
 // ─── SessionManager (Singleton) ──────────────────────────────────────────────
 //
@@ -33,6 +34,12 @@ class SessionManager {
 
   // La única promesa en vuelo hacia supabase.auth.getSession()
   private _inflight: Promise<GetSessionResult> | null = null;
+
+  // La única promesa en vuelo hacia supabase.auth.refreshSession()
+  // Coalesce todas las llamadas concurrentes a refresh para que solo una compita
+  // por navigator.lock. Sin esto, Múltiples retries de safeFetch disparan Múltiples
+  // refreshSession() en paralelo → todos esperan el lock → timeouts en cascada.
+  private _refreshInflight: Promise<RefreshSessionResult> | null = null;
 
   // Sincronización cross-tab: invalida el caché cuando otra pestaña hace logout/refresh
   private _channel: BroadcastChannel | null = null;
@@ -88,6 +95,54 @@ class SessionManager {
   }
 
   /**
+   * Refresca el token. Coalesce llamadas concurrentes — solo una refreshSession()
+   * en vuelo a la vez. Las demás reciben la misma promesa.
+   * Timeout de 10s para evitar bloqueos de navigator.lock.
+   */
+  refreshSession(): Promise<RefreshSessionResult> {
+    if (this._refreshInflight) return this._refreshInflight;
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () =>
+          reject(
+            new DOMException(
+              "refreshSession timed out waiting for lock",
+              "AbortError",
+            ),
+          ),
+        10_000,
+      );
+    });
+
+    this._refreshInflight = Promise.race([
+      supabase.auth.refreshSession(),
+      timeoutPromise,
+    ])
+      .then(
+        (result) => {
+          clearTimeout(timeoutId);
+          // Actualizar caché con la nueva sesión (TOKEN_REFRESHED también lo hará,
+          // pero hacerlo aquí evita una ventana de race entre callers).
+          if (!result.error && result.data.session) {
+            this._cache = { session: result.data.session, at: Date.now() };
+          }
+          return result;
+        },
+        (err) => {
+          clearTimeout(timeoutId);
+          throw err;
+        },
+      )
+      .finally(() => {
+        this._refreshInflight = null;
+      });
+
+    return this._refreshInflight;
+  }
+
+  /**
    * Retorna la sesión actual con tres niveles de optimización:
    *
    * 1. Caché fresco   → retorno inmediato sin ninguna llamada a Supabase.
@@ -124,7 +179,7 @@ class SessionManager {
                 "AbortError",
               ),
             ),
-          8_000,
+          12_000,
         );
       });
 
@@ -196,6 +251,43 @@ export function getTimeSinceLastActivity(): number {
  */
 export function invalidateSessionCache() {
   SessionManager.getInstance().invalidate();
+}
+
+/**
+ * Retorna la sesión actual a través del SessionManager (con caché y coalescing).
+ * Usar SIEMPRE en lugar de supabase.auth.getSession() directo para evitar
+ * competir por navigator.lock y causar "getSession timed out".
+ */
+export async function getSessionViaManager() {
+  try {
+    return await SessionManager.getInstance().getSession();
+  } catch {
+    return { data: { session: null }, error: null };
+  }
+}
+
+/**
+ * Retorna el usuario actual derivado del SessionManager (sin llamar getUser()).
+ * Evita adquirir navigator.lock una segunda vez y previene contención.
+ */
+export async function getCurrentUserViaManager() {
+  const { data, error } = await getSessionViaManager();
+  return { data: { user: data.session?.user ?? null }, error };
+}
+
+/**
+ * Refresca el token via SessionManager (coalesce). Usar en lugar de
+ * supabase.auth.refreshSession() directo para evitar contención en navigator.lock.
+ */
+export async function refreshSessionViaManager() {
+  try {
+    return await SessionManager.getInstance().refreshSession();
+  } catch (err) {
+    return {
+      data: { session: null, user: null },
+      error: err instanceof Error ? err : new Error(String(err)),
+    };
+  }
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getSessionViaManager } from "@/lib/fetchAuth";
 import { userProfileService } from "@/lib/services/userProfileService";
 import { UserProfile, AuthUser } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export function useAuthUser() {
         // Paso 2: Validar sesión con Supabase (sin llamar a getUser si no es necesario)
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await getSessionViaManager();
 
         if (!session?.user) {
           // Sin sesión válida

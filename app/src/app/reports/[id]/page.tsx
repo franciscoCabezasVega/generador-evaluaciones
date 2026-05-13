@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getSessionViaManager } from "@/lib/fetchAuth";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export default function ReportDetailPage() {
       const {
         data: { session },
         error,
-      } = await supabase.auth.getSession();
+      } = await getSessionViaManager();
       if (error || !session) {
         router.push("/auth/login");
       }

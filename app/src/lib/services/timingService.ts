@@ -863,7 +863,7 @@ export const timingService = {
       const catIds = categories.map((c) => c.id);
       const slugToId = buildSlugToIdMap(categories);
       const effectiveTestingId = slugToId["effective_testing"];
-      const retestId = slugToId["retest"];
+      const retestId = slugToId["qa_ready_for_testing"];
 
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {

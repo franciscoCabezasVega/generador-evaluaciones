@@ -306,6 +306,8 @@ export interface CreateTaskTimingInput {
   year: number;
   user_id?: string; // Opcional en el cliente, requerido en el servidor
   qa_entries: CreateTimingQAEntryInput[]; // Obligatorio: al menos 1 QA
+  /** Cuando es true, se omite la validación de horas > 0 (flujo save-then-sync con ClickUp) */
+  for_sync?: boolean;
 }
 
 export interface UpdateTaskTimingInput {

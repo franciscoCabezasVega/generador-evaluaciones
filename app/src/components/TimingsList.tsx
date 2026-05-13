@@ -110,6 +110,11 @@ export default function TimingsList({
 
                 {/* Badges de la tarea en fila separada */}
                 <div className="flex items-center gap-2 flex-wrap mt-1">
+                  {entry.product_type && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-300 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      {entry.product_type}
+                    </span>
+                  )}
                   {entry.tshirt_size && (
                     <span className="inline-flex items-center rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-semibold text-indigo-700">
                       {entry.tshirt_size}

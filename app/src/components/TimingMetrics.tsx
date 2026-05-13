@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SquadTimingMetrics,
   QATimingMetrics,
@@ -10,6 +10,7 @@ import {
   TshirtSize,
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
+import { formatTime } from "@/lib/timingUtils";
 
 interface TimingMetricsProps {
   metrics: SquadTimingMetrics[];
@@ -108,6 +109,12 @@ export function TimingMetricsDistributionChart({
     setTooltip({ ...tooltip, visible: false });
   };
 
+  useEffect(() => {
+    const hide = () => setTooltip((t) => ({ ...t, visible: false }));
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
+
   return (
     <div className="rounded-lg bg-white p-6">
       <h3 className="mb-6 text-lg font-semibold">
@@ -163,7 +170,7 @@ export function TimingMetricsDistributionChart({
                     onMouseEnter={(e) =>
                       handleTooltipShow(
                         e,
-                        `${metric.product_type}: ${metric.total_hours.toFixed(1)}h (${percentageValue.toFixed(1)}%)`,
+                        `${metric.product_type}: ${formatTime(metric.total_hours)} (${percentageValue.toFixed(1)}%)`,
                       )
                     }
                     onMouseLeave={handleTooltipHide}
@@ -192,7 +199,7 @@ export function TimingMetricsDistributionChart({
                 fontSize="10"
                 fill="#6B7280"
               >
-                {metrics.reduce((sum, m) => sum + m.total_hours, 0).toFixed(1)}h
+                {formatTime(metrics.reduce((sum, m) => sum + m.total_hours, 0))}
               </text>
             </svg>
           </div>
@@ -211,7 +218,7 @@ export function TimingMetricsDistributionChart({
                 onMouseEnter={(e) =>
                   handleTooltipShow(
                     e,
-                    `${metric.product_type}: ${metric.total_hours.toFixed(1)}h (${percentage.toFixed(1)}%)`,
+                    `${metric.product_type}: ${formatTime(metric.total_hours)} (${percentage.toFixed(1)}%)`,
                   )
                 }
                 onMouseLeave={handleTooltipHide}
@@ -231,7 +238,7 @@ export function TimingMetricsDistributionChart({
                   </span>
                 </div>
                 <p className="text-sm text-gray-600">
-                  {metric.total_hours.toFixed(1)}h - {metric.task_count} tareas
+                  {formatTime(metric.total_hours)} · {metric.task_count} tareas
                 </p>
               </div>
             );
@@ -316,20 +323,20 @@ export function TimingMetricsComparisonChart({
               {activeCategories.map((cat) => (
                 <th
                   key={cat.id}
-                  className="text-center py-3 px-4 font-semibold text-gray-700"
+                  className="text-center py-3 px-4 font-semibold text-gray-700 whitespace-nowrap"
                   title={cat.name}
                 >
                   {cat.name}
                 </th>
               ))}
               <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
+                className="text-center py-3 px-4 font-semibold text-gray-700 whitespace-nowrap"
                 title="Horas promedio totales por tarea"
               >
                 Total
               </th>
               <th
-                className="text-center py-3 px-4 font-semibold text-gray-700"
+                className="text-center py-3 px-4 font-semibold text-gray-700 whitespace-nowrap"
                 title="Cantidad de tareas registradas"
               >
                 Tareas
@@ -352,14 +359,14 @@ export function TimingMetricsComparisonChart({
                       ? (avg / metric.avg_total_hours) * 100
                       : 0;
                   return (
-                    <td key={cat.id} className="py-4 px-4">
+                    <td key={cat.id} className="py-4 px-4 whitespace-nowrap">
                       <div className="flex items-center justify-center">
                         <div className="text-right">
                           <p
                             className="font-semibold"
                             style={{ color: cat.hex_color }}
                           >
-                            {avg.toFixed(2)}h
+                            {avg > 0 ? formatTime(avg) : "0h"}
                           </p>
                           <p className="text-xs text-gray-500">
                             {pct.toFixed(0)}%
@@ -369,11 +376,11 @@ export function TimingMetricsComparisonChart({
                     </td>
                   );
                 })}
-                <td className="py-4 px-4">
+                <td className="py-4 px-4 whitespace-nowrap">
                   <div className="flex items-center justify-center">
                     <div className="text-right">
                       <p className="font-bold text-gray-900">
-                        {metric.avg_total_hours.toFixed(2)}h
+                        {formatTime(metric.avg_total_hours)}
                       </p>
                       <p className="text-xs text-gray-500">promedio</p>
                     </div>
@@ -432,7 +439,7 @@ export function TimingMetricsComparisonChart({
                 <div className="flex justify-between">
                   <span>Esperas promedio</span>
                   <span className="font-bold text-gray-700">
-                    {totalWaiting.toFixed(1)}h
+                    {formatTime(totalWaiting)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -440,7 +447,7 @@ export function TimingMetricsComparisonChart({
                   <span
                     className={`font-bold ${avgRetest < 0.5 ? "text-green-600" : avgRetest < 1 ? "text-yellow-600" : "text-red-600"}`}
                   >
-                    {avgRetest.toFixed(2)}h
+                    {formatTime(avgRetest)}
                   </span>
                 </div>
               </div>
@@ -504,8 +511,8 @@ export function SquadTimingSummaryCard({
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Horas Totales"
-          value={metric.total_hours.toFixed(1)}
-          unit="h"
+          value={formatTime(metric.total_hours)}
+          unit=""
           icon="⏱️"
           color="#3B82F6"
         />
@@ -537,8 +544,8 @@ export function SquadTimingSummaryCard({
         />
         <KPICard
           label="Promedio por Tarea"
-          value={metric.avg_total_hours.toFixed(2)}
-          unit="h"
+          value={formatTime(metric.avg_total_hours)}
+          unit=""
           icon="📈"
           color="#8B5CF6"
         />
@@ -566,7 +573,7 @@ export function SquadTimingSummaryCard({
                       className="font-semibold"
                       style={{ color: cat.hex_color }}
                     >
-                      {hours.toFixed(1)}h
+                      {formatTime(hours)}
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
@@ -597,7 +604,7 @@ export function SquadTimingSummaryCard({
                 {efficiencyRate.toFixed(1)}%
               </p>
               <p className="text-xs text-gray-600 mt-2">
-                {totalWaitingHours.toFixed(1)}h en esperas / bloqueantes
+                {formatTime(totalWaitingHours)} en esperas / bloqueantes
               </p>
             </div>
 
@@ -628,7 +635,7 @@ export function SquadTimingSummaryCard({
                 Carga de Trabajo
               </p>
               <p className="text-2xl font-bold text-purple-600 mt-2">
-                {metric.avg_total_hours.toFixed(2)}h
+                {formatTime(metric.avg_total_hours)}
               </p>
               <p className="text-xs text-gray-600 mt-2">promedio por tarea</p>
             </div>
@@ -672,6 +679,12 @@ export function QAHoursBarChart({
   });
   const { timingCategories } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
+
+  useEffect(() => {
+    const hide = () => setTooltip((t) => ({ ...t, visible: false }));
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
 
   if (loading) {
     return (
@@ -733,7 +746,7 @@ export function QAHoursBarChart({
                       {qa.task_count} tarea{qa.task_count !== 1 ? "s" : ""}
                     </span>
                     <span className="font-bold text-gray-700">
-                      {qa.total_hours.toFixed(1)}h
+                      {formatTime(qa.total_hours)}
                     </span>
                   </div>
                 </div>
@@ -748,7 +761,7 @@ export function QAHoursBarChart({
                         onMouseEnter={(e) =>
                           handleBarSectionMouseEnter(
                             e,
-                            `${cat.name}: ${hours.toFixed(1)}h`,
+                            `${cat.name}: ${formatTime(hours)}`,
                           )
                         }
                         onMouseLeave={handleMouseLeave}
@@ -880,7 +893,7 @@ export function QAEfficiencyChart({
   timings = [],
   tasks = [],
 }: QAEfficiencyChartProps) {
-  const [expandedQA, setExpandedQA] = useState<Set<string>>(new Set());
+  const [expandedQA, setExpandedQA] = useState<string | null>(null);
   const { timingCategories } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
   const slugToId = timingCategories.reduce(
@@ -898,15 +911,7 @@ export function QAEfficiencyChart({
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
 
   const toggleExpand = (qaName: string) => {
-    setExpandedQA((prev) => {
-      const next = new Set(prev);
-      if (next.has(qaName)) {
-        next.delete(qaName);
-      } else {
-        next.add(qaName);
-      }
-      return next;
-    });
+    setExpandedQA((prev) => (prev === qaName ? null : qaName));
   };
 
   // Get task details for a specific QA — uses assigned_qa (not registerer) to
@@ -1012,7 +1017,7 @@ export function QAEfficiencyChart({
             {qaMetrics
               .sort((a, b) => b.efficiency_rate - a.efficiency_rate)
               .map((qa, idx) => {
-                const isExpanded = expandedQA.has(qa.qa_name);
+                const isExpanded = expandedQA === qa.qa_name;
                 const taskDetails = isExpanded
                   ? getTaskDetailsForQA(qa.qa_name)
                   : [];
@@ -1020,7 +1025,7 @@ export function QAEfficiencyChart({
                 return (
                   <React.Fragment key={qa.qa_name}>
                     <tr
-                      className={`${idx % 2 === 0 ? "bg-gray-50 dark:bg-gray-800/50" : "bg-white dark:bg-gray-900"} ${hasExpandableData ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" : ""} ${isExpanded ? "bg-blue-50 dark:bg-blue-900/30" : ""}`}
+                      className={`${idx % 2 === 0 ? "bg-gray-50 dark:bg-[#1a2235]" : "bg-white dark:bg-[#151e2f]"} ${hasExpandableData ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" : ""} ${isExpanded ? "bg-blue-50 dark:bg-blue-900/30" : ""}`}
                       onClick={
                         hasExpandableData
                           ? () => toggleExpand(qa.qa_name)
@@ -1044,21 +1049,19 @@ export function QAEfficiencyChart({
                           {qa.task_count}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center font-semibold text-blue-600">
-                        {(slugToId["effective_testing"]
+                      <td className="py-3 px-3 text-center font-semibold text-blue-600 whitespace-nowrap">
+                        {formatTime(slugToId["effective_testing"]
                           ? (qa.totals_by_category?.[
                               slugToId["effective_testing"]
                             ] ?? 0)
                           : 0
-                        ).toFixed(1)}
-                        h
+                        )}
                       </td>
-                      <td className="py-3 px-3 text-center font-semibold text-red-600">
-                        {(slugToId["retest"]
+                      <td className="py-3 px-3 text-center font-semibold text-red-600 whitespace-nowrap">
+                        {formatTime(slugToId["retest"]
                           ? (qa.totals_by_category?.[slugToId["retest"]] ?? 0)
                           : 0
-                        ).toFixed(1)}
-                        h
+                        )}
                       </td>
                       <td className="py-3 px-3 text-center">
                         <span
@@ -1086,8 +1089,8 @@ export function QAEfficiencyChart({
                           {qa.retest_rate.toFixed(1)}%
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center font-semibold text-purple-600">
-                        {qa.avg_total_hours.toFixed(2)}h
+                      <td className="py-3 px-3 text-center font-semibold text-purple-600 whitespace-nowrap">
+                        {formatTime(qa.avg_total_hours)}
                       </td>
                     </tr>
 
@@ -1095,10 +1098,10 @@ export function QAEfficiencyChart({
                     {isExpanded && taskDetails.length > 0 && (
                       <tr>
                         <td colSpan={7} className="p-0">
-                          <div className="bg-slate-100 dark:bg-[#0f1829] border-t-2 border-b-2 border-indigo-300 dark:border-indigo-800">
-                            <table className="w-full text-xs">
+                          <div className="overflow-x-auto bg-[#111827] border-t-2 border-b-2 border-indigo-300 dark:border-indigo-800">
+                            <table className="min-w-full text-xs">
                               <thead>
-                                <tr className="bg-indigo-50 dark:bg-indigo-950/60 border-b border-indigo-200 dark:border-indigo-800/80">
+                                <tr className="bg-indigo-950/60 border-b border-indigo-800/80">
                                   <th className="text-left py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300">
                                     #
                                   </th>
@@ -1123,7 +1126,7 @@ export function QAEfficiencyChart({
                                   {activeCategories.map((cat) => (
                                     <th
                                       key={cat.id}
-                                      className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300"
+                                      className="text-center py-2 px-3 font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap"
                                       title={cat.name}
                                     >
                                       {cat.name}
@@ -1143,8 +1146,8 @@ export function QAEfficiencyChart({
                                     key={detail.taskId}
                                     className={
                                       taskIdx % 2 === 0
-                                        ? "bg-white dark:bg-white/[0.04] border-b border-slate-100 dark:border-white/5"
-                                        : "bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/5"
+                                        ? "bg-[#1a2235] text-slate-200 border-b border-white/5"
+                                        : "bg-[#151e2f] text-slate-200 border-b border-white/5"
                                     }
                                   >
                                     <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
@@ -1184,21 +1187,20 @@ export function QAEfficiencyChart({
                                     {activeCategories.map((cat) => (
                                       <td
                                         key={cat.id}
-                                        className="py-2 px-3 text-center font-medium"
+                                        className="py-2 px-3 text-center font-medium whitespace-nowrap"
                                         style={{ color: cat.hex_color }}
                                       >
-                                        {Number(
+                                        {formatTime(Number(
                                           detail.hours_by_category?.[cat.id] ??
                                             0,
-                                        ).toFixed(2)}
-                                        h
+                                        ))}
                                       </td>
                                     ))}
                                     <td
-                                      className="py-2 px-3 text-center font-bold"
+                                      className="py-2 px-3 text-center font-bold whitespace-nowrap"
                                       style={{ color: "#F59E0B" }}
                                     >
-                                      {Number(detail.total).toFixed(2)}h
+                                      {formatTime(Number(detail.total))}
                                     </td>
                                   </tr>
                                 ))}
@@ -1242,6 +1244,13 @@ export function QASummaryCards({
     y: 0,
     content: "",
   });
+
+  useEffect(() => {
+    const hide = () => setTooltip((t) => ({ ...t, visible: false }));
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
+
   const handleBarTooltipShow = (
     e: React.MouseEvent<HTMLDivElement>,
     content: string,
@@ -1295,7 +1304,7 @@ export function QASummaryCards({
                     <div>
                       <p className="text-gray-500 text-xs">Horas Totales</p>
                       <p className="font-bold text-gray-900">
-                        {qa.total_hours.toFixed(1)}h
+                        {formatTime(qa.total_hours)}
                       </p>
                     </div>
                     <div>
@@ -1347,7 +1356,7 @@ export function QASummaryCards({
                             onMouseEnter={(e) =>
                               handleBarTooltipShow(
                                 e,
-                                `${cat.name}: ${hours.toFixed(1)}h (${pct.toFixed(0)}%)`,
+                                `${cat.name}: ${formatTime(hours)} (${pct.toFixed(0)}%)`,
                               )
                             }
                             onMouseLeave={handleBarTooltipHide}
@@ -1476,6 +1485,12 @@ export function TshirtSizeComparison({
   });
   const { complexities, timingCategories } = useCatalogData();
   const activeCategories = timingCategories.filter((c) => c.is_active);
+
+  useEffect(() => {
+    const hide = () => setBarTooltip((t) => ({ ...t, visible: false }));
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
 
   // Derivar equivalente dinámico de TSHIRT_SIZE_HOURS y TSHIRT_SIZES desde el catálogo
   const sizeHoursMap = Object.fromEntries(
@@ -1781,7 +1796,7 @@ export function TshirtSizeComparison({
                   </span>{" "}
                   registros ·{" "}
                   <span className="font-semibold text-gray-700">
-                    {group.avgHours.toFixed(1)}h
+                    {formatTime(group.avgHours)}
                   </span>{" "}
                   promedio · Esperado: {group.expectedMin}-{group.expectedMax}h
                 </div>
@@ -1833,7 +1848,7 @@ export function TshirtSizeComparison({
                             onMouseEnter={(e) =>
                               handleBarTooltipShow(
                                 e,
-                                `${qa.name}: ${qa.avgHours.toFixed(1)}h promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`,
+                                `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`,
                               )
                             }
                             onMouseLeave={handleBarTooltipHide}
@@ -1857,7 +1872,7 @@ export function TshirtSizeComparison({
                             </div>
                           </div>
                           <span className="text-xs font-bold text-gray-700 w-20 text-right">
-                            {qa.avgHours.toFixed(1)}h ({qa.count})
+                            {formatTime(qa.avgHours)} ({qa.count})
                           </span>
                         </div>
                       );
@@ -1889,7 +1904,7 @@ export function TshirtSizeComparison({
                           <strong>{group.tshirtSize}</strong> y tipo de proyecto{" "}
                           <strong>{group.project_type}</strong>, el promedio
                           general es{" "}
-                          <strong>{group.avgHours.toFixed(1)}h</strong>{" "}
+                          <strong>{formatTime(group.avgHours)}</strong>{" "}
                           (esperado: {group.expectedMin}-{group.expectedMax}h).
                         </p>
                         {hasSignificantSpread ? (
@@ -1898,10 +1913,10 @@ export function TshirtSizeComparison({
                             <strong className="text-orange-700">
                               variación significativa
                             </strong>{" "}
-                            de {spread.toFixed(1)}h entre el QA más rápido (
-                            {qaList[0].name}: {qaList[0].avgHours.toFixed(1)}h)
+                            de {formatTime(spread)} entre el QA más rápido (
+                            {qaList[0].name}: {formatTime(qaList[0].avgHours)})
                             y el más lento ({qaList[qaList.length - 1].name}:{" "}
-                            {qaList[qaList.length - 1].avgHours.toFixed(1)}h).
+                            {formatTime(qaList[qaList.length - 1].avgHours)}).
                             Esto podría indicar diferencias en complejidad de
                             tareas, experiencia del QA, o la calidad de los
                             entregables del desarrollo.
@@ -1914,7 +1929,7 @@ export function TshirtSizeComparison({
                             </strong>{" "}
                             entre sí
                             {spread > 0
-                              ? ` (variación de ${spread.toFixed(1)}h)`
+                              ? ` (variación de ${formatTime(spread)})`
                               : ""}
                             , lo cual sugiere un buen estándar en el equipo para
                             este tipo de tarea.
@@ -2039,14 +2054,13 @@ export function TshirtSizeComparison({
                                   className="py-1.5 px-2 text-center font-medium"
                                   style={{ color: cat.hex_color }}
                                 >
-                                  {Number(
+                                  {formatTime(Number(
                                     entry.hours_by_category?.[cat.id] ?? 0,
-                                  ).toFixed(2)}
-                                  h
+                                  ))}
                                 </td>
                               ))}
                               <td className="py-1.5 px-2 text-center font-bold text-gray-800">
-                                {Number(entry.totalHours).toFixed(2)}h
+                                {formatTime(Number(entry.totalHours))}
                               </td>
                               <td className="py-1.5 px-2 text-center">
                                 <span

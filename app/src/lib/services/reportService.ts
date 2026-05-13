@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getCurrentUserViaManager } from "@/lib/fetchAuth";
 import { Report, CreateReportInput } from "@/lib/types";
 
 export const reportService = {
@@ -71,7 +72,7 @@ export const reportService = {
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getCurrentUserViaManager();
 
     if (authError || !user) throw new Error("User not authenticated");
 

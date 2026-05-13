@@ -157,8 +157,42 @@ export function useSafeAuthFetch() {
           throw error instanceof Error ? error : new Error(String(error));
         }
 
+        // Normalizar: tanto DOMException como Error con name="AbortError"
+        const isAbortError =
+          error instanceof Error && error.name === "AbortError";
+
+        // getSession lock timeout — verificar ANTES del check de caller abort
+        // para que el mensaje crudo nunca llegue a la UI.
+        if (
+          error instanceof Error &&
+          error.message.includes("getSession timed out")
+        ) {
+          const SESSION_LOCK_MAX_RETRIES = 3;
+          if (retryCount < SESSION_LOCK_MAX_RETRIES) {
+            const delay = 2000 + retryCount * 1000;
+            console.warn(
+              `Session lock timeout (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`,
+            );
+            onRetry?.({
+              attempt: retryCount + 1,
+              max: SESSION_LOCK_MAX_RETRIES + 1,
+              reason: "session-lock",
+              delayMs: delay,
+            });
+            try {
+              await abortableDelay(delay, callerSignal);
+            } catch {
+              throw new DOMException("The operation was aborted.", "AbortError");
+            }
+            return safeFetch(url, options, retryCount + 1, effectiveTimeout, onRetry);
+          }
+          throw new Error(
+            "La sesión está ocupada. Espera unos segundos e intenta de nuevo.",
+          );
+        }
+
         // AbortError puede ser por timeout interno, signal del caller, o desmontaje
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (isAbortError) {
           // Si el caller canceló la request (e.g. cleanup de useEffect / navegación),
           // propagar AbortError tal cual para que el caller lo filtre
           if (callerSignal?.aborted) {

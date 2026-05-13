@@ -96,9 +96,6 @@ export async function POST(request: NextRequest) {
       if (!Number.isFinite(value)) {
         throw new Error(`${fieldName} must be a finite number`);
       }
-      if (!Number.isInteger(value)) {
-        throw new Error(`${fieldName} must be an integer (no decimals)`);
-      }
       if (value < 0) {
         throw new Error(`${fieldName} must be a non-negative number`);
       }
@@ -133,7 +130,7 @@ export async function POST(request: NextRequest) {
           entryTotal += hours as number;
         }
 
-        if (entryTotal === 0) {
+        if (entryTotal === 0 && !body.for_sync) {
           throw new Error(
             `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
           );

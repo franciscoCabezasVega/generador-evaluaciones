@@ -47,46 +47,113 @@ interface ClickUpSyncInfo {
 
 function ClickUpSyncPanel({
   taskId,
+  taskMonth,
+  taskYear,
+  assignedQA,
+  taskLink,
   safeFetch,
 }: {
   taskId: string;
+  taskMonth: number;
+  taskYear: number;
+  assignedQA: string[];
+  taskLink?: string;
   safeFetch: ReturnType<typeof useSafeAuthFetch>["safeFetch"];
 }) {
-  const [clickupId, setClickupId] = useState("");
+  const idFromLink = taskLink ? (taskLink.split("/").pop()?.split("?")[0] ?? "") : "";
+  const [clickupId, setClickupId] = useState(idFromLink);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<ClickUpSyncInfo | null>(null);
+  const [hasTiming, setHasTiming] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    safeFetch(`/api/tasks/${taskId}/clickup-sync`)
-      .then(async (res) => {
-        if (cancelled) return;
-        if (res.ok) {
-          const data = await res.json() as ClickUpSyncInfo;
-          setSyncInfo(data);
-          if (data.clickup_qa_task_id) setClickupId(data.clickup_qa_task_id);
-        }
-      })
-      .catch(() => null)
-      .finally(() => { if (!cancelled) setLoading(false); });
+    // Cargar sync info y verificar si ya existe un timing para este mes/año
+    Promise.all([
+      safeFetch(`/api/tasks/${taskId}/clickup-sync`)
+        .then(async (res) => {
+          if (cancelled) return;
+          if (res.ok) {
+            const data = await res.json() as ClickUpSyncInfo;
+            setSyncInfo(data);
+            if (data.clickup_qa_task_id) setClickupId(data.clickup_qa_task_id);
+            else if (idFromLink) setClickupId(idFromLink);
+          }
+        })
+        .catch(() => null),
+      safeFetch(`/api/timings?task_id=${taskId}&month=${taskMonth}&year=${taskYear}`)
+        .then(async (res) => {
+          if (cancelled) return;
+          if (res.ok) {
+            const data = await res.json() as unknown[];
+            setHasTiming(Array.isArray(data) && data.length > 0);
+          }
+        })
+        .catch(() => null),
+    ]).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId, taskMonth, taskYear]);
 
   const handleSync = async () => {
     const id = clickupId.trim();
     if (!id) { setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." }); return; }
+
     setSyncing(true);
     setMsg(null);
+
+    // Si no hay timing, crearlo automáticamente con las horas en 0 (for_sync)
+    if (!hasTiming) {
+      if (assignedQA.length === 0) {
+        setMsg({ type: "error", text: "La tarea no tiene QA asignados. Edita la tarea para asignar QA primero." });
+        setSyncing(false);
+        return;
+      }
+      setMsg({ type: "success", text: "Creando registro de timing..." });
+      try {
+        const createRes = await safeFetch("/api/timings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            task_id: taskId,
+            month: taskMonth,
+            year: taskYear,
+            for_sync: true,
+            qa_entries: assignedQA.map((qaName) => ({
+              qa_name: qaName,
+              hours_by_category: {},
+            })),
+          }),
+        });
+        if (!createRes.ok) {
+          setMsg({ type: "error", text: "No se pudo crear el registro de timing. Intenta de nuevo." });
+          setSyncing(false);
+          return;
+        }
+        setHasTiming(true);
+        setMsg({ type: "success", text: "Timing creado. Sincronizando con ClickUp..." });
+      } catch {
+        setMsg({ type: "error", text: "Error al crear el timing. Intenta de nuevo." });
+        setSyncing(false);
+        return;
+      }
+    }
+
     try {
-      const res = await safeFetch(`/api/tasks/${taskId}/clickup-sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clickup_qa_task_id: id }),
-      });
+      // Timeout de 60s: el servidor llama a ClickUp (puede tardar ~30s) + operaciones DB
+      const res = await safeFetch(
+        `/api/tasks/${taskId}/clickup-sync`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clickup_qa_task_id: id }),
+        },
+        0,
+        60_000,
+      );
       const data = await res.json() as { ok?: boolean; skipped?: boolean; error?: string; clickup_qa_task_id?: string };
       if (!res.ok) {
         setMsg({ type: "error", text: data.error ?? "Error al sincronizar" });
@@ -103,11 +170,18 @@ function ClickUpSyncPanel({
       setMsg({
         type: "success",
         text: data.skipped
-          ? "Sincronizado. No había registros de timing para esta tarea todavía — los tiempos se cargarán cuando existan entradas QA."
+          ? "Sincronizado. No había tiempos en ClickUp todavía — los datos se actualizarán al próximo sync."
           : "¡Tiempos sincronizados correctamente desde ClickUp!",
       });
-    } catch {
-      setMsg({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+    } catch (err) {
+      const isTimeout = err instanceof Error &&
+        (err.name === "TimeoutError" || err.message.includes("tardó más de"));
+      setMsg({
+        type: "error",
+        text: isTimeout
+          ? "ClickUp tardó demasiado en responder. Espera unos segundos e intenta de nuevo."
+          : "Error de conexión. Intenta de nuevo.",
+      });
     } finally {
       setSyncing(false);
     }
@@ -977,7 +1051,14 @@ export default function TasksPage() {
                                     )}
                                 </div>
                                 {/* ClickUp sync */}
-                                <ClickUpSyncPanel taskId={task.id} safeFetch={safeFetch} />
+                                <ClickUpSyncPanel
+                                  taskId={task.id}
+                                  taskMonth={task.month}
+                                  taskYear={task.year}
+                                  assignedQA={task.assigned_qa ?? []}
+                                  taskLink={task.task_link ?? undefined}
+                                  safeFetch={safeFetch}
+                                />
                                 {/* Tabla de squads */}
                                 <div className="bg-gray-100 border border-gray-300 rounded-lg overflow-hidden">
                                   <table className="w-full text-sm">
