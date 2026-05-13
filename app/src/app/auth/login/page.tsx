@@ -7,7 +7,12 @@ import { invalidateSessionCache, getSessionViaManager } from "@/lib/fetchAuth";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, X } from "lucide-react";
 
-type SessionExpiredReason = "timeout" | "inactive" | "error" | "unknown";
+type SessionExpiredReason =
+  | "timeout"
+  | "inactive"
+  | "error"
+  | "refresh_failed"
+  | "unknown";
 
 const REMEMBER_ME_KEY = "login_remembered_email";
 

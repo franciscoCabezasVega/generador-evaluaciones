@@ -98,7 +98,13 @@ export const authService = {
    * @returns Promise que se resuelve después de la limpieza (antes del redirect)
    */
   async clearSession(
-    reason?: "timeout" | "inactive" | "error" | "user-logout" | boolean,
+    reason?:
+      | "timeout"
+      | "inactive"
+      | "error"
+      | "user-logout"
+      | "refresh_failed"
+      | boolean,
   ) {
     try {
       // Limpiar todos los datos de sesión (await para asegurar limpieza completa)

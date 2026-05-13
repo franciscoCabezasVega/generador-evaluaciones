@@ -89,22 +89,21 @@ export function SessionChecker() {
             // revocado, red cortada permanentemente, etc.). Forzamos
             // logout local + redirect al login para sacar al usuario del
             // estado bloqueado en vez de seguir reintentando.
+            //
+            // clearSession ya hace el redirect (window.location.href) con
+            // el reason recibido, así que es la única fuente de verdad
+            // para la URL de login. No hace falta un router.push extra.
             if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
               console.warn(
                 "SessionChecker: Max consecutive refresh failures reached, forcing re-login",
               );
               consecutiveFailuresRef.current = 0;
               try {
-                await authService.clearSession("error");
+                await authService.clearSession("refresh_failed");
               } catch (signOutErr) {
                 console.error(
-                  "SessionChecker: signOut during recovery failed",
+                  "SessionChecker: clearSession during recovery failed",
                   signOutErr,
-                );
-              }
-              if (isMountedRef.current) {
-                router.push(
-                  "/auth/login?sessionExpired=true&reason=refresh_failed",
                 );
               }
             }
@@ -142,7 +141,7 @@ export function SessionChecker() {
         checkIntervalRef.current = null;
       }
     };
-  }, [user?.id, router]);
+  }, [user?.id]);
 
   // Listener para detectar cuando storage es borrado (incluye limpieza manual del navegador)
   useEffect(() => {
