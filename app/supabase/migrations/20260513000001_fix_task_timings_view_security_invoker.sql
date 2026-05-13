@@ -1,0 +1,16 @@
+-- Fix: change task_timings_with_totals from SECURITY DEFINER to SECURITY INVOKER
+--
+-- SECURITY DEFINER (default for views in Postgres) runs the view with the
+-- permissions of the view owner (postgres), which bypasses RLS on all
+-- underlying tables. This means any authenticated user querying the view
+-- could see all rows from all users — a privilege escalation risk.
+--
+-- SECURITY INVOKER makes the view execute with the querying user's
+-- permissions, so RLS policies on the underlying tables apply normally:
+--   - task_timings:             is_admin_user() OR user_id = auth.uid()
+--   - timing_qa_entries:        is_admin_user() OR (timing owned by caller)
+--   - timing_qa_category_hours: USING (true) — any authenticated user
+--
+-- Result: admins retain full transversal visibility; regular users see
+-- only their own timings. No legitimate access is removed.
+ALTER VIEW public.task_timings_with_totals SET (security_invoker = true);

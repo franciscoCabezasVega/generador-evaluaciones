@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/lib/services/authService";
 
+// Circuit breaker: número máximo de fallos consecutivos de refresh antes de
+// forzar re-login. Definido en scope de módulo para evitar closure stale
+// dentro del useEffect.
+const MAX_CONSECUTIVE_FAILURES = 2;
+
 /**
  * Componente que valida la sesión periódicamente en background
  * No renderiza nada, solo mantiene tokens frescos
@@ -20,6 +25,8 @@ export function SessionChecker() {
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCheckRef = useRef<number>(0);
   const isMountedRef = useRef(true);
+  // Contador de fallos consecutivos de refresh (circuit breaker).
+  const consecutiveFailuresRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -37,6 +44,10 @@ export function SessionChecker() {
         clearInterval(checkIntervalRef.current);
         checkIntervalRef.current = null;
       }
+      // Reset circuit breaker counter al cerrar sesión / perder user.
+      // Evita que un usuario que acumuló 1 fallo, hace logout y vuelve a
+      // entrar, dispare el forzar re-login antes de tiempo en su nueva sesión.
+      consecutiveFailuresRef.current = 0;
       return;
     }
 
@@ -75,11 +86,35 @@ export function SessionChecker() {
           const refreshed = await authService.silentRefreshToken();
 
           if (!refreshed && isMountedRef.current) {
-            console.warn("SessionChecker: Token refresh failed, session lost");
+            consecutiveFailuresRef.current += 1;
+            console.warn(
+              `SessionChecker: Token refresh failed, session lost (${consecutiveFailuresRef.current}/${MAX_CONSECUTIVE_FAILURES})`,
+            );
+
+            // Circuit breaker: tras N fallos consecutivos asumimos que la
+            // sesión está irrecuperable (lock atascado, refresh token
+            // revocado, red cortada permanentemente, etc.). Forzamos
+            // logout local + redirect al login para sacar al usuario del
+            // estado bloqueado en vez de seguir reintentando.
+            //
+            // clearSession ya hace el redirect (window.location.href) con
+            // el reason recibido, así que es la única fuente de verdad
+            // para la URL de login. No hace falta un router.push extra.
+            if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+              console.warn(
+                "SessionChecker: Max consecutive refresh failures reached, forcing re-login",
+              );
+              consecutiveFailuresRef.current = 0;
+              // clearSession ya atrapa sus propios errores y fuerza el
+              // redirect — no necesitamos un try/catch adicional aquí.
+              await authService.clearSession("refresh_failed");
+            }
           } else if (refreshed && isMountedRef.current) {
+            consecutiveFailuresRef.current = 0;
             console.warn("SessionChecker: Token refreshed successfully");
           }
         } else if (isMountedRef.current) {
+          consecutiveFailuresRef.current = 0;
           console.warn("SessionChecker: Token validation passed");
         }
       } catch (error) {
