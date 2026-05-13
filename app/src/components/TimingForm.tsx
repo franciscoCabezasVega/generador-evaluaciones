@@ -1072,6 +1072,29 @@ function ClickUpSyncInline({
           } else if (clickupIdFromLink) {
             setClickupId(clickupIdFromLink);
           }
+
+          // Auto-hidratación: si el sync está registrado y hay un timingId,
+          // leer el timing fresco desde la BD (sin llamar a ClickUp) para que
+          // el form refleje siempre el último valor escrito por el cron,
+          // evitando que el caché de página muestre datos desactualizados.
+          if (data.registered && timingId && onSyncSuccess) {
+            try {
+              const freshRes = await safeFetch(`/api/timings/${timingId}`);
+              if (!cancelled && freshRes.ok) {
+                const freshTiming = (await freshRes.json()) as {
+                  qa_entries?: Array<{
+                    qa_name: string;
+                    hours_by_category: Record<string, number>;
+                  }>;
+                };
+                if (freshTiming.qa_entries) {
+                  onSyncSuccess(freshTiming.qa_entries);
+                }
+              }
+            } catch {
+              // silencioso — el form sigue con los datos pasados como initialData
+            }
+          }
         }
       })
       .catch(() => null)
