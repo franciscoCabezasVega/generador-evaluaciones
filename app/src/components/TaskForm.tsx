@@ -41,8 +41,6 @@ interface TaskFormProps {
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
 
 interface FormDataState {
   name: string;
@@ -67,6 +65,9 @@ function TaskFormComponent(
     data: Record<string, unknown> | null | undefined,
   ): FormDataState => {
     if (!data) {
+      // Use local date to avoid UTC vs local-time mismatch at month boundaries
+      const today = new Date();
+      const localIsoDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       return {
         name: "",
         task_link: "",
@@ -74,21 +75,24 @@ function TaskFormComponent(
         squads: [],
         assigned_qa: [],
         status: "Pendiente",
-        month: new Date().getMonth() + 1,
-        year: CURRENT_YEAR,
-        effort_score_date: new Date().toISOString().split("T")[0],
+        month: today.getMonth() + 1,
+        year: today.getFullYear(),
+        effort_score_date: localIsoDate,
         tshirt_size: "Estándar",
         project_type: "",
       };
     }
 
     // Si data.squads existe, devolver como está (cada squad gestiona sus propias notas)
+    // month/year (evaluation period) and effort_score_date are independent:
+    // a task can belong to month=4 but have effort work done in May (carryover).
     const parsed = data as unknown as FormDataState;
+    const today = new Date();
+    const localIsoDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     return {
       ...parsed,
       assigned_qa: Array.isArray(parsed.assigned_qa) ? parsed.assigned_qa : [],
-      effort_score_date:
-        parsed.effort_score_date || new Date().toISOString().split("T")[0],
+      effort_score_date: parsed.effort_score_date || localIsoDate,
       tshirt_size: parsed.tshirt_size || "Estándar",
       project_type: parsed.project_type || "",
     };
@@ -522,6 +526,10 @@ function TaskFormComponent(
     },
     [formData, onSubmit],
   );
+
+  // Computed at render-time so the list always includes the current year,
+  // even if the app tab was left open across a year boundary (e.g. Dec 31 → Jan 1).
+  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" data-testid="task-form">
