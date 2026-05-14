@@ -41,8 +41,6 @@ interface TaskFormProps {
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
 
 interface FormDataState {
   name: string;
@@ -528,6 +526,10 @@ function TaskFormComponent(
     },
     [formData, onSubmit],
   );
+
+  // Computed at render-time so the list always includes the current year,
+  // even if the app tab was left open across a year boundary (e.g. Dec 31 → Jan 1).
+  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" data-testid="task-form">
