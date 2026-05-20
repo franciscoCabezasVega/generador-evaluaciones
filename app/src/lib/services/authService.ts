@@ -1,5 +1,9 @@
 import { supabase } from "../supabase";
-import { invalidateSessionCache, getSessionViaManager, refreshSessionViaManager } from "../fetchAuth";
+import {
+  invalidateSessionCache,
+  getSessionViaManager,
+  refreshSessionViaManager,
+} from "../fetchAuth";
 
 /**
  * Limpiar datos de sesión sin hacer redirect

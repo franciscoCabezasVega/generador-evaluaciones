@@ -55,7 +55,6 @@ export default function TourOverlay() {
       }
     }
   }, [isRunning, stepData, currentStep, waitingForExpand, nextStep]);
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isRunning || !stepData) {
       return;
@@ -139,17 +138,14 @@ export default function TourOverlay() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [stepData, isRunning]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Cleanup when tour ends
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isRunning) {
       setTargetElement(null);
       setPosition(null);
     }
   }, [isRunning]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!isRunning || !stepData || !position) {
     return null;

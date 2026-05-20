@@ -1,7 +1,9 @@
 import { supabase } from "./supabase";
 
 type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
-type RefreshSessionResult = Awaited<ReturnType<typeof supabase.auth.refreshSession>>;
+type RefreshSessionResult = Awaited<
+  ReturnType<typeof supabase.auth.refreshSession>
+>;
 
 // ─── SessionManager (Singleton) ──────────────────────────────────────────────
 //
@@ -141,7 +143,8 @@ class SessionManager {
     // _refreshInflight sigue apuntando a la llamada real y los callers
     // concurrentes pueden coalescerse en ella en vez de iniciar un refresh
     // paralelo que re-contendería navigator.lock provocando timeouts en cascada.
-    const realRefresh = supabase.auth.refreshSession()
+    const realRefresh = supabase.auth
+      .refreshSession()
       .then(
         (result) => {
           clearTimeout(timeoutId);
@@ -292,11 +295,11 @@ export async function getSessionViaManager() {
     // Retornar error: null hacía ambos casos indistinguibles.
     return {
       data: { session: null },
-      error: (
-        err instanceof Error || err instanceof DOMException
-          ? err
-          : new Error(String(err))
-      ) as unknown as NonNullable<GetSessionResult["error"]>,
+      error: (err instanceof Error || err instanceof DOMException
+        ? err
+        : new Error(String(err))) as unknown as NonNullable<
+        GetSessionResult["error"]
+      >,
     };
   }
 }

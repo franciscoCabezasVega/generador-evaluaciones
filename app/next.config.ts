@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // turbopack.root solo se activa fuera de Vercel.
+  // - Localmente: apunta a app/ para silenciar el warning "multiple lockfiles".
+  // - En Vercel: se omite para que no conflictúe con outputFileTracingRoot
+  //   que Vercel inyecta automáticamente.
+  ...(process.env.VERCEL ? {} : { turbopack: { root: __dirname } }),
   async headers() {
     return [
       {

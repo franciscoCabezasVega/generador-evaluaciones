@@ -68,9 +68,8 @@ export async function validateProfileInBackground(
   onUpdate?: (profile: UserProfile) => void,
 ) {
   // Si el caché de localStorage es reciente, no ir a la DB
-  const expiry = typeof window !== "undefined"
-    ? localStorage.getItem(STORAGE_EXPIRY)
-    : null;
+  const expiry =
+    typeof window !== "undefined" ? localStorage.getItem(STORAGE_EXPIRY) : null;
   if (expiry) {
     const msUntilExpiry = parseInt(expiry) - Date.now();
     // El caché expira en CACHE_DURATION (30min) desde que se guardó.

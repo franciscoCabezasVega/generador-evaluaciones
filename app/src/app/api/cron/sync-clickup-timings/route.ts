@@ -24,9 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   // Use constant-time comparison to reduce timing-attack exposure on the secret.
   const tokenBuf = Buffer.from(token);

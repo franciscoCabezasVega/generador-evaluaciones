@@ -105,7 +105,8 @@ const QA_FIELDS: FieldDef[] = [
     label: "ClickUp User ID",
     type: "text",
     placeholder: "Ej: 12345678 (opcional)",
-    description: "ID numérico del miembro en ClickUp. Requerido para sincronizar tiempos automáticamente.",
+    description:
+      "ID numérico del miembro en ClickUp. Requerido para sincronizar tiempos automáticamente.",
   },
 ];
 

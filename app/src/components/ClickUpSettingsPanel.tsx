@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Loader2, Trash2, Eye, EyeOff } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Trash2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 
 interface ClickUpStatus {
@@ -23,7 +30,10 @@ export default function ClickUpSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [showKey, setShowKey] = useState(false);
 
   // Fetch current status on mount
@@ -32,7 +42,7 @@ export default function ClickUpSettingsPanel() {
       try {
         const res = await safeFetch("/api/settings/clickup");
         if (res.ok) {
-          const data = await res.json() as ClickUpStatus;
+          const data = (await res.json()) as ClickUpStatus;
           setStatus(data);
         }
       } catch {
@@ -42,7 +52,7 @@ export default function ClickUpSettingsPanel() {
       }
     }
     void loadStatus();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -59,18 +69,34 @@ export default function ClickUpSettingsPanel() {
         body: JSON.stringify({ apiKey: apiKey.trim() }),
       });
 
-      const data = await res.json() as { success?: boolean; error?: string; updatedAt?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        updatedAt?: string;
+      };
 
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error ?? "Error al guardar la clave" });
+        setMessage({
+          type: "error",
+          text: data.error ?? "Error al guardar la clave",
+        });
         return;
       }
 
-      setStatus({ hasKey: true, updatedAt: data.updatedAt ?? new Date().toISOString() });
+      setStatus({
+        hasKey: true,
+        updatedAt: data.updatedAt ?? new Date().toISOString(),
+      });
       setApiKey("");
-      setMessage({ type: "success", text: "Clave de ClickUp guardada correctamente." });
+      setMessage({
+        type: "success",
+        text: "Clave de ClickUp guardada correctamente.",
+      });
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({
+        type: "error",
+        text: "Error de conexión. Intenta de nuevo.",
+      });
     } finally {
       setSaving(false);
     }
@@ -86,19 +112,30 @@ export default function ClickUpSettingsPanel() {
     setMessage(null);
 
     try {
-      const res = await safeFetch("/api/settings/clickup", { method: "DELETE" });
+      const res = await safeFetch("/api/settings/clickup", {
+        method: "DELETE",
+      });
 
       if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        setMessage({ type: "error", text: data.error ?? "Error al eliminar la clave" });
+        const data = (await res.json()) as { error?: string };
+        setMessage({
+          type: "error",
+          text: data.error ?? "Error al eliminar la clave",
+        });
         return;
       }
 
       setStatus({ hasKey: false, updatedAt: null });
       setConfirmDelete(false);
-      setMessage({ type: "success", text: "Clave de ClickUp eliminada. Todos los syncs han sido desactivados." });
+      setMessage({
+        type: "success",
+        text: "Clave de ClickUp eliminada. Todos los syncs han sido desactivados.",
+      });
     } catch {
-      setMessage({ type: "error", text: "Error de conexión. Intenta de nuevo." });
+      setMessage({
+        type: "error",
+        text: "Error de conexión. Intenta de nuevo.",
+      });
     } finally {
       setDeleting(false);
     }
@@ -121,7 +158,9 @@ export default function ClickUpSettingsPanel() {
           <>
             <CheckCircle size={20} className="text-emerald-500 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-800">API key configurada</p>
+              <p className="text-sm font-medium text-gray-800">
+                API key configurada
+              </p>
               {status.updatedAt && (
                 <p className="text-xs text-gray-500">
                   Última actualización:{" "}
@@ -140,7 +179,8 @@ export default function ClickUpSettingsPanel() {
           <>
             <XCircle size={20} className="text-red-400 flex-shrink-0" />
             <p className="text-sm text-gray-600">
-              No hay API key configurada. Sin ella, la sincronización con ClickUp está inactiva.
+              No hay API key configurada. Sin ella, la sincronización con
+              ClickUp está inactiva.
             </p>
           </>
         )}
@@ -153,7 +193,9 @@ export default function ClickUpSettingsPanel() {
             htmlFor="clickup-api-key"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            {status?.hasKey ? "Reemplazar API key de ClickUp" : "API key de ClickUp"}
+            {status?.hasKey
+              ? "Reemplazar API key de ClickUp"
+              : "API key de ClickUp"}
           </label>
           <div className="relative">
             <input
@@ -175,8 +217,8 @@ export default function ClickUpSettingsPanel() {
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Encuéntrala en ClickUp → Configuración → Apps → API token.
-            La clave se almacena cifrada en la base de datos.
+            Encuéntrala en ClickUp → Configuración → Apps → API token. La clave
+            se almacena cifrada en la base de datos.
           </p>
         </div>
 
@@ -193,7 +235,9 @@ export default function ClickUpSettingsPanel() {
       {/* Delete */}
       {status?.hasKey && (
         <div className="pt-4 border-t border-gray-200">
-          <p className="text-sm font-medium text-gray-700 mb-2">Zona de peligro</p>
+          <p className="text-sm font-medium text-gray-700 mb-2">
+            Zona de peligro
+          </p>
           {confirmDelete ? (
             <div className="flex items-center gap-3">
               <p className="text-sm text-red-600">
@@ -236,7 +280,10 @@ export default function ClickUpSettingsPanel() {
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle size={16} className="flex-shrink-0 mt-0.5 text-emerald-600" />
+            <CheckCircle
+              size={16}
+              className="flex-shrink-0 mt-0.5 text-emerald-600"
+            />
           ) : (
             <XCircle size={16} className="flex-shrink-0 mt-0.5 text-red-500" />
           )}

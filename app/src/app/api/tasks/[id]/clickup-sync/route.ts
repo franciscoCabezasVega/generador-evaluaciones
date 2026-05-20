@@ -29,12 +29,17 @@ export async function GET(
 
   const supabase = getServiceClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server misconfiguration" },
+      { status: 500 },
+    );
   }
 
   const { data, error } = await supabase
     .from("clickup_task_sync")
-    .select("sync_enabled, clickup_qa_task_id, last_synced_at, last_clickup_status")
+    .select(
+      "sync_enabled, clickup_qa_task_id, last_synced_at, last_clickup_status",
+    )
     .eq("task_id", id)
     .maybeSingle();
 
@@ -99,7 +104,10 @@ export async function POST(
 
   const supabase = getServiceClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server misconfiguration" },
+      { status: 500 },
+    );
   }
 
   // 1. Upsert into clickup_task_sync so the cron picks it up on future runs

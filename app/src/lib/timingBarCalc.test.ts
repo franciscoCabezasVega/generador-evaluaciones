@@ -8,7 +8,9 @@
 
 /** Usada en "Comparación Visual" (categorías): máx 96px, mínimo 4px si hay valor */
 function computeCategoryBarPx(value: number, maxValue: number): number {
-  return maxValue > 0 ? Math.max((value / maxValue) * 96, value > 0 ? 4 : 0) : 0;
+  return maxValue > 0
+    ? Math.max((value / maxValue) * 96, value > 0 ? 4 : 0)
+    : 0;
 }
 
 /** Usada en "Distribución por Producto/QA": 110px cuando hours === total; sin cap superior (puede exceder si hours > total); mínimo 4px si hours > 0; 0 si hours === 0 */

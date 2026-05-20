@@ -42,6 +42,16 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
+      // React Compiler rules added in eslint-plugin-react-hooks@7 — disabled intentionally.
+      // These flag valid patterns used throughout the codebase (setLoading at effect start,
+      // ref.current sync during render, Date.now() in useRef initial value, forward refs in
+      // useImperativeHandle). Fixing all of them would require large refactors with regression
+      // risk. The critical correctness rules (rules-of-hooks, exhaustive-deps) remain enabled.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/preserve-manual-memoization": "off",
       "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/no-explicit-any": "warn",
       "no-console": ["warn", { allow: ["warn", "error"] }],

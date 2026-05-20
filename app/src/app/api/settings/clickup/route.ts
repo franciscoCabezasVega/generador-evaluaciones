@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
 
   const supabase = getServiceClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 500 },
+    );
   }
   // maybeSingle() returns { data: null, error: null } for 0 rows,
   // { data: row } for exactly 1 row, and { error } for multiple rows
@@ -60,7 +63,9 @@ export async function POST(request: NextRequest) {
   const { role } = authCtx;
   if (role !== "admin") {
     return NextResponse.json(
-      { error: "Solo administradores pueden configurar la integración ClickUp" },
+      {
+        error: "Solo administradores pueden configurar la integración ClickUp",
+      },
       { status: 403 },
     );
   }
@@ -72,15 +77,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  if (
-    !body.apiKey ||
-    typeof body.apiKey !== "string" ||
-    !body.apiKey.trim()
-  ) {
-    return NextResponse.json(
-      { error: "apiKey es requerido" },
-      { status: 400 },
-    );
+  if (!body.apiKey || typeof body.apiKey !== "string" || !body.apiKey.trim()) {
+    return NextResponse.json({ error: "apiKey es requerido" }, { status: 400 });
   }
 
   let encrypted: { ciphertext: string; iv: string };
@@ -89,21 +87,31 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Encryption error:", err);
     return NextResponse.json(
-      { error: "Error al cifrar la clave. Verifica la variable CLICKUP_ENCRYPTION_KEY." },
+      {
+        error:
+          "Error al cifrar la clave. Verifica la variable CLICKUP_ENCRYPTION_KEY.",
+      },
       { status: 500 },
     );
   }
 
   const supabase = getServiceClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 500 },
+    );
   }
 
   // Upsert on singleton_key ensures at most one row and is atomic.
   const { data, error } = await supabase
     .from("clickup_settings")
     .upsert(
-      { encrypted_key: encrypted.ciphertext, key_iv: encrypted.iv, singleton_key: true },
+      {
+        encrypted_key: encrypted.ciphertext,
+        key_iv: encrypted.iv,
+        singleton_key: true,
+      },
       { onConflict: "singleton_key" },
     )
     .select("id, updated_at")
@@ -117,7 +125,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true, updatedAt: data.updated_at }, { status: 201 });
+  return NextResponse.json(
+    { success: true, updatedAt: data.updated_at },
+    { status: 201 },
+  );
 }
 
 /**
@@ -138,7 +149,10 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = getServiceClient();
   if (!supabase) {
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 500 },
+    );
   }
 
   // Disable all syncs first — must succeed before deleting the key

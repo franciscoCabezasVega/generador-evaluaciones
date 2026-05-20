@@ -177,7 +177,11 @@ export function useCachedFetch<T>({
   }, []);
 
   const doFetch = useCallback(
-    async (isBackground: boolean, signal: AbortSignal, autoRetryAttempt = 0) => {
+    async (
+      isBackground: boolean,
+      signal: AbortSignal,
+      autoRetryAttempt = 0,
+    ) => {
       // Cancel any pending auto-retry timer — this call starts a new fetch cycle.
       // Covers invalidation (cacheStore.subscribe) and visibilitychange paths
       // that bypass the manual-refresh cancel logic.
@@ -397,7 +401,16 @@ export function useCachedFetch<T>({
     });
   }, []);
 
-  return { data, loading, error, isRefreshing, isReconnecting, refresh, setData, invalidate };
+  return {
+    data,
+    loading,
+    error,
+    isRefreshing,
+    isReconnecting,
+    refresh,
+    setData,
+    invalidate,
+  };
 }
 
 // ============================================================================

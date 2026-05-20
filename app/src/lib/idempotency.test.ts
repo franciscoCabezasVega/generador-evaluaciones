@@ -25,7 +25,9 @@ describe("withIdempotency", () => {
 
   // ─── No key ────────────────────────────────────────────────────────────────
   it("runs handler directly when idempotencyKey is null", async () => {
-    const handler = jest.fn().mockResolvedValue({ status: 201, body: { ok: true } });
+    const handler = jest
+      .fn()
+      .mockResolvedValue({ status: 201, body: { ok: true } });
     const result = await withIdempotency(null, USER, METHOD, PATH, handler);
     expect(handler).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ status: 201, body: { ok: true } });
@@ -39,8 +41,16 @@ describe("withIdempotency", () => {
 
   // ─── Cache miss / first call ────────────────────────────────────────────────
   it("executes handler on first call with a valid key", async () => {
-    const handler = jest.fn().mockResolvedValue({ status: 201, body: { id: "1" } });
-    const result = await withIdempotency(uniqueKey(), USER, METHOD, PATH, handler);
+    const handler = jest
+      .fn()
+      .mockResolvedValue({ status: 201, body: { id: "1" } });
+    const result = await withIdempotency(
+      uniqueKey(),
+      USER,
+      METHOD,
+      PATH,
+      handler,
+    );
     expect(handler).toHaveBeenCalledTimes(1);
     expect(result.status).toBe(201);
   });
@@ -84,7 +94,9 @@ describe("withIdempotency", () => {
     const key = uniqueKey();
     let resolveHandler!: (v: { status: number; body: unknown }) => void;
     const handlerPromise = new Promise<{ status: number; body: unknown }>(
-      (res) => { resolveHandler = res; },
+      (res) => {
+        resolveHandler = res;
+      },
     );
     const handler = jest.fn(() => handlerPromise);
 
@@ -150,7 +162,9 @@ describe("withIdempotency", () => {
   // ─── 2xx boundary: 200 and 201 ARE cached ─────────────────────────────────
   it("caches a 200 response", async () => {
     const key = uniqueKey();
-    const handler = jest.fn().mockResolvedValue({ status: 200, body: { ok: true } });
+    const handler = jest
+      .fn()
+      .mockResolvedValue({ status: 200, body: { ok: true } });
 
     await withIdempotency(key, USER, METHOD, PATH, handler);
     await withIdempotency(key, USER, METHOD, PATH, handler);

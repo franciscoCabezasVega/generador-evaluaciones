@@ -117,9 +117,17 @@ export function TimingMetricsDistributionChart({
   const total = metrics.reduce((s, m) => s + m.total_hours, 0);
   const totalTasks = metrics.reduce((s, m) => s + m.task_count, 0);
 
-  const handleTooltipShow = (e: React.MouseEvent<Element> | React.FocusEvent<Element>, content: string) => {
+  const handleTooltipShow = (
+    e: React.MouseEvent<Element> | React.FocusEvent<Element>,
+    content: string,
+  ) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
+    setTooltip({
+      visible: true,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10,
+      content,
+    });
   };
   const handleTooltipHide = () => setTooltip((t) => ({ ...t, visible: false }));
 
@@ -127,18 +135,41 @@ export function TimingMetricsDistributionChart({
     <div className="space-y-4">
       {/* ① KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KPICard label="Total Horas" value={formatTime(total)} icon="⏱️" color="#F59E0B" />
-        <KPICard label="Total Tareas" value={totalTasks} icon="📋" color="#3B82F6" />
-        <KPICard label="Productos" value={metrics.length} icon="🗂️" color="#EC4899" />
+        <KPICard
+          label="Total Horas"
+          value={formatTime(total)}
+          icon="⏱️"
+          color="#F59E0B"
+        />
+        <KPICard
+          label="Total Tareas"
+          value={totalTasks}
+          icon="📋"
+          color="#3B82F6"
+        />
+        <KPICard
+          label="Productos"
+          value={metrics.length}
+          icon="🗂️"
+          color="#EC4899"
+        />
       </div>
 
       {/* Distribución por Producto — barras verticales */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-xs font-semibold text-gray-700 mb-3">Distribución por Producto</p>
-        <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
+        <p className="text-xs font-semibold text-gray-700 mb-3">
+          Distribución por Producto
+        </p>
+        <div
+          className="flex items-end justify-center gap-4"
+          style={{ height: "120px" }}
+        >
           {metrics.map((metric, i) => {
             const pct = total > 0 ? (metric.total_hours / total) * 100 : 0;
-            const barPx = total > 0 && metric.total_hours > 0 ? Math.max((metric.total_hours / total) * 110, 4) : 0;
+            const barPx =
+              total > 0 && metric.total_hours > 0
+                ? Math.max((metric.total_hours / total) * 110, 4)
+                : 0;
             const label = `${metric.product_type}: ${formatTime(metric.total_hours)} (${pct.toFixed(1)}%)`;
             return (
               <div
@@ -147,7 +178,11 @@ export function TimingMetricsDistributionChart({
                 aria-label={label}
                 tabIndex={0}
                 className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
-                style={{ width: "56px", height: `${barPx}px`, backgroundColor: colors[i % colors.length] }}
+                style={{
+                  width: "56px",
+                  height: `${barPx}px`,
+                  backgroundColor: colors[i % colors.length],
+                }}
                 onMouseEnter={(e) => handleTooltipShow(e, label)}
                 onMouseLeave={handleTooltipHide}
                 onFocus={(e) => handleTooltipShow(e, label)}
@@ -185,85 +220,107 @@ export function TimingMetricsDistributionChart({
 
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
-        <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {!catalogLoading && activeCategories.length > 0 && activeCategories.every((cat) =>
+        <p className="text-sm font-semibold text-gray-800 mb-3">
+          Comparación Visual
+        </p>
+        {!catalogLoading &&
+        activeCategories.length > 0 &&
+        activeCategories.every((cat) =>
           metrics.every((m) => (m.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
-            <p className="text-sm text-gray-400">Sin datos de tiempos por categoría</p>
+            <p className="text-sm text-gray-400">
+              Sin datos de tiempos por categoría
+            </p>
           </div>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {activeCategories.map((cat) => {
-            const allEntries = metrics.map((m, i) => ({
-              label: m.product_type,
-              value: m.totals_by_category?.[cat.id] ?? 0,
-              color: colors[i % colors.length],
-            }));
-            const entries = allEntries.filter((e) => e.value > 0);
-            const maxValue = Math.max(...entries.map((e) => e.value), 0);
-            // Omitir categorías sin datos en ningún producto
-            if (maxValue === 0) return null;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeCategories.map((cat) => {
+              const allEntries = metrics.map((m, i) => ({
+                label: m.product_type,
+                value: m.totals_by_category?.[cat.id] ?? 0,
+                color: colors[i % colors.length],
+              }));
+              const entries = allEntries.filter((e) => e.value > 0);
+              const maxValue = Math.max(...entries.map((e) => e.value), 0);
+              // Omitir categorías sin datos en ningún producto
+              if (maxValue === 0) return null;
 
-            return (
-              <div key={cat.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                <h4
-                  className="text-sm font-semibold mb-3 truncate"
-                  style={{ color: cat.hex_color }}
-                  title={cat.name}
+              return (
+                <div
+                  key={cat.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4"
                 >
-                  {cat.name}
-                </h4>
-                {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
-                <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
-                  {entries.map((entry) => {
-                    const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
-                    const label = `${entry.label}: ${formatTime(entry.value)}`;
-                    return (
-                      <div
-                        key={entry.label}
-                        role="img"
-                        aria-label={label}
-                        tabIndex={0}
-                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
-                        style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
-                        onMouseEnter={(e) => handleTooltipShow(e, label)}
-                        onMouseLeave={handleTooltipHide}
-                        onFocus={(e) => handleTooltipShow(e, label)}
-                        onBlur={handleTooltipHide}
-                      />
-                    );
-                  })}
+                  <h4
+                    className="text-sm font-semibold mb-3 truncate"
+                    style={{ color: cat.hex_color }}
+                    title={cat.name}
+                  >
+                    {cat.name}
+                  </h4>
+                  {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
+                  <div
+                    className="flex items-end justify-center gap-4"
+                    style={{ height: "100px" }}
+                  >
+                    {entries.map((entry) => {
+                      const barPx =
+                        maxValue > 0
+                          ? Math.max(
+                              (entry.value / maxValue) * 96,
+                              entry.value > 0 ? 4 : 0,
+                            )
+                          : 0;
+                      const label = `${entry.label}: ${formatTime(entry.value)}`;
+                      return (
+                        <div
+                          key={entry.label}
+                          role="img"
+                          aria-label={label}
+                          tabIndex={0}
+                          className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
+                          style={{
+                            width: "56px",
+                            height: `${barPx}px`,
+                            backgroundColor: entry.color,
+                          }}
+                          onMouseEnter={(e) => handleTooltipShow(e, label)}
+                          onMouseLeave={handleTooltipHide}
+                          onFocus={(e) => handleTooltipShow(e, label)}
+                          onBlur={handleTooltipHide}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Fila de valores */}
+                  <div className="flex justify-center gap-4 mt-1">
+                    {entries.map((entry) => (
+                      <span
+                        key={`val-${entry.label}`}
+                        className="text-xs font-bold text-center truncate"
+                        style={{ width: "56px", color: entry.color }}
+                      >
+                        {entry.value > 0 ? formatTime(entry.value) : "—"}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Fila de etiquetas */}
+                  <div className="flex justify-center gap-4 mt-0.5">
+                    {entries.map((entry) => (
+                      <span
+                        key={`name-${entry.label}`}
+                        className="text-xs text-gray-600 text-center truncate"
+                        style={{ width: "56px" }}
+                        title={entry.label}
+                      >
+                        {entry.label.split(" ")[0]}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                {/* Fila de valores */}
-                <div className="flex justify-center gap-4 mt-1">
-                  {entries.map((entry) => (
-                    <span
-                      key={`val-${entry.label}`}
-                      className="text-xs font-bold text-center truncate"
-                      style={{ width: "56px", color: entry.color }}
-                    >
-                      {entry.value > 0 ? formatTime(entry.value) : "—"}
-                    </span>
-                  ))}
-                </div>
-                {/* Fila de etiquetas */}
-                <div className="flex justify-center gap-4 mt-0.5">
-                  {entries.map((entry) => (
-                    <span
-                      key={`name-${entry.label}`}
-                      className="text-xs text-gray-600 text-center truncate"
-                      style={{ width: "56px" }}
-                      title={entry.label}
-                    >
-                      {entry.label.split(" ")[0]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -729,19 +786,39 @@ export function QAHoursBarChart({
       ? qaMetrics.reduce((s, q) => s + q.efficiency_rate, 0) / qaMetrics.length
       : 0;
 
-  const handleTooltipShow = (e: React.MouseEvent<Element> | React.FocusEvent<Element>, content: string) => {
+  const handleTooltipShow = (
+    e: React.MouseEvent<Element> | React.FocusEvent<Element>,
+    content: string,
+  ) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
+    setTooltip({
+      visible: true,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10,
+      content,
+    });
   };
   const handleTooltipHide = () => setTooltip((t) => ({ ...t, visible: false }));
-  const sortedQAs = [...qaMetrics].sort((a, b) => b.total_hours - a.total_hours);
+  const sortedQAs = [...qaMetrics].sort(
+    (a, b) => b.total_hours - a.total_hours,
+  );
 
   return (
     <div className="space-y-4">
       {/* ① KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KPICard label="QAs Activos" value={qaMetrics.length} icon="👥" color="#F59E0B" />
-        <KPICard label="Total Horas" value={formatTime(totalHours)} icon="⏱️" color="#3B82F6" />
+        <KPICard
+          label="QAs Activos"
+          value={qaMetrics.length}
+          icon="👥"
+          color="#F59E0B"
+        />
+        <KPICard
+          label="Total Horas"
+          value={formatTime(totalHours)}
+          icon="⏱️"
+          color="#3B82F6"
+        />
         <KPICard
           label="Ef. Promedio"
           value={`${avgEfficiency.toFixed(0)}%`}
@@ -758,16 +835,27 @@ export function QAHoursBarChart({
 
       {/* Distribución por QA — barras verticales */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-xs font-semibold text-gray-700 mb-3">Distribución por QA</p>
+        <p className="text-xs font-semibold text-gray-700 mb-3">
+          Distribución por QA
+        </p>
         {(() => {
-          const sorted = [...qaMetrics].sort((a, b) => b.total_hours - a.total_hours);
+          const sorted = [...qaMetrics].sort(
+            (a, b) => b.total_hours - a.total_hours,
+          );
           const maxHours = sorted[0]?.total_hours ?? 0;
           return (
             <>
-              <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
+              <div
+                className="flex items-end justify-center gap-4"
+                style={{ height: "120px" }}
+              >
                 {sorted.map((qa, i) => {
-                  const pct = totalHours > 0 ? (qa.total_hours / totalHours) * 100 : 0;
-                  const barPx = maxHours > 0 && qa.total_hours > 0 ? Math.max((qa.total_hours / maxHours) * 110, 4) : 0;
+                  const pct =
+                    totalHours > 0 ? (qa.total_hours / totalHours) * 100 : 0;
+                  const barPx =
+                    maxHours > 0 && qa.total_hours > 0
+                      ? Math.max((qa.total_hours / maxHours) * 110, 4)
+                      : 0;
                   const label = `${qa.qa_name}: ${formatTime(qa.total_hours)} (${pct.toFixed(1)}%)`;
                   return (
                     <div
@@ -779,7 +867,8 @@ export function QAHoursBarChart({
                       style={{
                         width: "56px",
                         height: `${barPx}px`,
-                        backgroundColor: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
+                        backgroundColor:
+                          QA_CHART_COLORS[i % QA_CHART_COLORS.length],
                       }}
                       onMouseEnter={(e) => handleTooltipShow(e, label)}
                       onMouseLeave={handleTooltipHide}
@@ -795,9 +884,15 @@ export function QAHoursBarChart({
                   <span
                     key={qa.qa_name}
                     className="text-xs font-bold text-center truncate"
-                    style={{ width: "56px", color: QA_CHART_COLORS[i % QA_CHART_COLORS.length] }}
+                    style={{
+                      width: "56px",
+                      color: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
+                    }}
                   >
-                    {totalHours > 0 ? ((qa.total_hours / totalHours) * 100).toFixed(1) : 0}%
+                    {totalHours > 0
+                      ? ((qa.total_hours / totalHours) * 100).toFixed(1)
+                      : 0}
+                    %
                   </span>
                 ))}
               </div>
@@ -821,85 +916,107 @@ export function QAHoursBarChart({
 
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
-        <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {!catalogLoading && activeCategories.length > 0 && activeCategories.every((cat) =>
+        <p className="text-sm font-semibold text-gray-800 mb-3">
+          Comparación Visual
+        </p>
+        {!catalogLoading &&
+        activeCategories.length > 0 &&
+        activeCategories.every((cat) =>
           qaMetrics.every((q) => (q.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
-            <p className="text-sm text-gray-400">Sin datos de tiempos por categoría</p>
+            <p className="text-sm text-gray-400">
+              Sin datos de tiempos por categoría
+            </p>
           </div>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {activeCategories.map((cat) => {
-            const allEntries = sortedQAs.map((qa, i) => ({
-              label: qa.qa_name,
-              value: qa.totals_by_category?.[cat.id] ?? 0,
-              color: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
-            }));
-            const entries = allEntries.filter((e) => e.value > 0);
-            const maxValue = Math.max(...entries.map((e) => e.value), 0);
-            // Omitir categorías sin datos en ningún QA
-            if (maxValue === 0) return null;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeCategories.map((cat) => {
+              const allEntries = sortedQAs.map((qa, i) => ({
+                label: qa.qa_name,
+                value: qa.totals_by_category?.[cat.id] ?? 0,
+                color: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
+              }));
+              const entries = allEntries.filter((e) => e.value > 0);
+              const maxValue = Math.max(...entries.map((e) => e.value), 0);
+              // Omitir categorías sin datos en ningún QA
+              if (maxValue === 0) return null;
 
-            return (
-              <div key={cat.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                <h4
-                  className="text-sm font-semibold mb-3 truncate"
-                  style={{ color: cat.hex_color }}
-                  title={cat.name}
+              return (
+                <div
+                  key={cat.id}
+                  className="rounded-lg border border-gray-200 bg-white p-4"
                 >
-                  {cat.name}
-                </h4>
-                {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
-                <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
-                  {entries.map((entry) => {
-                    const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
-                    const label = `${entry.label}: ${formatTime(entry.value)}`;
-                    return (
-                      <div
-                        key={entry.label}
-                        role="img"
-                        aria-label={label}
-                        tabIndex={0}
-                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
-                        style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
-                        onMouseEnter={(e) => handleTooltipShow(e, label)}
-                        onMouseLeave={handleTooltipHide}
-                        onFocus={(e) => handleTooltipShow(e, label)}
-                        onBlur={handleTooltipHide}
-                      />
-                    );
-                  })}
+                  <h4
+                    className="text-sm font-semibold mb-3 truncate"
+                    style={{ color: cat.hex_color }}
+                    title={cat.name}
+                  >
+                    {cat.name}
+                  </h4>
+                  {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
+                  <div
+                    className="flex items-end justify-center gap-4"
+                    style={{ height: "100px" }}
+                  >
+                    {entries.map((entry) => {
+                      const barPx =
+                        maxValue > 0
+                          ? Math.max(
+                              (entry.value / maxValue) * 96,
+                              entry.value > 0 ? 4 : 0,
+                            )
+                          : 0;
+                      const label = `${entry.label}: ${formatTime(entry.value)}`;
+                      return (
+                        <div
+                          key={entry.label}
+                          role="img"
+                          aria-label={label}
+                          tabIndex={0}
+                          className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
+                          style={{
+                            width: "56px",
+                            height: `${barPx}px`,
+                            backgroundColor: entry.color,
+                          }}
+                          onMouseEnter={(e) => handleTooltipShow(e, label)}
+                          onMouseLeave={handleTooltipHide}
+                          onFocus={(e) => handleTooltipShow(e, label)}
+                          onBlur={handleTooltipHide}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Fila de valores */}
+                  <div className="flex justify-center gap-4 mt-1">
+                    {entries.map((entry) => (
+                      <span
+                        key={`val-${entry.label}`}
+                        className="text-xs font-bold text-center truncate"
+                        style={{ width: "56px", color: entry.color }}
+                      >
+                        {entry.value > 0 ? formatTime(entry.value) : "—"}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Fila de etiquetas */}
+                  <div className="flex justify-center gap-4 mt-0.5">
+                    {entries.map((entry) => (
+                      <span
+                        key={`name-${entry.label}`}
+                        className="text-xs text-gray-600 text-center truncate"
+                        style={{ width: "56px" }}
+                        title={entry.label}
+                      >
+                        {entry.label.split(" ")[0]}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                {/* Fila de valores */}
-                <div className="flex justify-center gap-4 mt-1">
-                  {entries.map((entry) => (
-                    <span
-                      key={`val-${entry.label}`}
-                      className="text-xs font-bold text-center truncate"
-                      style={{ width: "56px", color: entry.color }}
-                    >
-                      {entry.value > 0 ? formatTime(entry.value) : "—"}
-                    </span>
-                  ))}
-                </div>
-                {/* Fila de etiquetas */}
-                <div className="flex justify-center gap-4 mt-0.5">
-                  {entries.map((entry) => (
-                    <span
-                      key={`name-${entry.label}`}
-                      className="text-xs text-gray-600 text-center truncate"
-                      style={{ width: "56px" }}
-                      title={entry.label}
-                    >
-                      {entry.label.split(" ")[0]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -942,7 +1059,10 @@ export function QAHoursBarChart({
 function redistributeTimingHours(
   qaEntries: TimingQAEntry[],
   assignedQAs: string[],
-): Map<string, { totalHours: number; hours_by_category: Record<string, number> }> {
+): Map<
+  string,
+  { totalHours: number; hours_by_category: Record<string, number> }
+> {
   const result = new Map<
     string,
     { totalHours: number; hours_by_category: Record<string, number> }
@@ -1050,7 +1170,10 @@ function buildTaskAnalysis(
   // 2) Justificación por categorías no productivas
   // Etiqueta amigable por slug; si la categoría existe en el catálogo, se
   // antepone en la explicación.
-  const factors: { slug: string; explanation: (h: string, name: string) => string }[] = [
+  const factors: {
+    slug: string;
+    explanation: (h: string, name: string) => string;
+  }[] = [
     {
       slug: "qa_on_hold",
       explanation: (h, name) =>
@@ -1169,15 +1292,18 @@ export function QAEfficiencyChart({
       if (!task) continue;
 
       const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
-      const redistribution = redistributeTimingHours(timing.qa_entries, assignedQAs);
+      const redistribution = redistributeTimingHours(
+        timing.qa_entries,
+        assignedQAs,
+      );
       const qaData = redistribution.get(qaName);
       if (!qaData) continue;
 
       // Excluir categorías fuera del control del QA (ej. on_hold/sin_asignar)
       // tanto del total como del detalle visible. Coherente con el backend.
-      const excludedIds = QA_NON_CONTROLLABLE_CATEGORY_SLUGS
-        .map((s) => slugToId[s])
-        .filter(Boolean);
+      const excludedIds = QA_NON_CONTROLLABLE_CATEGORY_SLUGS.map(
+        (s) => slugToId[s],
+      ).filter(Boolean);
       const cleanHours: Record<string, number> = {};
       let controllableHours = 0;
       for (const [catId, h] of Object.entries(qaData.hours_by_category)) {
@@ -1302,17 +1428,21 @@ export function QAEfficiencyChart({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-blue-600 whitespace-nowrap">
-                        {formatTime(slugToId["effective_testing"]
-                          ? (qa.totals_by_category?.[
-                              slugToId["effective_testing"]
-                            ] ?? 0)
-                          : 0
+                        {formatTime(
+                          slugToId["effective_testing"]
+                            ? (qa.totals_by_category?.[
+                                slugToId["effective_testing"]
+                              ] ?? 0)
+                            : 0,
                         )}
                       </td>
                       <td className="py-3 px-3 text-center font-semibold text-red-600 whitespace-nowrap">
-                        {formatTime(slugToId["qa_ready_for_testing"]
-                          ? (qa.totals_by_category?.[slugToId["qa_ready_for_testing"]] ?? 0)
-                          : 0
+                        {formatTime(
+                          slugToId["qa_ready_for_testing"]
+                            ? (qa.totals_by_category?.[
+                                slugToId["qa_ready_for_testing"]
+                              ] ?? 0)
+                            : 0,
                         )}
                       </td>
                       <td className="py-3 px-3 text-center">
@@ -1410,94 +1540,106 @@ export function QAEfficiencyChart({
                                       ? "bg-[#1a2235]"
                                       : "bg-[#151e2f]";
                                   return (
-                                  <React.Fragment key={detail.taskId}>
-                                  <tr
-                                    className={`${rowBg} text-slate-200 border-b border-white/5`}
-                                  >
-                                    <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
-                                      {taskIdx + 1}
-                                    </td>
-                                    <td className="py-2 px-3">
-                                      {detail.taskLink ? (
-                                        <a
-                                          href={detail.taskLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          {detail.taskName}
-                                        </a>
-                                      ) : (
-                                        <span className="font-medium text-slate-700 dark:text-slate-300">
-                                          {detail.taskName}
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="py-2 px-3 text-center">
-                                      {detail.tshirtSize && (
-                                        <span className="inline-flex items-center rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-xs font-semibold text-indigo-700">
-                                          {detail.tshirtSize}
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="py-2 px-3 text-center">
-                                      {detail.project_type && (
-                                        <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700 whitespace-nowrap">
-                                          {detail.project_type}
-                                        </span>
-                                      )}
-                                    </td>
-                                    {activeCategories.map((cat) => (
-                                      <td
-                                        key={cat.id}
-                                        className="py-2 px-3 text-center font-medium whitespace-nowrap"
-                                        style={{ color: cat.hex_color }}
+                                    <React.Fragment key={detail.taskId}>
+                                      <tr
+                                        className={`${rowBg} text-slate-200 border-b border-white/5`}
                                       >
-                                        {formatTime(Number(
-                                          detail.hours_by_category?.[cat.id] ??
-                                            0,
-                                        ))}
-                                      </td>
-                                    ))}
-                                    <td
-                                      className="py-2 px-3 text-center font-bold whitespace-nowrap"
-                                      style={{ color: "#F59E0B" }}
-                                    >
-                                      {formatTime(Number(detail.total))}
-                                    </td>
-                                  </tr>
-                                  <tr className={`${rowBg} border-b-2 border-slate-800/60`}>
-                                    <td
-                                      colSpan={5 + activeCategories.length}
-                                      className="px-4 pb-3 pt-1"
-                                    >
-                                      <div className="rounded-md border border-slate-700/60 bg-black/40 px-3 py-2">
-                                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                          <span className="text-[11px] uppercase tracking-wide text-slate-300/80 font-semibold">
-                                            Cumplimiento de talla
-                                            {detail.tshirtSize ? ` (${detail.tshirtSize})` : ""}:
-                                          </span>
-                                          <span
-                                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${analysis.badgeClass}`}
+                                        <td className="py-2 px-3 text-slate-400 dark:text-slate-500 font-medium">
+                                          {taskIdx + 1}
+                                        </td>
+                                        <td className="py-2 px-3">
+                                          {detail.taskLink ? (
+                                            <a
+                                              href={detail.taskLink}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              {detail.taskName}
+                                            </a>
+                                          ) : (
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                                              {detail.taskName}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-3 text-center">
+                                          {detail.tshirtSize && (
+                                            <span className="inline-flex items-center rounded-full bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-xs font-semibold text-indigo-700">
+                                              {detail.tshirtSize}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-3 text-center">
+                                          {detail.project_type && (
+                                            <span className="inline-flex items-center rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-xs text-purple-700 whitespace-nowrap">
+                                              {detail.project_type}
+                                            </span>
+                                          )}
+                                        </td>
+                                        {activeCategories.map((cat) => (
+                                          <td
+                                            key={cat.id}
+                                            className="py-2 px-3 text-center font-medium whitespace-nowrap"
+                                            style={{ color: cat.hex_color }}
                                           >
-                                            {analysis.badgeLabel}
-                                          </span>
-                                        </div>
-                                        <p className="text-xs text-slate-200 leading-relaxed">
-                                          {analysis.summary}
-                                        </p>
-                                        {analysis.reasons.length > 0 && (
-                                          <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-300/90 list-disc pl-5">
-                                            {analysis.reasons.map((r, i) => (
-                                              <li key={i}>{r}</li>
-                                            ))}
-                                          </ul>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                  </React.Fragment>
+                                            {formatTime(
+                                              Number(
+                                                detail.hours_by_category?.[
+                                                  cat.id
+                                                ] ?? 0,
+                                              ),
+                                            )}
+                                          </td>
+                                        ))}
+                                        <td
+                                          className="py-2 px-3 text-center font-bold whitespace-nowrap"
+                                          style={{ color: "#F59E0B" }}
+                                        >
+                                          {formatTime(Number(detail.total))}
+                                        </td>
+                                      </tr>
+                                      <tr
+                                        className={`${rowBg} border-b-2 border-slate-800/60`}
+                                      >
+                                        <td
+                                          colSpan={5 + activeCategories.length}
+                                          className="px-4 pb-3 pt-1"
+                                        >
+                                          <div className="rounded-md border border-slate-700/60 bg-black/40 px-3 py-2">
+                                            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                              <span className="text-[11px] uppercase tracking-wide text-slate-300/80 font-semibold">
+                                                Cumplimiento de talla
+                                                {detail.tshirtSize
+                                                  ? ` (${detail.tshirtSize})`
+                                                  : ""}
+                                                :
+                                              </span>
+                                              <span
+                                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${analysis.badgeClass}`}
+                                              >
+                                                {analysis.badgeLabel}
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-slate-200 leading-relaxed">
+                                              {analysis.summary}
+                                            </p>
+                                            {analysis.reasons.length > 0 && (
+                                              <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-300/90 list-disc pl-5">
+                                                {analysis.reasons.map(
+                                                  (r, i) => (
+                                                    <li key={i}>{r}</li>
+                                                  ),
+                                                )}
+                                              </ul>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </React.Fragment>
                                   );
                                 })}
                               </tbody>
@@ -1850,7 +1992,10 @@ export function TshirtSizeComparison({
     const group = groupMap.get(key)!;
 
     const assignedQAs = (task.assigned_qa ?? []).filter(Boolean) as string[];
-    const redistribution = redistributeTimingHours(timing.qa_entries, assignedQAs);
+    const redistribution = redistributeTimingHours(
+      timing.qa_entries,
+      assignedQAs,
+    );
 
     for (const [qaName, data] of redistribution) {
       // Excluir categorías fuera del control del QA del detalle y total.
@@ -2079,25 +2224,52 @@ export function TshirtSizeComparison({
                       ...qaList.map((qa) => qa.avgHours * 1.1),
                     );
                     const effectiveH = chartH - 2;
-                    const bandTop = globalMax > 0 ? chartH - (group.expectedMax / globalMax) * effectiveH : chartH;
-                    const bandHeight = globalMax > 0 ? ((group.expectedMax - group.expectedMin) / globalMax) * effectiveH : 0;
+                    const bandTop =
+                      globalMax > 0
+                        ? chartH - (group.expectedMax / globalMax) * effectiveH
+                        : chartH;
+                    const bandHeight =
+                      globalMax > 0
+                        ? ((group.expectedMax - group.expectedMin) /
+                            globalMax) *
+                          effectiveH
+                        : 0;
                     return (
                       <>
                         {/* Columnas centradas con ancho fijo para evitar barras demasiado anchas */}
-                        <div className="flex items-end justify-center gap-6" style={{ height: `${chartH}px` }}>
+                        <div
+                          className="flex items-end justify-center gap-6"
+                          style={{ height: `${chartH}px` }}
+                        >
                           {qaList.map((qa) => {
-                            const barPx = globalMax > 0
-                              ? Math.max((qa.avgHours / globalMax) * (chartH - 2), qa.avgHours > 0 ? 4 : 0)
-                              : 0;
-                            const devLevel = getDeviationLevel(qa.avgHours, group.expectedMin, group.expectedMax);
-                            const barColor = devLevel === "ok" ? "#22C55E" : "#EF4444";
+                            const barPx =
+                              globalMax > 0
+                                ? Math.max(
+                                    (qa.avgHours / globalMax) * (chartH - 2),
+                                    qa.avgHours > 0 ? 4 : 0,
+                                  )
+                                : 0;
+                            const devLevel = getDeviationLevel(
+                              qa.avgHours,
+                              group.expectedMin,
+                              group.expectedMax,
+                            );
+                            const barColor =
+                              devLevel === "ok" ? "#22C55E" : "#EF4444";
                             const barLabel = `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`;
                             return (
-                              <div key={qa.name} className="relative flex flex-col items-center" style={{ width: "64px", height: "100%" }}>
+                              <div
+                                key={qa.name}
+                                className="relative flex flex-col items-center"
+                                style={{ width: "64px", height: "100%" }}
+                              >
                                 {/* Relleno del rango esperado para esta columna */}
                                 <div
                                   className="absolute inset-x-0 bg-green-100 opacity-30 pointer-events-none"
-                                  style={{ top: `${bandTop}px`, height: `${Math.max(bandHeight, 1)}px` }}
+                                  style={{
+                                    top: `${bandTop}px`,
+                                    height: `${Math.max(bandHeight, 1)}px`,
+                                  }}
                                 />
                                 {/* Línea superior del rango (expectedMax) */}
                                 <div
@@ -2107,7 +2279,9 @@ export function TshirtSizeComparison({
                                 {/* Línea inferior del rango (expectedMin) */}
                                 <div
                                   className="absolute inset-x-0 border-t border-dashed border-green-400 opacity-70 pointer-events-none"
-                                  style={{ top: `${bandTop + Math.max(bandHeight, 1)}px` }}
+                                  style={{
+                                    top: `${bandTop + Math.max(bandHeight, 1)}px`,
+                                  }}
                                 />
                                 {/* Barra */}
                                 <div
@@ -2115,10 +2289,17 @@ export function TshirtSizeComparison({
                                   aria-label={barLabel}
                                   tabIndex={0}
                                   className="absolute bottom-0 inset-x-0 rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
-                                  style={{ height: `${barPx}px`, backgroundColor: barColor }}
-                                  onMouseEnter={(e) => handleBarTooltipShow(e, barLabel)}
+                                  style={{
+                                    height: `${barPx}px`,
+                                    backgroundColor: barColor,
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    handleBarTooltipShow(e, barLabel)
+                                  }
                                   onMouseLeave={handleBarTooltipHide}
-                                  onFocus={(e) => handleBarTooltipShow(e, barLabel)}
+                                  onFocus={(e) =>
+                                    handleBarTooltipShow(e, barLabel)
+                                  }
                                   onBlur={handleBarTooltipHide}
                                 />
                               </div>
@@ -2128,12 +2309,20 @@ export function TshirtSizeComparison({
                         {/* Fila de valores */}
                         <div className="flex justify-center gap-6 mt-1">
                           {qaList.map((qa) => {
-                            const devLevel = getDeviationLevel(qa.avgHours, group.expectedMin, group.expectedMax);
+                            const devLevel = getDeviationLevel(
+                              qa.avgHours,
+                              group.expectedMin,
+                              group.expectedMax,
+                            );
                             return (
                               <span
                                 key={`val-${qa.name}`}
                                 className="text-xs font-bold text-center truncate"
-                                style={{ width: "64px", color: devLevel === "ok" ? "#22C55E" : "#EF4444" }}
+                                style={{
+                                  width: "64px",
+                                  color:
+                                    devLevel === "ok" ? "#22C55E" : "#EF4444",
+                                }}
                               >
                                 {formatTime(qa.avgHours)} ({qa.count})
                               </span>
@@ -2155,7 +2344,8 @@ export function TshirtSizeComparison({
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                           <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded-sm" />
-                          Rango esperado ({group.expectedMin}-{group.expectedMax}h)
+                          Rango esperado ({group.expectedMin}-
+                          {group.expectedMax}h)
                         </div>
                       </>
                     );
@@ -2323,9 +2513,11 @@ export function TshirtSizeComparison({
                                   className="py-1.5 px-3 text-center font-medium whitespace-nowrap"
                                   style={{ color: cat.hex_color }}
                                 >
-                                  {formatTime(Number(
-                                    entry.hours_by_category?.[cat.id] ?? 0,
-                                  ))}
+                                  {formatTime(
+                                    Number(
+                                      entry.hours_by_category?.[cat.id] ?? 0,
+                                    ),
+                                  )}
                                 </td>
                               ))}
                               <td className="py-1.5 px-3 text-center font-bold text-gray-800 whitespace-nowrap">

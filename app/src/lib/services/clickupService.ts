@@ -43,27 +43,27 @@ const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
  */
 const STATUS_CATEGORY_MAP: Record<string, string> = {
   // ── Tareas con prefijo "QA - " ─────────────────────────────────────────────
-  "qa - testing":             "effective_testing",
-  "qa - ready for testing":   "qa_ready_for_testing",
-  "qa - retesting":           "qa_retesting",
-  "qa - on hold":             "qa_on_hold",
-  "qa - fixed":               "qa_fixed",
-  "qa - sin asignar":         "qa_sin_asignar",
-  "qa - review client":       "qa_review_client",
-  "qa - returned to dev":     "waiting_development_fixes",
-  "qa - clarification":         "clarification",
-  "qa - clarificaciones":       "clarification",
-  "qa - waiting environment":   "waiting_environment",
+  "qa - testing": "effective_testing",
+  "qa - ready for testing": "qa_ready_for_testing",
+  "qa - retesting": "qa_retesting",
+  "qa - on hold": "qa_on_hold",
+  "qa - fixed": "qa_fixed",
+  "qa - sin asignar": "qa_sin_asignar",
+  "qa - review client": "qa_review_client",
+  "qa - returned to dev": "waiting_development_fixes",
+  "qa - clarification": "clarification",
+  "qa - clarificaciones": "clarification",
+  "qa - waiting environment": "waiting_environment",
   "qa - en espera de ambiente": "waiting_environment",
 
   // ── Tareas sin prefijo (statuses bare) ────────────────────────────────────
-  "in testing":               "effective_testing",
-  "retesting":                "qa_retesting",
-  "on hold":                  "qa_on_hold",
-  "fixed":                    "qa_fixed",
-  "review client":            "qa_review_client",
-  "clarificaciones":          "clarification",
-  "en espera de ambiente":    "waiting_environment",
+  "in testing": "effective_testing",
+  retesting: "qa_retesting",
+  "on hold": "qa_on_hold",
+  fixed: "qa_fixed",
+  "review client": "qa_review_client",
+  clarificaciones: "clarification",
+  "en espera de ambiente": "waiting_environment",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -221,7 +221,10 @@ export async function syncTaskTimings(
       taskId: internalTaskId,
       clickupTaskId: clickupQaTaskId,
       success: false,
-      error: err instanceof Error ? err.message : "ClickUp API key decryption failed",
+      error:
+        err instanceof Error
+          ? err.message
+          : "ClickUp API key decryption failed",
     };
   }
   if (!apiKey) {
@@ -297,7 +300,9 @@ export async function syncTaskTimings(
           .eq("timing_id", latestTiming.id);
 
         if (qaError) {
-          throw new Error(`DB error reading timing_qa_entries: ${qaError.message}`);
+          throw new Error(
+            `DB error reading timing_qa_entries: ${qaError.message}`,
+          );
         }
 
         if (qaEntries && qaEntries.length > 0) {
@@ -308,7 +313,9 @@ export async function syncTaskTimings(
             .in("slug", slugs);
 
           if (catError) {
-            throw new Error(`DB error reading timing_categories: ${catError.message}`);
+            throw new Error(
+              `DB error reading timing_categories: ${catError.message}`,
+            );
           }
 
           const categoryMap = new Map<string, string>(
@@ -370,7 +377,9 @@ export async function syncTaskTimings(
               .eq("task_id", internalTaskId);
 
             if (syncUpdateError) {
-              throw new Error(`DB error updating clickup_task_sync: ${syncUpdateError.message}`);
+              throw new Error(
+                `DB error updating clickup_task_sync: ${syncUpdateError.message}`,
+              );
             }
 
             return {
