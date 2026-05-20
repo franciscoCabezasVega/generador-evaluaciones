@@ -51,7 +51,6 @@ export function SessionExpirationModal({
   // Sincronizar con timeRemaining externo
   useEffect(() => {
     if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayTime(timeRemaining);
     }
   }, [isOpen, timeRemaining]);

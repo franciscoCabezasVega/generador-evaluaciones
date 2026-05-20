@@ -18,7 +18,6 @@ export function AuthErrorBoundary({ children }: AuthErrorBoundaryProps) {
 
   useLayoutEffect(() => {
     // Para evitar hydration mismatch, marcar como montado después que el cliente renderice
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
 
     // Escuchar cambios en la sesión y detectar errores
