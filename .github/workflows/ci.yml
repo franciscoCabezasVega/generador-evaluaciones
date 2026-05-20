@@ -99,7 +99,7 @@ jobs:
         run: mkdir -p ../test-results
 
       - name: Run unit tests
-        run: pnpm test -- --ci --forceExit --json --outputFile=../test-results/unit-results.json
+        run: pnpm exec jest --ci --forceExit --json --outputFile=../test-results/unit-results.json
         env:
           # Required for Next.js / jest environment during test compilation
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

@@ -17,7 +17,7 @@
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
     "precheck": "pnpm lint",
-    "precheck:ci": "pnpm lint && pnpm test -- --ci --forceExit",
+    "precheck:ci": "pnpm lint && pnpm exec jest --ci --forceExit",
     "verify": "pnpm lint && pnpm test && pnpm test:e2e && pnpm build"
   },
   "dependencies": {
