@@ -117,7 +117,7 @@ export function TimingMetricsDistributionChart({
   const total = metrics.reduce((s, m) => s + m.total_hours, 0);
   const totalTasks = metrics.reduce((s, m) => s + m.task_count, 0);
 
-  const handleTooltipShow = (e: React.MouseEvent<Element>, content: string) => {
+  const handleTooltipShow = (e: React.MouseEvent<Element> | React.FocusEvent<Element>, content: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
   };
@@ -170,7 +170,7 @@ export function TimingMetricsDistributionChart({
         </div>
         {/* Fila de etiquetas */}
         <div className="flex justify-center gap-4 mt-0.5">
-          {metrics.map((m, i) => (
+          {metrics.map((m) => (
             <span
               key={`lbl-${m.product_type}`}
               className="text-xs text-gray-600 text-center truncate"
@@ -186,7 +186,7 @@ export function TimingMetricsDistributionChart({
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
         <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {!catalogLoading && activeCategories.every((cat) =>
+        {!catalogLoading && activeCategories.length > 0 && activeCategories.every((cat) =>
           metrics.every((m) => (m.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
@@ -729,7 +729,7 @@ export function QAHoursBarChart({
       ? qaMetrics.reduce((s, q) => s + q.efficiency_rate, 0) / qaMetrics.length
       : 0;
 
-  const handleTooltipShow = (e: React.MouseEvent<Element>, content: string) => {
+  const handleTooltipShow = (e: React.MouseEvent<Element> | React.FocusEvent<Element>, content: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
   };
@@ -803,7 +803,7 @@ export function QAHoursBarChart({
               </div>
               {/* Fila de etiquetas */}
               <div className="flex justify-center gap-4 mt-0.5">
-                {sorted.map((qa, i) => (
+                {sorted.map((qa) => (
                   <span
                     key={`lbl-${qa.qa_name}`}
                     className="text-xs text-gray-600 text-center truncate"
@@ -822,7 +822,7 @@ export function QAHoursBarChart({
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
         <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {!catalogLoading && activeCategories.every((cat) =>
+        {!catalogLoading && activeCategories.length > 0 && activeCategories.every((cat) =>
           qaMetrics.every((q) => (q.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
@@ -1790,7 +1790,7 @@ export function TshirtSizeComparison({
     .map((c) => c.name);
 
   const handleBarTooltipShow = (
-    e: React.MouseEvent<HTMLDivElement>,
+    e: React.MouseEvent<HTMLDivElement> | React.FocusEvent<HTMLDivElement>,
     content: string,
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -2078,8 +2078,9 @@ export function TshirtSizeComparison({
                       group.expectedMax * 2,
                       ...qaList.map((qa) => qa.avgHours * 1.1),
                     );
-                    const bandTop = chartH - (group.expectedMax / globalMax) * (chartH - 2);
-                    const bandHeight = ((group.expectedMax - group.expectedMin) / globalMax) * (chartH - 2);
+                    const effectiveH = chartH - 2;
+                    const bandTop = globalMax > 0 ? chartH - (group.expectedMax / globalMax) * effectiveH : chartH;
+                    const bandHeight = globalMax > 0 ? ((group.expectedMax - group.expectedMin) / globalMax) * effectiveH : 0;
                     return (
                       <>
                         {/* Columnas centradas con ancho fijo para evitar barras demasiado anchas */}

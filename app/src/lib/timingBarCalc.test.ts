@@ -11,7 +11,7 @@ function computeCategoryBarPx(value: number, maxValue: number): number {
   return maxValue > 0 ? Math.max((value / maxValue) * 96, value > 0 ? 4 : 0) : 0;
 }
 
-/** Usada en "Distribución por Producto/QA": máx 110px, siempre mínimo 4px */
+/** Usada en "Distribución por Producto/QA": 110px cuando hours === total; sin cap superior (puede exceder si hours > total); mínimo 4px */
 function computeDistributionBarPx(hours: number, total: number): number {
   return total > 0 ? Math.max((hours / total) * 110, 4) : 0;
 }
