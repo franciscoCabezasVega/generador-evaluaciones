@@ -30,24 +30,50 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Anti-flash: no renderizar hasta que el componente esté montado en cliente
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Cerrar con Escape y devolver foco al trigger
+  // Teclado: Escape cierra + devuelve foco; flechas navegan entre opciones
   useEffect(() => {
     if (!open) return;
+
+    // Auto-foco: enfocar el ítem actualmente seleccionado al abrir
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]',
+      ) ?? [],
+    );
+    const selectedIdx = OPTIONS.findIndex((o) => o.value === theme);
+    (items[selectedIdx] ?? items[0])?.focus();
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const all = Array.from(
+          menuRef.current?.querySelectorAll<HTMLButtonElement>(
+            '[role="menuitemradio"]',
+          ) ?? [],
+        );
+        const idx = all.indexOf(document.activeElement as HTMLButtonElement);
+        const next =
+          e.key === "ArrowDown"
+            ? (idx + 1) % all.length
+            : (idx - 1 + all.length) % all.length;
+        all[next]?.focus();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  }, [open, theme]);
 
   if (!mounted) {
     return <div className="w-8 h-8" aria-hidden />;
@@ -96,6 +122,7 @@ export function ThemeToggle() {
             aria-hidden
           />
           <div
+            ref={menuRef}
             role="menu"
             aria-label="Seleccionar tema"
             className="absolute right-0 top-full mt-1 z-50 w-36 rounded-md border border-gray-200 bg-gray-50 py-1 shadow-lg shadow-black/20"

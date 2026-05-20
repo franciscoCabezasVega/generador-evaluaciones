@@ -18,6 +18,16 @@ export function ThemeSync() {
   useEffect(() => {
     const pref = profile?.theme_preference;
     if (!pref || syncedRef.current === pref) return;
+
+    // No sobreescribir si ya hay una preferencia explícita en localStorage.
+    // Esto evita revertir el tema al recargar cuando el caché del perfil está desactualizado.
+    // ThemeSync aplica la preferencia del perfil solo en dispositivos/sesiones sin valor previo.
+    const stored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("theme")
+        : null;
+    if (stored) return;
+
     syncedRef.current = pref;
     setTheme(pref);
   }, [profile?.theme_preference, setTheme]);
