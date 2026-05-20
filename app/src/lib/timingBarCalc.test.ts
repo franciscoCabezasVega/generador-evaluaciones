@@ -71,7 +71,7 @@ describe("TimingMetrics — computeDistributionBarPx", () => {
     expect(computeDistributionBarPx(0, 0)).toBe(0);
   });
 
-  it("no excede 110px aunque hours > total (datos inconsistentes)", () => {
+  it("puede superar 110px cuando hours > total (caso anómalo sin cap)", () => {
     // Math.max garantiza al menos 4; no hay cap en 110 pero la proporción > 1 es un caso anómalo
     expect(computeDistributionBarPx(300, 200)).toBeGreaterThan(110);
   });

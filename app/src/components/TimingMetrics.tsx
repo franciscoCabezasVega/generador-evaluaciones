@@ -88,7 +88,7 @@ export function TimingMetricsDistributionChart({
     y: 0,
     content: "",
   });
-  const { timingCategories } = useCatalogData();
+  const { timingCategories, loading: catalogLoading } = useCatalogData();
   const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
 
   useEffect(() => {
@@ -139,15 +139,19 @@ export function TimingMetricsDistributionChart({
           {metrics.map((metric, i) => {
             const pct = total > 0 ? (metric.total_hours / total) * 100 : 0;
             const barPx = total > 0 ? Math.max((metric.total_hours / total) * 110, 4) : 0;
+            const label = `${metric.product_type}: ${formatTime(metric.total_hours)} (${pct.toFixed(1)}%)`;
             return (
               <div
                 key={metric.product_type}
-                className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                role="img"
+                aria-label={label}
+                tabIndex={0}
+                className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
                 style={{ width: "56px", height: `${barPx}px`, backgroundColor: colors[i % colors.length] }}
-                onMouseEnter={(e) =>
-                  handleTooltipShow(e, `${metric.product_type}: ${formatTime(metric.total_hours)} (${pct.toFixed(1)}%)`)
-                }
+                onMouseEnter={(e) => handleTooltipShow(e, label)}
                 onMouseLeave={handleTooltipHide}
+                onFocus={(e) => handleTooltipShow(e, label)}
+                onBlur={handleTooltipHide}
               />
             );
           })}
@@ -182,7 +186,7 @@ export function TimingMetricsDistributionChart({
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
         <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {activeCategories.every((cat) =>
+        {!catalogLoading && activeCategories.every((cat) =>
           metrics.every((m) => (m.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
@@ -214,15 +218,19 @@ export function TimingMetricsDistributionChart({
                 <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
                   {entries.map((entry) => {
                     const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
+                    const label = `${entry.label}: ${formatTime(entry.value)}`;
                     return (
                       <div
                         key={entry.label}
-                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                        role="img"
+                        aria-label={label}
+                        tabIndex={0}
+                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
                         style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
-                        onMouseEnter={(e) =>
-                          handleTooltipShow(e, `${entry.label}: ${formatTime(entry.value)}`)
-                        }
+                        onMouseEnter={(e) => handleTooltipShow(e, label)}
                         onMouseLeave={handleTooltipHide}
+                        onFocus={(e) => handleTooltipShow(e, label)}
+                        onBlur={handleTooltipHide}
                       />
                     );
                   })}
@@ -690,7 +698,7 @@ export function QAHoursBarChart({
     y: 0,
     content: "",
   });
-  const { timingCategories } = useCatalogData();
+  const { timingCategories, loading: catalogLoading } = useCatalogData();
   const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
 
   useEffect(() => {
@@ -726,6 +734,7 @@ export function QAHoursBarChart({
     setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
   };
   const handleTooltipHide = () => setTooltip((t) => ({ ...t, visible: false }));
+  const sortedQAs = [...qaMetrics].sort((a, b) => b.total_hours - a.total_hours);
 
   return (
     <div className="space-y-4">
@@ -759,22 +768,23 @@ export function QAHoursBarChart({
                 {sorted.map((qa, i) => {
                   const pct = totalHours > 0 ? (qa.total_hours / totalHours) * 100 : 0;
                   const barPx = maxHours > 0 ? Math.max((qa.total_hours / maxHours) * 110, 4) : 0;
+                  const label = `${qa.qa_name}: ${formatTime(qa.total_hours)} (${pct.toFixed(1)}%)`;
                   return (
                     <div
                       key={qa.qa_name}
-                      className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                      role="img"
+                      aria-label={label}
+                      tabIndex={0}
+                      className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
                       style={{
                         width: "56px",
                         height: `${barPx}px`,
                         backgroundColor: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
                       }}
-                      onMouseEnter={(e) =>
-                        handleTooltipShow(
-                          e,
-                          `${qa.qa_name}: ${formatTime(qa.total_hours)} (${pct.toFixed(1)}%)`,
-                        )
-                      }
+                      onMouseEnter={(e) => handleTooltipShow(e, label)}
                       onMouseLeave={handleTooltipHide}
+                      onFocus={(e) => handleTooltipShow(e, label)}
+                      onBlur={handleTooltipHide}
                     />
                   );
                 })}
@@ -812,7 +822,7 @@ export function QAHoursBarChart({
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
       <div>
         <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
-        {activeCategories.every((cat) =>
+        {!catalogLoading && activeCategories.every((cat) =>
           qaMetrics.every((q) => (q.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
           <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
@@ -821,9 +831,6 @@ export function QAHoursBarChart({
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeCategories.map((cat) => {
-            const sortedQAs = [...qaMetrics].sort(
-              (a, b) => b.total_hours - a.total_hours,
-            );
             const allEntries = sortedQAs.map((qa, i) => ({
               label: qa.qa_name,
               value: qa.totals_by_category?.[cat.id] ?? 0,
@@ -847,18 +854,19 @@ export function QAHoursBarChart({
                 <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
                   {entries.map((entry) => {
                     const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
+                    const label = `${entry.label}: ${formatTime(entry.value)}`;
                     return (
                       <div
                         key={entry.label}
-                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                        role="img"
+                        aria-label={label}
+                        tabIndex={0}
+                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
                         style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
-                        onMouseEnter={(e) =>
-                          handleTooltipShow(
-                            e,
-                            `${entry.label}: ${formatTime(entry.value)}`,
-                          )
-                        }
+                        onMouseEnter={(e) => handleTooltipShow(e, label)}
                         onMouseLeave={handleTooltipHide}
+                        onFocus={(e) => handleTooltipShow(e, label)}
+                        onBlur={handleTooltipHide}
                       />
                     );
                   })}
@@ -2070,8 +2078,8 @@ export function TshirtSizeComparison({
                       group.expectedMax * 2,
                       ...qaList.map((qa) => qa.avgHours * 1.1),
                     );
-                    const bandTop = chartH - (group.expectedMax / globalMax) * chartH;
-                    const bandHeight = ((group.expectedMax - group.expectedMin) / globalMax) * chartH;
+                    const bandTop = chartH - (group.expectedMax / globalMax) * (chartH - 2);
+                    const bandHeight = ((group.expectedMax - group.expectedMin) / globalMax) * (chartH - 2);
                     return (
                       <>
                         {/* Columnas centradas con ancho fijo para evitar barras demasiado anchas */}
@@ -2082,6 +2090,7 @@ export function TshirtSizeComparison({
                               : 0;
                             const devLevel = getDeviationLevel(qa.avgHours, group.expectedMin, group.expectedMax);
                             const barColor = devLevel === "ok" ? "#22C55E" : "#EF4444";
+                            const barLabel = `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`;
                             return (
                               <div key={qa.name} className="relative flex flex-col items-center" style={{ width: "64px", height: "100%" }}>
                                 {/* Relleno del rango esperado para esta columna */}
@@ -2101,15 +2110,15 @@ export function TshirtSizeComparison({
                                 />
                                 {/* Barra */}
                                 <div
-                                  className="absolute bottom-0 inset-x-0 rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                                  role="img"
+                                  aria-label={barLabel}
+                                  tabIndex={0}
+                                  className="absolute bottom-0 inset-x-0 rounded-t-md cursor-pointer hover:opacity-80 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400"
                                   style={{ height: `${barPx}px`, backgroundColor: barColor }}
-                                  onMouseEnter={(e) =>
-                                    handleBarTooltipShow(
-                                      e,
-                                      `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`,
-                                    )
-                                  }
+                                  onMouseEnter={(e) => handleBarTooltipShow(e, barLabel)}
                                   onMouseLeave={handleBarTooltipHide}
+                                  onFocus={(e) => handleBarTooltipShow(e, barLabel)}
+                                  onBlur={handleBarTooltipHide}
                                 />
                               </div>
                             );
