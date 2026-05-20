@@ -1,14 +1,14 @@
-import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // turbopack.root apunta al root del repo (parent de app/).
-  // Localmente elimina el warning de "multiple lockfiles" (pnpm-lock.yaml en root + app/).
-  // En Vercel coincide con outputFileTracingRoot=/vercel/path0 que Vercel inyecta,
-  // evitando el conflicto "Both outputFileTracingRoot and turbopack.root are set".
+  // turbopack.root apunta a app/ (este mismo directorio).
+  // Silencia el warning local "multiple lockfiles" porque explicita cuál es el
+  // workspace root en lugar de que Next.js lo infiera. En Vercel, Vercel inyecta
+  // outputFileTracingRoot=/vercel/path0 y emite un warning cosmético de conflicto,
+  // pero el build finaliza correctamente usando outputFileTracingRoot.
   turbopack: {
-    root: path.join(__dirname, ".."),
+    root: __dirname,
   },
   async headers() {
     return [
