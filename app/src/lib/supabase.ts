@@ -28,12 +28,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     flowType: "pkce",
     lock: processLock,
-    // NOTA sobre `lockAcquireTimeout`: lo dejamos en su default (0 ms).
-    // Cuando dos llamadas piden el lock a la vez supabase-js loggea un
-    // warning "Lock acquisition timed out after 0ms" pero NO bloquea:
-    // la segunda llamada cae al `localStorage` cache de gotrue y sigue.
-    // Subir el timeout (probamos 10 s) hace que las llamadas se queden
-    // colgadas esperando, lo cual es estrictamente peor. SessionManager
-    // ya coalescing en memoria, así que el warning es cosmético.
   },
 });
