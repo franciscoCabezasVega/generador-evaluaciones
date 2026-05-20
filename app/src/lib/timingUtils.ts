@@ -25,7 +25,9 @@ export const QA_NON_CONTROLLABLE_CATEGORY_SLUGS: readonly string[] = [
 /**
  * Indica si un slug de categoría debe excluirse de las métricas de QA.
  */
-export function isQANonControllableSlug(slug: string | null | undefined): boolean {
+export function isQANonControllableSlug(
+  slug: string | null | undefined,
+): boolean {
   if (!slug) return false;
   return QA_NON_CONTROLLABLE_CATEGORY_SLUGS.includes(slug);
 }

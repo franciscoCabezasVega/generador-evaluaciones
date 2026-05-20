@@ -15,7 +15,9 @@ interface CacheWarningBannerProps {
  * Banner informativo que indica al usuario cómo proceder ante errores
  * persistentes de carga de datos. Solo se renderiza cuando `show={true}`.
  */
-export default function CacheWarningBanner({ show = false }: CacheWarningBannerProps) {
+export default function CacheWarningBanner({
+  show = false,
+}: CacheWarningBannerProps) {
   const [dismissed, setDismissed] = useState(false);
   // Track the previous value of `show` so we can detect a false→true transition
   // and reset the dismissed state. This follows the React docs "adjusting state
@@ -78,4 +80,3 @@ export default function CacheWarningBanner({ show = false }: CacheWarningBannerP
     </div>
   );
 }
-

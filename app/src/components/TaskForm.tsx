@@ -34,7 +34,10 @@ import {
 import type { RetryInfo } from "@/hooks/useSafeAuthFetch";
 
 interface TaskFormProps {
-  onSubmit: (data: CreateTaskInput, onRetry?: (info: RetryInfo | null) => void) => Promise<void>;
+  onSubmit: (
+    data: CreateTaskInput,
+    onRetry?: (info: RetryInfo | null) => void,
+  ) => Promise<void>;
   onCancel?: () => void;
   initialData?: Record<string, unknown> | null;
   isLoading?: boolean;
@@ -496,7 +499,9 @@ function TaskFormComponent(
       setRetryStatus(null);
 
       try {
-        await onSubmit(formData as CreateTaskInput, (info) => setRetryStatus(info));
+        await onSubmit(formData as CreateTaskInput, (info) =>
+          setRetryStatus(info),
+        );
       } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : "Error desconocido";
@@ -529,7 +534,10 @@ function TaskFormComponent(
 
   // Computed at render-time so the list always includes the current year,
   // even if the app tab was left open across a year boundary (e.g. Dec 31 → Jan 1).
-  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i);
+  const YEARS = Array.from(
+    { length: 5 },
+    (_, i) => new Date().getFullYear() + i,
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" data-testid="task-form">

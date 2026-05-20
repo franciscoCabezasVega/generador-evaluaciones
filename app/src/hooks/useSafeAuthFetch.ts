@@ -160,7 +160,8 @@ export function useSafeAuthFetch() {
         // Normalizar: tanto DOMException como Error con name="AbortError".
         // DOMException no hereda de Error en todos los entornos (Node <18, JSDOM),
         // por lo que comprobamos ambos tipos explícitamente.
-        const isErrorLike = error instanceof Error || error instanceof DOMException;
+        const isErrorLike =
+          error instanceof Error || error instanceof DOMException;
         const isAbortError =
           isErrorLike && (error as { name: string }).name === "AbortError";
 
@@ -169,7 +170,9 @@ export function useSafeAuthFetch() {
         // fetchAuth.ts lanza: new DOMException("getSession timed out...", "AbortError")
         if (
           isErrorLike &&
-          (error as { message: string }).message?.includes("getSession timed out")
+          (error as { message: string }).message?.includes(
+            "getSession timed out",
+          )
         ) {
           const SESSION_LOCK_MAX_RETRIES = 3;
           if (retryCount < SESSION_LOCK_MAX_RETRIES) {
@@ -186,9 +189,18 @@ export function useSafeAuthFetch() {
             try {
               await abortableDelay(delay, callerSignal);
             } catch {
-              throw new DOMException("The operation was aborted.", "AbortError");
+              throw new DOMException(
+                "The operation was aborted.",
+                "AbortError",
+              );
             }
-            return safeFetch(url, options, retryCount + 1, effectiveTimeout, onRetry);
+            return safeFetch(
+              url,
+              options,
+              retryCount + 1,
+              effectiveTimeout,
+              onRetry,
+            );
           }
           throw new Error(
             "La sesión está ocupada. Espera unos segundos e intenta de nuevo.",
@@ -208,7 +220,12 @@ export function useSafeAuthFetch() {
             console.warn(
               `Request timeout (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en ${retryDelay / 1000}s...`,
             );
-            onRetry?.({ attempt: retryCount + 1, max: MAX_RETRIES + 1, reason: "timeout", delayMs: retryDelay });
+            onRetry?.({
+              attempt: retryCount + 1,
+              max: MAX_RETRIES + 1,
+              reason: "timeout",
+              delayMs: retryDelay,
+            });
             try {
               await abortableDelay(retryDelay, callerSignal);
             } catch {
@@ -218,7 +235,13 @@ export function useSafeAuthFetch() {
                 "AbortError",
               );
             }
-            return safeFetch(url, options, retryCount + 1, effectiveTimeout, onRetry);
+            return safeFetch(
+              url,
+              options,
+              retryCount + 1,
+              effectiveTimeout,
+              onRetry,
+            );
           }
           // Timeout agotado sin reintentos disponibles
           throw new TimeoutError(
@@ -236,7 +259,12 @@ export function useSafeAuthFetch() {
             console.warn(
               `Session lock busy (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`,
             );
-            onRetry?.({ attempt: retryCount + 1, max: SESSION_LOCK_MAX_RETRIES + 1, reason: "session-lock", delayMs: delay });
+            onRetry?.({
+              attempt: retryCount + 1,
+              max: SESSION_LOCK_MAX_RETRIES + 1,
+              reason: "session-lock",
+              delayMs: delay,
+            });
             try {
               await abortableDelay(delay, callerSignal);
             } catch {
@@ -245,7 +273,13 @@ export function useSafeAuthFetch() {
                 "AbortError",
               );
             }
-            return safeFetch(url, options, retryCount + 1, effectiveTimeout, onRetry);
+            return safeFetch(
+              url,
+              options,
+              retryCount + 1,
+              effectiveTimeout,
+              onRetry,
+            );
           }
 
           // Todos los reintentos agotados — dejar que la UI muestre un banner de error
@@ -294,14 +328,25 @@ export function useSafeAuthFetch() {
           console.warn(
             `Error de red (intento ${retryCount + 1}/${MAX_RETRIES + 1}), reintentando en ${retryDelay / 1000}s...`,
           );
-          onRetry?.({ attempt: retryCount + 1, max: MAX_RETRIES + 1, reason: "network", delayMs: retryDelay });
+          onRetry?.({
+            attempt: retryCount + 1,
+            max: MAX_RETRIES + 1,
+            reason: "network",
+            delayMs: retryDelay,
+          });
           try {
             await abortableDelay(retryDelay, callerSignal);
           } catch {
             // Si el delay fue abortado, propagar AbortError
             throw new DOMException("The operation was aborted.", "AbortError");
           }
-          return safeFetch(url, options, retryCount + 1, effectiveTimeout, onRetry);
+          return safeFetch(
+            url,
+            options,
+            retryCount + 1,
+            effectiveTimeout,
+            onRetry,
+          );
         }
 
         throw error;

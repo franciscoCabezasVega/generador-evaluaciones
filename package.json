@@ -1,0 +1,12 @@
+{
+  "name": "generador-evaluaciones-root",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10"
+  }
+}

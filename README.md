@@ -185,7 +185,7 @@ Esto permite que distintas organizaciones o equipos usen la misma instancia con 
 ## Requisitos Previos
 
 - Node.js 18.17 o superior
-- npm 9+
+- pnpm 10+ (via Corepack: `corepack enable`)
 - Cuenta Supabase configurada
 - API Key de OpenAI (para funcionalidad de IA)
 
@@ -202,8 +202,10 @@ cd generador-evaluaciones/app
 
 ### 2. Instalar dependencias
 
+> Este proyecto usa **pnpm 10.x** vía Corepack. Tras clonar, habilita Corepack con `corepack enable`.
+
 ```bash
-npm install
+pnpm install
 ```
 
 ### 3. Configurar variables de entorno
@@ -234,7 +236,7 @@ E2E_USER_PASSWORD=YourSecurePassword
 ### 4. Instalar navegadores de Playwright (solo para E2E)
 
 ```bash
-npx playwright install --with-deps chromium
+pnpm exec playwright install --with-deps chromium
 ```
 
 ---
@@ -244,7 +246,7 @@ npx playwright install --with-deps chromium
 ### Desarrollo
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
@@ -252,14 +254,14 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 ### Build de producción
 
 ```bash
-npm run build
-npm start
+pnpm build
+pnpm start
 ```
 
 ### Linting
 
 ```bash
-npm run lint
+pnpm lint
 ```
 
 ---
@@ -269,8 +271,8 @@ npm run lint
 ### Tests Unitarios (Jest)
 
 ```bash
-npm test                # Ejecución única
-npm run test:watch      # Modo watch
+pnpm test                # Ejecución única
+pnpm test:watch          # Modo watch
 ```
 
 **Cobertura de tests unitarios (~35-45%):**
@@ -293,9 +295,9 @@ npm run test:watch      # Modo watch
 ### Tests E2E (Playwright)
 
 ```bash
-npm run test:e2e           # Headless (CI)
-npm run test:e2e:headed    # Con navegador visible
-npm run test:e2e:ui        # UI interactiva de Playwright
+pnpm test:e2e           # Headless (CI)
+pnpm test:e2e:headed    # Con navegador visible
+pnpm test:e2e:ui        # UI interactiva de Playwright
 ```
 
 **Arquitectura E2E:**
@@ -367,7 +369,7 @@ Push a main / PR → ┌─ Unit Tests (Jest) ─┐
 
 | Job | Qué hace | Duración aprox. |
 |-----|----------|-----------------|
-| **Unit Tests** | `npm test --ci --coverage` | ~15s |
+| **Unit Tests** | `pnpm test --ci --coverage` | ~15s |
 | **E2E Tests** | Instala Chromium, crea `.env.local`, ejecuta Playwright | ~60s |
 | **CI Gate** | Verifica que ambos jobs pasen | ~2s |
 | **Deploy** | Solo en push a `main` + tests verdes → `vercel deploy --prod` | ~60s |
@@ -743,11 +745,11 @@ El hook `useCachedFetch` implementa un mecanismo de **auto-retry transparente** 
 ### "Tests E2E fallan en local"
 - Verifica que `.env.local` tenga `E2E_USER_EMAIL` y `E2E_USER_PASSWORD`
 - Asegúrate de que el usuario de test exista en Supabase Auth
-- Ejecuta `npx playwright install --with-deps chromium`
+- Ejecuta `pnpm exec playwright install --with-deps chromium`
 
 ### "Error al compilar"
 ```bash
-npm run build
+pnpm build
 ```
 
 ---

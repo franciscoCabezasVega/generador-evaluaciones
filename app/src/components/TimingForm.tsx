@@ -205,7 +205,9 @@ function TimingFormComponent(
   // Quitar QA del timing y sincronizar con la tarea
   const removeQA = async (qaName: string) => {
     // Same compute-first pattern as addQA — no side-effects inside updater.
-    const removedIndex = formData.qa_entries.findIndex((e) => e.qa_name === qaName);
+    const removedIndex = formData.qa_entries.findIndex(
+      (e) => e.qa_name === qaName,
+    );
     if (removedIndex === -1) return;
     const removedEntry = formData.qa_entries[removedIndex];
     const taskIdToSync = formData.task_id || null;
@@ -351,13 +353,14 @@ function TimingFormComponent(
     // ClickUp-synced values (e.g. 20.88) can be viewed and edited without
     // losing the decimal part. The DB column is NUMERIC(10,2).
     const filteredValue = value
-      .replace(/[^0-9.]/g, "")         // strip non-digit/non-dot
+      .replace(/[^0-9.]/g, "") // strip non-digit/non-dot
       .replace(/(\.[0-9]{0,2}).*/, "$1") // keep at most 2 decimal places
-      .replace(/^\./, "");              // strip leading dot
+      .replace(/^\./, ""); // strip leading dot
     // Prevent multiple dots: if user types a second dot, ignore it
-    const normalized = filteredValue.split(".").length > 2
-      ? filteredValue.slice(0, filteredValue.lastIndexOf("."))
-      : filteredValue;
+    const normalized =
+      filteredValue.split(".").length > 2
+        ? filteredValue.slice(0, filteredValue.lastIndexOf("."))
+        : filteredValue;
     const key = `${qaName}_${categoryId}`;
 
     if (filteredValue !== "") {
@@ -474,10 +477,12 @@ function TimingFormComponent(
     if (formData.qa_entries.length === 0) return null;
     const taskId = lockedTask?.id ?? formData.task_id;
     if (!taskId) return null;
-    const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map((e) => ({
-      qa_name: e.qa_name,
-      hours_by_category: e.hours_by_category,
-    }));
+    const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map(
+      (e) => ({
+        qa_name: e.qa_name,
+        hours_by_category: e.hours_by_category,
+      }),
+    );
     return onCreateForSync({
       task_id: taskId,
       month: Number(formData.month),
@@ -726,7 +731,9 @@ function TimingFormComponent(
             <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-200">
               <Users size={18} className="text-blue-600" />
               QA Asignados
-              {syncingQA && <Loader2 size={14} className="animate-spin text-blue-500" />}
+              {syncingQA && (
+                <Loader2 size={14} className="animate-spin text-blue-500" />
+              )}
             </span>
             {/* Dropdown para añadir QA */}
             <div className="relative">
@@ -741,17 +748,27 @@ function TimingFormComponent(
               {qaDropdownOpen && (
                 <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
                   {activeQAMembers.filter(
-                    (m) => !formData.qa_entries.some((e) => e.qa_name === m.name)
+                    (m) =>
+                      !formData.qa_entries.some((e) => e.qa_name === m.name),
                   ).length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-gray-500">Todos los QA ya están asignados</p>
+                    <p className="px-3 py-2 text-xs text-gray-500">
+                      Todos los QA ya están asignados
+                    </p>
                   ) : (
                     activeQAMembers
-                      .filter((m) => !formData.qa_entries.some((e) => e.qa_name === m.name))
+                      .filter(
+                        (m) =>
+                          !formData.qa_entries.some(
+                            (e) => e.qa_name === m.name,
+                          ),
+                      )
                       .map((m) => (
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => { void addQA(m.name); }}
+                          onClick={() => {
+                            void addQA(m.name);
+                          }}
                           disabled={syncingQA}
                           className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -774,7 +791,9 @@ function TimingFormComponent(
                   {entry.qa_name}
                   <button
                     type="button"
-                    onClick={() => { void removeQA(entry.qa_name); }}
+                    onClick={() => {
+                      void removeQA(entry.qa_name);
+                    }}
                     disabled={syncingQA}
                     className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity disabled:cursor-not-allowed"
                     title={`Quitar ${entry.qa_name}`}
@@ -809,11 +828,17 @@ function TimingFormComponent(
           taskId={formData.task_id}
           timingId={initialData?.id ? String(initialData.id) : undefined}
           taskLink={
-            (lockedTask?.task_link) ??
-            [...dynamicTasks, ...availableTasks].find((t) => t.id === formData.task_id)?.task_link
+            lockedTask?.task_link ??
+            [...dynamicTasks, ...availableTasks].find(
+              (t) => t.id === formData.task_id,
+            )?.task_link
           }
           safeFetch={safeFetch}
-          onSaveFirst={!isEditing && !initialData?.id && formData.qa_entries.length > 0 ? saveForSync : undefined}
+          onSaveFirst={
+            !isEditing && !initialData?.id && formData.qa_entries.length > 0
+              ? saveForSync
+              : undefined
+          }
           onSyncSuccess={(freshQaEntries) => {
             setFormData((prev) => ({
               ...prev,
@@ -897,7 +922,10 @@ function TimingFormComponent(
                             </label>
                             <div className="flex items-center gap-2">
                               {catHours > 0 && (
-                                <span className="text-xs font-semibold opacity-80" style={{ color: cat.hex_color }}>
+                                <span
+                                  className="text-xs font-semibold opacity-80"
+                                  style={{ color: cat.hex_color }}
+                                >
                                   {formatTime(catHours)}
                                 </span>
                               )}
@@ -916,9 +944,16 @@ function TimingFormComponent(
                                 }
                                 onKeyPress={(ev) => {
                                   // Allow digits and one decimal point
-                                  if (!/[0-9.]/.test(ev.key)) ev.preventDefault();
+                                  if (!/[0-9.]/.test(ev.key))
+                                    ev.preventDefault();
                                   // Block second dot
-                                  if (ev.key === "." && (ev.currentTarget as HTMLInputElement).value.includes(".")) ev.preventDefault();
+                                  if (
+                                    ev.key === "." &&
+                                    (
+                                      ev.currentTarget as HTMLInputElement
+                                    ).value.includes(".")
+                                  )
+                                    ev.preventDefault();
                                 }}
                                 onBlur={(ev) => {
                                   if (ev.target.value === "") {
@@ -1066,7 +1101,10 @@ interface ClickUpSyncInlineProps {
     timeoutMs?: number,
   ) => Promise<Response>;
   onSyncSuccess?: (
-    qaEntries: Array<{ qa_name: string; hours_by_category: Record<string, number> }>,
+    qaEntries: Array<{
+      qa_name: string;
+      hours_by_category: Record<string, number>;
+    }>,
   ) => void;
 }
 
@@ -1089,16 +1127,26 @@ function ClickUpSyncInline({
   // Extraer el ID del último segmento de la URL de ClickUp
   // ej: https://app.clickup.com/t/86e0pxw4d → "86e0pxw4d"
   const clickupIdFromLink = taskLink
-    ? (taskLink.split("/").filter(Boolean).pop()?.split("?")[0]?.split("#")[0] ?? "")
+    ? (taskLink
+        .split("/")
+        .filter(Boolean)
+        .pop()
+        ?.split("?")[0]
+        ?.split("#")[0] ?? "")
     : "";
 
   const [clickupId, setClickupId] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<ClickUpSyncInfo | null>(null);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   // Cuando onSaveFirst crea el timing, guardamos el ID aquí para usarlo en el sync
-  const [localTimingId, setLocalTimingId] = useState<string | undefined>(timingId);
+  const [localTimingId, setLocalTimingId] = useState<string | undefined>(
+    timingId,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1153,7 +1201,12 @@ function ClickUpSyncInline({
   // load and there is no DB-registered sync ID, pre-fill the input.
   // This handles the case where taskLink arrives after the first fetch runs.
   useEffect(() => {
-    if (clickupIdFromLink && syncInfo && !syncInfo.clickup_qa_task_id && !clickupId) {
+    if (
+      clickupIdFromLink &&
+      syncInfo &&
+      !syncInfo.clickup_qa_task_id &&
+      !clickupId
+    ) {
       setClickupId(clickupIdFromLink);
     }
   }, [clickupIdFromLink, syncInfo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1180,15 +1233,27 @@ function ClickUpSyncInline({
       try {
         const newId = await onSaveFirst();
         if (!newId) {
-          setMsg({ type: "error", text: "Error al guardar el timing. Intenta de nuevo." });
+          setMsg({
+            type: "error",
+            text: "Error al guardar el timing. Intenta de nuevo.",
+          });
           setSyncing(false);
           return;
         }
         setLocalTimingId(newId);
         effectiveTimingId = newId;
-        setMsg({ type: "success", text: "Timing guardado. Sincronizando con ClickUp..." });
+        setMsg({
+          type: "success",
+          text: "Timing guardado. Sincronizando con ClickUp...",
+        });
       } catch (saveErr) {
-        setMsg({ type: "error", text: saveErr instanceof Error ? saveErr.message : "Error al guardar el timing. Intenta de nuevo." });
+        setMsg({
+          type: "error",
+          text:
+            saveErr instanceof Error
+              ? saveErr.message
+              : "Error al guardar el timing. Intenta de nuevo.",
+        });
         setSyncing(false);
         return;
       }
@@ -1254,18 +1319,28 @@ function ClickUpSyncInline({
       });
     } catch (err) {
       console.error("[ClickUp sync error]", err);
-      if (err instanceof TimeoutError || (err instanceof Error && err.name === "TimeoutError")) {
-        setMsg({ type: "error", text: "ClickUp tardó demasiado en responder. Espera unos segundos e intenta de nuevo." });
+      if (
+        err instanceof TimeoutError ||
+        (err instanceof Error && err.name === "TimeoutError")
+      ) {
+        setMsg({
+          type: "error",
+          text: "ClickUp tardó demasiado en responder. Espera unos segundos e intenta de nuevo.",
+        });
       } else if (err instanceof Error && err.message.includes("sesión")) {
         setMsg({ type: "error", text: err.message });
       } else if (err instanceof Error && err.name === "AbortError") {
-        setMsg({ type: "error", text: "La solicitud fue cancelada. Intenta de nuevo." });
+        setMsg({
+          type: "error",
+          text: "La solicitud fue cancelada. Intenta de nuevo.",
+        });
       } else {
         setMsg({
           type: "error",
-          text: err instanceof Error && err.message
-            ? `Error: ${err.message}`
-            : "Error de conexión. Intenta de nuevo.",
+          text:
+            err instanceof Error && err.message
+              ? `Error: ${err.message}`
+              : "Error de conexión. Intenta de nuevo.",
         });
       }
     } finally {

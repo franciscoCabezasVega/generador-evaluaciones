@@ -60,7 +60,14 @@ function ClickUpSyncPanel({
   taskLink?: string;
   safeFetch: ReturnType<typeof useSafeAuthFetch>["safeFetch"];
 }) {
-  const idFromLink = taskLink ? (taskLink.split("/").filter(Boolean).pop()?.split("?")[0]?.split("#")[0] ?? "") : "";
+  const idFromLink = taskLink
+    ? (taskLink
+        .split("/")
+        .filter(Boolean)
+        .pop()
+        ?.split("?")[0]
+        ?.split("#")[0] ?? "")
+    : "";
   const [clickupId, setClickupId] = useState(idFromLink);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -69,7 +76,10 @@ function ClickUpSyncPanel({
   // true  = timing row confirmed to exist for this task/month/year
   // false = confirmed no timing row exists
   const [hasTiming, setHasTiming] = useState<boolean | null>(null);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,18 +90,20 @@ function ClickUpSyncPanel({
         .then(async (res) => {
           if (cancelled) return;
           if (res.ok) {
-            const data = await res.json() as ClickUpSyncInfo;
+            const data = (await res.json()) as ClickUpSyncInfo;
             setSyncInfo(data);
             if (data.clickup_qa_task_id) setClickupId(data.clickup_qa_task_id);
             else if (idFromLink) setClickupId(idFromLink);
           }
         })
         .catch(() => null),
-      safeFetch(`/api/timings?task_id=${taskId}&month=${taskMonth}&year=${taskYear}`)
+      safeFetch(
+        `/api/timings?task_id=${taskId}&month=${taskMonth}&year=${taskYear}`,
+      )
         .then(async (res) => {
           if (cancelled) return;
           if (res.ok) {
-            const data = await res.json() as unknown[];
+            const data = (await res.json()) as unknown[];
             setHasTiming(Array.isArray(data) && data.length > 0);
           } else {
             // Non-2xx: leave as null (unknown) — handleSync will guard
@@ -103,14 +115,21 @@ function ClickUpSyncPanel({
           // rather than attempting to create a potentially duplicate timing.
           if (!cancelled) setHasTiming(null);
         }),
-    ]).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    ]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, taskMonth, taskYear]);
 
   const handleSync = async () => {
     const id = clickupId.trim();
-    if (!id) { setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." }); return; }
+    if (!id) {
+      setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." });
+      return;
+    }
 
     setSyncing(true);
     setMsg(null);
@@ -118,7 +137,10 @@ function ClickUpSyncPanel({
     // Guard: if the timing-existence check didn't resolve (network failure),
     // block auto-create to avoid generating a duplicate timing row.
     if (hasTiming === null) {
-      setMsg({ type: "error", text: "No se pudo verificar si existe un registro de timing. Recarga la página e intenta de nuevo." });
+      setMsg({
+        type: "error",
+        text: "No se pudo verificar si existe un registro de timing. Recarga la página e intenta de nuevo.",
+      });
       setSyncing(false);
       return;
     }
@@ -126,7 +148,10 @@ function ClickUpSyncPanel({
     // Si no hay timing, crearlo automáticamente con las horas en 0 (for_sync)
     if (!hasTiming) {
       if (assignedQA.length === 0) {
-        setMsg({ type: "error", text: "La tarea no tiene QA asignados. Edita la tarea para asignar QA primero." });
+        setMsg({
+          type: "error",
+          text: "La tarea no tiene QA asignados. Edita la tarea para asignar QA primero.",
+        });
         setSyncing(false);
         return;
       }
@@ -147,16 +172,25 @@ function ClickUpSyncPanel({
           }),
         });
         if (!createRes.ok) {
-          setMsg({ type: "error", text: "No se pudo crear el registro de timing. Intenta de nuevo." });
+          setMsg({
+            type: "error",
+            text: "No se pudo crear el registro de timing. Intenta de nuevo.",
+          });
           setSyncing(false);
           return;
         }
         setHasTiming(true);
         invalidateCache("timings");
         invalidateCache("timings-tasks");
-        setMsg({ type: "success", text: "Timing creado. Sincronizando con ClickUp..." });
+        setMsg({
+          type: "success",
+          text: "Timing creado. Sincronizando con ClickUp...",
+        });
       } catch {
-        setMsg({ type: "error", text: "Error al crear el timing. Intenta de nuevo." });
+        setMsg({
+          type: "error",
+          text: "Error al crear el timing. Intenta de nuevo.",
+        });
         setSyncing(false);
         return;
       }
@@ -174,7 +208,12 @@ function ClickUpSyncPanel({
         0,
         60_000,
       );
-      const data = await res.json() as { ok?: boolean; skipped?: boolean; error?: string; clickup_qa_task_id?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        skipped?: boolean;
+        error?: string;
+        clickup_qa_task_id?: string;
+      };
       if (!res.ok) {
         setMsg({ type: "error", text: data.error ?? "Error al sincronizar" });
         return;
@@ -201,7 +240,8 @@ function ClickUpSyncPanel({
       invalidateCache("timings-all-comparison");
       invalidateCache("timings-all-tasks-comparison");
     } catch (err) {
-      const isTimeout = err instanceof Error &&
+      const isTimeout =
+        err instanceof Error &&
         (err.name === "TimeoutError" || err.message.includes("tardó más de"));
       setMsg({
         type: "error",
@@ -230,7 +270,8 @@ function ClickUpSyncPanel({
         Sincronizar tiempos desde ClickUp
         {syncInfo?.registered && (
           <span className="ml-auto text-violet-500 font-normal">
-            Registrado{syncInfo.last_synced_at
+            Registrado
+            {syncInfo.last_synced_at
               ? ` · Último sync: ${new Date(syncInfo.last_synced_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}`
               : ""}
           </span>
@@ -241,7 +282,9 @@ function ClickUpSyncPanel({
           type="text"
           value={clickupId}
           onChange={(e) => setClickupId(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") void handleSync(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSync();
+          }}
           placeholder="ID de subtarea ClickUp (ej: abc123xy)"
           className="flex-1 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
           disabled={syncing}
@@ -251,17 +294,27 @@ function ClickUpSyncPanel({
           disabled={syncing || !clickupId.trim()}
           className="inline-flex items-center gap-1.5 rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
         >
-          {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+          {syncing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Zap className="w-3.5 h-3.5" />
+          )}
           {syncing ? "Sincronizando..." : "Sincronizar"}
         </button>
       </div>
       {msg && (
-        <div className={`flex items-start gap-1.5 text-xs rounded px-2 py-1.5 ${
-          msg.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-        }`}>
-          {msg.type === "success"
-            ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            : <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+        <div
+          className={`flex items-start gap-1.5 text-xs rounded px-2 py-1.5 ${
+            msg.type === "success"
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
+          }`}
+        >
+          {msg.type === "success" ? (
+            <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          ) : (
+            <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          )}
           {msg.text}
         </div>
       )}
@@ -892,278 +945,274 @@ export default function TasksPage() {
                 </tr>
               </thead>
               <tbody>
-                {tasks
-                  .map((task, index) => {
-                    const squads = task.squads || [];
-                    const avgScore =
-                      squads.length > 0
-                        ? formatScore(
-                            squads.reduce(
-                              (sum: number, sq) =>
-                                sum + (sq.calculated_score || 0),
-                              0,
-                            ) / squads.length,
-                          )
-                        : "0.0";
-                    const isExpanded = expandedTaskId === task.id;
+                {tasks.map((task, index) => {
+                  const squads = task.squads || [];
+                  const avgScore =
+                    squads.length > 0
+                      ? formatScore(
+                          squads.reduce(
+                            (sum: number, sq) =>
+                              sum + (sq.calculated_score || 0),
+                            0,
+                          ) / squads.length,
+                        )
+                      : "0.0";
+                  const isExpanded = expandedTaskId === task.id;
 
-                    return (
-                      <React.Fragment key={task.id}>
-                        <tr
-                          onClick={() =>
-                            setExpandedTaskId(isExpanded ? null : task.id)
-                          }
-                          className="border-b border-gray-200 hover:bg-gray-200 cursor-pointer transition-colors"
-                          data-tour="task-table-row"
-                        >
-                          <td className="px-2 py-3 text-center">
-                            <button
-                              className="text-gray-600 hover:text-gray-800 p-1"
-                              data-tour="task-row-expand-btn"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4" />
-                              )}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 text-sm font-medium">
-                            {index + 1}
-                          </td>
-                          <td className="px-4 py-3 text-sm max-w-xs">
-                            <div className="truncate" title={task.name}>
-                              {task.task_link ? (
-                                <a
-                                  href={task.task_link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline hover:text-blue-800"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {task.name}
-                                </a>
-                              ) : (
-                                task.name
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className="text-gray-800">
-                              {task.product_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className="inline-flex items-center rounded-full badge-violet px-2 py-0.5 text-xs font-semibold">
-                              {task.tshirt_size || "—"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className="inline-flex items-center rounded-full badge-purple px-2 py-0.5 text-xs font-medium whitespace-nowrap">
-                              {task.project_type || "—"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span
-                              className={`px-2 py-1 rounded-md text-xs font-semibold ${
-                                task.status === "Completada"
-                                  ? "badge-success"
-                                  : task.status === "Deprecada"
-                                    ? "badge-neutral"
-                                    : "badge-warning"
-                              }`}
-                            >
-                              {task.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            {squads.length === 1 ? (
-                              <span className="text-gray-800">
-                                {squads[0].squad}
-                              </span>
+                  return (
+                    <React.Fragment key={task.id}>
+                      <tr
+                        onClick={() =>
+                          setExpandedTaskId(isExpanded ? null : task.id)
+                        }
+                        className="border-b border-gray-200 hover:bg-gray-200 cursor-pointer transition-colors"
+                        data-tour="task-table-row"
+                      >
+                        <td className="px-2 py-3 text-center">
+                          <button
+                            className="text-gray-600 hover:text-gray-800 p-1"
+                            data-tour="task-row-expand-btn"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
                             ) : (
-                              <span className="bg-blue-50 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                                {squads.length}{" "}
-                                {squads.length === 2 ? "equipo" : "equipos"}
-                              </span>
+                              <ChevronRight className="w-4 h-4" />
                             )}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            {task.status === "Pendiente" ||
-                            task.status === "Deprecada"
-                              ? "-"
-                              : `${avgScore}/10`}
-                          </td>
-                          {canManageTasks && (
-                            <td
-                              className="px-4 py-3 text-sm"
-                              onClick={(e) => e.stopPropagation()}
-                              data-tour="task-actions"
-                            >
-                              <div className="flex gap-2">
-                                <div className="group relative">
-                                  <button
-                                    onClick={() => {
-                                      setEditingTask(task);
-                                      setShowForm(true);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800 transition-colors p-1"
-                                    title="Editar tarea"
-                                    data-testid={`edit-task-${task.id}`}
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                    Editar tarea
-                                  </div>
-                                </div>
-                                <div className="group relative">
-                                  <button
-                                    onClick={() => handleDelete(task.id)}
-                                    className="text-red-600 hover:text-red-800 transition-colors p-1"
-                                    title="Eliminar tarea"
-                                    data-testid={`delete-task-${task.id}`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                    Eliminar tarea
-                                  </div>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-sm max-w-xs">
+                          <div className="truncate" title={task.name}>
+                            {task.task_link ? (
+                              <a
+                                href={task.task_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline hover:text-blue-800"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {task.name}
+                              </a>
+                            ) : (
+                              task.name
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="text-gray-800">
+                            {task.product_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="inline-flex items-center rounded-full badge-violet px-2 py-0.5 text-xs font-semibold">
+                            {task.tshirt_size || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="inline-flex items-center rounded-full badge-purple px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                            {task.project_type || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span
+                            className={`px-2 py-1 rounded-md text-xs font-semibold ${
+                              task.status === "Completada"
+                                ? "badge-success"
+                                : task.status === "Deprecada"
+                                  ? "badge-neutral"
+                                  : "badge-warning"
+                            }`}
+                          >
+                            {task.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {squads.length === 1 ? (
+                            <span className="text-gray-800">
+                              {squads[0].squad}
+                            </span>
+                          ) : (
+                            <span className="bg-blue-50 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                              {squads.length}{" "}
+                              {squads.length === 2 ? "equipo" : "equipos"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {task.status === "Pendiente" ||
+                          task.status === "Deprecada"
+                            ? "-"
+                            : `${avgScore}/10`}
+                        </td>
+                        {canManageTasks && (
+                          <td
+                            className="px-4 py-3 text-sm"
+                            onClick={(e) => e.stopPropagation()}
+                            data-tour="task-actions"
+                          >
+                            <div className="flex gap-2">
+                              <div className="group relative">
+                                <button
+                                  onClick={() => {
+                                    setEditingTask(task);
+                                    setShowForm(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                                  title="Editar tarea"
+                                  data-testid={`edit-task-${task.id}`}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  Editar tarea
                                 </div>
                               </div>
-                            </td>
-                          )}
-                        </tr>
-                        {/* Fila expandida con detalles */}
-                        {isExpanded && squads.length > 0 && (
-                          <tr
-                            className="border-b border-gray-200 bg-gray-200"
-                            data-tour="task-row-details"
+                              <div className="group relative">
+                                <button
+                                  onClick={() => handleDelete(task.id)}
+                                  className="text-red-600 hover:text-red-800 transition-colors p-1"
+                                  title="Eliminar tarea"
+                                  data-testid={`delete-task-${task.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  Eliminar tarea
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                      {/* Fila expandida con detalles */}
+                      {isExpanded && squads.length > 0 && (
+                        <tr
+                          className="border-b border-gray-200 bg-gray-200"
+                          data-tour="task-row-details"
+                        >
+                          <td
+                            colSpan={canManageTasks ? 11 : 10}
+                            className="px-6 py-4"
                           >
-                            <td
-                              colSpan={canManageTasks ? 11 : 10}
-                              className="px-6 py-4"
-                            >
-                              <div className="space-y-4">
-                                {/* Info adicional de la tarea */}
-                                <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-                                  {task.effort_score_date && (
-                                    <span className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/25 rounded px-2 py-1">
-                                      <span className="font-semibold text-emerald-400">
-                                        Fecha Esfuerzo:
+                            <div className="space-y-4">
+                              {/* Info adicional de la tarea */}
+                              <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                                {task.effort_score_date && (
+                                  <span className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/25 rounded px-2 py-1">
+                                    <span className="font-semibold text-emerald-400">
+                                      Fecha Esfuerzo:
+                                    </span>
+                                    <span className="text-emerald-300 num">
+                                      {(() => {
+                                        const d = parseISO(
+                                          task.effort_score_date,
+                                        );
+                                        return isValid(d)
+                                          ? formatDate(d, "dd/MM/yyyy")
+                                          : task.effort_score_date;
+                                      })()}
+                                    </span>
+                                  </span>
+                                )}
+                                {task.assigned_qa &&
+                                  task.assigned_qa.length > 0 && (
+                                    <span className="inline-flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded px-2 py-1">
+                                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                                      <span className="font-semibold text-blue-700">
+                                        QA Asignados:
                                       </span>
-                                      <span className="text-emerald-300 num">
-                                        {(() => {
-                                          const d = parseISO(
-                                            task.effort_score_date,
-                                          );
-                                          return isValid(d)
-                                            ? formatDate(d, "dd/MM/yyyy")
-                                            : task.effort_score_date;
-                                        })()}
+                                      <span className="text-blue-700">
+                                        {task.assigned_qa.join(", ")}
                                       </span>
                                     </span>
                                   )}
-                                  {task.assigned_qa &&
-                                    task.assigned_qa.length > 0 && (
-                                      <span className="inline-flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded px-2 py-1">
-                                        <Users className="w-3.5 h-3.5 text-blue-600" />
-                                        <span className="font-semibold text-blue-700">
-                                          QA Asignados:
-                                        </span>
-                                        <span className="text-blue-700">
-                                          {task.assigned_qa.join(", ")}
-                                        </span>
-                                      </span>
-                                    )}
-                                </div>
-                                {/* ClickUp sync */}
-                                <ClickUpSyncPanel
-                                  taskId={task.id}
-                                  taskMonth={task.month}
-                                  taskYear={task.year}
-                                  assignedQA={task.assigned_qa ?? []}
-                                  taskLink={task.task_link ?? undefined}
-                                  safeFetch={safeFetch}
-                                />
-                                {/* Tabla de squads */}
-                                <div className="bg-gray-100 border border-gray-300 rounded-lg overflow-hidden">
-                                  <table className="w-full text-sm">
-                                    <thead className="bg-gray-300 border-b border-gray-400">
-                                      <tr>
-                                        <th className="px-3 py-2 text-left font-semibold text-gray-700">
-                                          Equipo
-                                        </th>
-                                        <th className="px-3 py-2 text-left font-semibold text-gray-700">
-                                          Bajas
-                                        </th>
-                                        <th className="px-3 py-2 text-left font-semibold text-gray-700">
-                                          Medias
-                                        </th>
-                                        <th className="px-3 py-2 text-left font-semibold text-gray-700">
-                                          Graves
-                                        </th>
-                                        <th className="px-3 py-2 text-right font-semibold text-gray-700">
-                                          Nota
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {squads.map(
-                                        (squad, squadIndex: number) => (
-                                          <React.Fragment key={squadIndex}>
-                                            <tr className="border-b hover:bg-gray-50">
-                                              <td className="px-3 py-2 font-medium text-gray-800">
-                                                {squad.squad}
-                                              </td>
-                                              <td className="px-3 py-2 text-gray-700">
-                                                {squad.low_returns}
-                                              </td>
-                                              <td className="px-3 py-2 text-gray-700">
-                                                {squad.medium_returns}
-                                              </td>
-                                              <td className="px-3 py-2 text-gray-700">
-                                                {squad.high_returns}
-                                              </td>
-                                              <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                                                {typeof squad.calculated_score ===
-                                                "number"
-                                                  ? formatScore(
-                                                      squad.calculated_score,
-                                                    )
-                                                  : squad.calculated_score ||
-                                                    "0.0"}
-                                                /10
-                                              </td>
-                                            </tr>
-                                            {squad.additional_notes && (
-                                              <tr className="border-b border-gray-200 bg-blue-100">
-                                                <td
-                                                  colSpan={5}
-                                                  className="px-3 py-2"
-                                                >
-                                                  <p className="text-xs font-semibold text-blue-700 mb-1">
-                                                    Notas:
-                                                  </p>
-                                                  <p className="text-sm text-blue-700">
-                                                    {squad.additional_notes}
-                                                  </p>
-                                                </td>
-                                              </tr>
-                                            )}
-                                          </React.Fragment>
-                                        ),
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
+                              {/* ClickUp sync */}
+                              <ClickUpSyncPanel
+                                taskId={task.id}
+                                taskMonth={task.month}
+                                taskYear={task.year}
+                                assignedQA={task.assigned_qa ?? []}
+                                taskLink={task.task_link ?? undefined}
+                                safeFetch={safeFetch}
+                              />
+                              {/* Tabla de squads */}
+                              <div className="bg-gray-100 border border-gray-300 rounded-lg overflow-hidden">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-gray-300 border-b border-gray-400">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                        Equipo
+                                      </th>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                        Bajas
+                                      </th>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                        Medias
+                                      </th>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-700">
+                                        Graves
+                                      </th>
+                                      <th className="px-3 py-2 text-right font-semibold text-gray-700">
+                                        Nota
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {squads.map((squad, squadIndex: number) => (
+                                      <React.Fragment key={squadIndex}>
+                                        <tr className="border-b hover:bg-gray-50">
+                                          <td className="px-3 py-2 font-medium text-gray-800">
+                                            {squad.squad}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700">
+                                            {squad.low_returns}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700">
+                                            {squad.medium_returns}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700">
+                                            {squad.high_returns}
+                                          </td>
+                                          <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                                            {typeof squad.calculated_score ===
+                                            "number"
+                                              ? formatScore(
+                                                  squad.calculated_score,
+                                                )
+                                              : squad.calculated_score || "0.0"}
+                                            /10
+                                          </td>
+                                        </tr>
+                                        {squad.additional_notes && (
+                                          <tr className="border-b border-gray-200 bg-blue-100">
+                                            <td
+                                              colSpan={5}
+                                              className="px-3 py-2"
+                                            >
+                                              <p className="text-xs font-semibold text-blue-700 mb-1">
+                                                Notas:
+                                              </p>
+                                              <p className="text-sm text-blue-700">
+                                                {squad.additional_notes}
+                                              </p>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

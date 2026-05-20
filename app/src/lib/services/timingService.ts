@@ -973,7 +973,9 @@ export const timingService = {
       );
 
       // Obtener assigned_qa de todas las tareas involucradas
-      const involvedTaskIds = Array.from(new Set(Array.from(timingToTask.values())));
+      const involvedTaskIds = Array.from(
+        new Set(Array.from(timingToTask.values())),
+      );
       const { data: assignedQAData, error: assignedQAError } = await client
         .from("tasks")
         .select("id, assigned_qa")
@@ -981,7 +983,10 @@ export const timingService = {
       if (assignedQAError) throw assignedQAError;
       const taskAssignedQA = new Map<string, string[]>(
         ((assignedQAData ?? []) as { id: string; assigned_qa: string[] }[]).map(
-          (t) => [t.id, Array.isArray(t.assigned_qa) ? t.assigned_qa.filter(Boolean) : []],
+          (t) => [
+            t.id,
+            Array.isArray(t.assigned_qa) ? t.assigned_qa.filter(Boolean) : [],
+          ],
         ),
       );
 
@@ -991,7 +996,7 @@ export const timingService = {
       // - Tareas SIN assigned_qa: agregar por (timing_id, qa_name) para preservar
       //   el desglose real por registrador sin perder información.
       const byTimingAssigned = new Map<string, TimingQAEntry>(); // timing_id → aggregate
-      const byTimingQA = new Map<string, TimingQAEntry>();        // `${timing_id}|${qa_name}` → aggregate
+      const byTimingQA = new Map<string, TimingQAEntry>(); // `${timing_id}|${qa_name}` → aggregate
 
       for (const entry of flatEntries) {
         const taskId = timingToTask.get(entry.timing_id);
@@ -1006,7 +1011,9 @@ export const timingService = {
             });
           } else {
             existing.total_hours += entry.total_hours;
-            for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+            for (const [catId, hours] of Object.entries(
+              entry.hours_by_category,
+            )) {
               existing.hours_by_category[catId] =
                 (existing.hours_by_category[catId] ?? 0) + hours;
             }
@@ -1021,7 +1028,9 @@ export const timingService = {
             });
           } else {
             existing.total_hours += entry.total_hours;
-            for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+            for (const [catId, hours] of Object.entries(
+              entry.hours_by_category,
+            )) {
               existing.hours_by_category[catId] =
                 (existing.hours_by_category[catId] ?? 0) + hours;
             }
@@ -1066,8 +1075,8 @@ export const timingService = {
           {} as Record<string, number>,
         );
 
-      const metrics: QATimingMetrics[] = Object.entries(byQA).map(
-        ([qaName, entries]) => {
+      const metrics: QATimingMetrics[] = Object.entries(byQA)
+        .map(([qaName, entries]) => {
           const totals_by_category = initTotals();
           // Total controlable por QA: excluye categorías como "QA - On Hold"
           // o "QA - Sin Asignar" que están fuera del control del equipo y
@@ -1136,8 +1145,8 @@ export const timingService = {
                   100,
               ) / 100,
           };
-        },
-      ).filter((m) => m.task_count > 0);
+        })
+        .filter((m) => m.task_count > 0);
 
       return metrics.sort((a, b) => b.total_hours - a.total_hours);
     } catch (error) {

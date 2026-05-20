@@ -105,17 +105,26 @@ describe("useCachedFetch – visibilitychange integration", () => {
     const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
     renderHook(() =>
-      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+        staleTime: STALE_TIME,
+      }),
     );
 
     // Fire jitter timer so the initial fetch completes
-    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {
+      jest.runAllTimers();
+    });
     await act(async () => {});
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
     // Expire the cache by advancing fake clock past staleTime
-    act(() => { jest.advanceTimersByTime(STALE_TIME + 100); });
+    act(() => {
+      jest.advanceTimersByTime(STALE_TIME + 100);
+    });
 
     // Tab becomes visible → hook should trigger a background refetch
     await act(async () => {
@@ -133,10 +142,17 @@ describe("useCachedFetch – visibilitychange integration", () => {
     const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
     renderHook(() =>
-      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+        staleTime: STALE_TIME,
+      }),
     );
 
-    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {
+      jest.runAllTimers();
+    });
     await act(async () => {});
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
@@ -157,16 +173,25 @@ describe("useCachedFetch – visibilitychange integration", () => {
     const fetchFn = jest.fn().mockResolvedValue(["data"]);
 
     renderHook(() =>
-      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {}, staleTime: STALE_TIME }),
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+        staleTime: STALE_TIME,
+      }),
     );
 
-    await act(async () => { jest.runAllTimers(); });
+    await act(async () => {
+      jest.runAllTimers();
+    });
     await act(async () => {});
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
     // Expire cache
-    act(() => { jest.advanceTimersByTime(STALE_TIME + 100); });
+    act(() => {
+      jest.advanceTimersByTime(STALE_TIME + 100);
+    });
 
     // Tab goes to background — hook must NOT refetch on hidden
     await act(async () => {

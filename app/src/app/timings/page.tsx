@@ -318,12 +318,15 @@ export default function TimingsPage() {
     if (!response.ok) {
       let errorMsg = "Error al guardar el timing";
       try {
-        const errBody = await response.json() as { error?: string };
+        const errBody = (await response.json()) as { error?: string };
         if (errBody?.error) errorMsg = errBody.error;
-      } catch { /* ignore parse error */ }
+      } catch {
+        /* ignore parse error */
+      }
       throw new Error(errorMsg);
     }
-    const newTiming = await response.json() as import("@/lib/types").TaskTiming;
+    const newTiming =
+      (await response.json()) as import("@/lib/types").TaskTiming;
     setTimings((prev) => [newTiming, ...prev]);
     // Pasar a modo edición sin cerrar el modal para que el sync pueda continuar
     setRegisteringTask(null);
@@ -333,7 +336,6 @@ export default function TimingsPage() {
     invalidateCache("timings-all-comparison");
     return newTiming.id;
   };
-
 
   // Handle eliminar timing
   const handleDelete = async (id: string) => {
@@ -656,9 +658,11 @@ export default function TimingsPage() {
             if (!response.ok) {
               let errorMessage = "No se pudo actualizar el QA asignado.";
               try {
-                const errorData = await response.json() as { error?: string };
+                const errorData = (await response.json()) as { error?: string };
                 if (errorData?.error) errorMessage = errorData.error;
-              } catch { /* ignore parse error */ }
+              } catch {
+                /* ignore parse error */
+              }
               throw new Error(errorMessage);
             }
           }}

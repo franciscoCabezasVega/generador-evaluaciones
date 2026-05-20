@@ -74,7 +74,9 @@ export async function POST(request: NextRequest) {
     .from("qa_members")
     .insert({
       name,
-      ...(clickupUserId !== undefined ? { clickup_user_id: clickupUserId } : {}),
+      ...(clickupUserId !== undefined
+        ? { clickup_user_id: clickupUserId }
+        : {}),
     })
     .select()
     .single();
