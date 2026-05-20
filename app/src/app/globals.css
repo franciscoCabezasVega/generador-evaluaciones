@@ -45,36 +45,126 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  /* ===== INDUSTRIAL PRECISION — Gray scale (dark-first, inverted) ===== */
-  --color-white: oklch(0.13 0.012 256);
-  --color-gray-50: oklch(0.16 0.012 254);
-  --color-gray-100: oklch(0.2 0.011 252);
-  --color-gray-200: oklch(0.26 0.01 250);
-  --color-gray-300: oklch(0.34 0.009 247);
-  --color-gray-400: oklch(0.46 0.008 243);
-  --color-gray-500: oklch(0.57 0.007 239);
-  --color-gray-600: oklch(0.66 0.006 235);
-  --color-gray-700: oklch(0.75 0.005 231);
-  --color-gray-800: oklch(0.84 0.004 227);
-  --color-gray-900: oklch(0.92 0.003 223);
-  --color-gray-950: oklch(0.96 0.001 219);
+  /* ===== INDUSTRIAL PRECISION — Gray scale (via CSS vars for theme switching) ===== */
+  --color-white: var(--gray-white);
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
+  --color-gray-950: var(--gray-950);
 
-  /* ===== INDUSTRIAL PRECISION — Blue → Amber/Copper accent ===== */
-  --color-blue-50: oklch(0.17 0.05 66);
-  --color-blue-100: oklch(0.21 0.065 68);
-  --color-blue-200: oklch(0.29 0.082 70);
-  --color-blue-300: oklch(0.42 0.108 74);
-  --color-blue-400: oklch(0.57 0.138 78);
-  --color-blue-500: oklch(0.68 0.162 80);
-  --color-blue-600: oklch(0.79 0.178 82);
-  --color-blue-700: oklch(0.7 0.165 78);
-  --color-blue-800: oklch(0.61 0.148 74);
-  --color-blue-900: oklch(0.48 0.118 69);
-  --color-blue-950: oklch(0.33 0.085 64);
+  /* ===== INDUSTRIAL PRECISION — Blue → Amber/Copper accent (via CSS vars) ===== */
+  --color-blue-50: var(--blue-50);
+  --color-blue-100: var(--blue-100);
+  --color-blue-200: var(--blue-200);
+  --color-blue-300: var(--blue-300);
+  --color-blue-400: var(--blue-400);
+  --color-blue-500: var(--blue-500);
+  --color-blue-600: var(--blue-600);
+  --color-blue-700: var(--blue-700);
+  --color-blue-800: var(--blue-800);
+  --color-blue-900: var(--blue-900);
+  --color-blue-950: var(--blue-950);
 }
 
 :root {
   --radius: 0.5rem;
+
+  /* ===== Gray scale intermediates — LIGHT MODE ===== */
+  --gray-white: oklch(1 0 0);
+  --gray-50: oklch(0.985 0 0);
+  --gray-100: oklch(0.967 0 0);
+  --gray-200: oklch(0.922 0 0);
+  --gray-300: oklch(0.87 0 0);
+  --gray-400: oklch(0.707 0 0);
+  --gray-500: oklch(0.556 0 0);
+  --gray-600: oklch(0.439 0 0);
+  --gray-700: oklch(0.374 0 0);
+  --gray-800: oklch(0.269 0 0);
+  --gray-900: oklch(0.205 0 0);
+  --gray-950: oklch(0.145 0 0);
+
+  /* ===== Blue/Amber scale intermediates — LIGHT MODE ===== */
+  --blue-50: oklch(0.97 0.028 75);
+  --blue-100: oklch(0.94 0.052 76);
+  --blue-200: oklch(0.89 0.082 77);
+  --blue-300: oklch(0.82 0.115 79);
+  --blue-400: oklch(0.73 0.148 80);
+  --blue-500: oklch(0.63 0.168 79);
+  --blue-600: oklch(0.57 0.17 75);
+  --blue-700: oklch(0.49 0.155 73);
+  --blue-800: oklch(0.4 0.135 70);
+  --blue-900: oklch(0.31 0.105 67);
+  --blue-950: oklch(0.22 0.075 64);
+
+  /* === Industrial Light Base === */
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.16 0.012 256);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.012 256);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.012 256);
+  --primary: oklch(0.57 0.17 75);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.2 0.012 256);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.47 0.008 243);
+  --accent: oklch(0.96 0 0);
+  --accent-foreground: oklch(0.2 0.012 256);
+  --destructive: oklch(0.577 0.245 27);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.97 0 0);
+  --ring: oklch(0.57 0.17 75);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0 0);
+  --sidebar-foreground: oklch(0.16 0.012 256);
+  --sidebar-primary: oklch(0.57 0.17 75);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.93 0 0);
+  --sidebar-accent-foreground: oklch(0.2 0.012 256);
+  --sidebar-border: oklch(0.9 0 0);
+  --sidebar-ring: oklch(0.57 0.17 75);
+}
+
+.dark {
+  /* ===== Gray scale intermediates — DARK MODE ===== */
+  --gray-white: oklch(0.13 0.012 256);
+  --gray-50: oklch(0.16 0.012 254);
+  --gray-100: oklch(0.2 0.011 252);
+  --gray-200: oklch(0.26 0.01 250);
+  --gray-300: oklch(0.34 0.009 247);
+  --gray-400: oklch(0.46 0.008 243);
+  --gray-500: oklch(0.57 0.007 239);
+  --gray-600: oklch(0.66 0.006 235);
+  --gray-700: oklch(0.75 0.005 231);
+  --gray-800: oklch(0.84 0.004 227);
+  --gray-900: oklch(0.92 0.003 223);
+  --gray-950: oklch(0.96 0.001 219);
+
+  /* ===== Blue/Amber scale intermediates — DARK MODE ===== */
+  --blue-50: oklch(0.17 0.05 66);
+  --blue-100: oklch(0.21 0.065 68);
+  --blue-200: oklch(0.29 0.082 70);
+  --blue-300: oklch(0.42 0.108 74);
+  --blue-400: oklch(0.57 0.138 78);
+  --blue-500: oklch(0.68 0.162 80);
+  --blue-600: oklch(0.79 0.178 82);
+  --blue-700: oklch(0.7 0.165 78);
+  --blue-800: oklch(0.61 0.148 74);
+  --blue-900: oklch(0.48 0.118 69);
+  --blue-950: oklch(0.33 0.085 64);
+
   /* === Industrial Dark Base === */
   --background: oklch(0.1 0.015 260);
   --foreground: oklch(0.93 0.003 224);
@@ -117,12 +207,12 @@
     @apply bg-background text-foreground;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: oklch(0.3 0.01 252) transparent;
+    scrollbar-color: var(--border) transparent;
   }
 
   ::selection {
     background-color: oklch(0.79 0.178 82 / 0.25);
-    color: oklch(0.97 0.001 218);
+    color: var(--foreground);
   }
 
   /* Industrial input/select/textarea base styles */

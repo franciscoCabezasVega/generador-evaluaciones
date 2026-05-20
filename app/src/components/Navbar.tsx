@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut, HelpCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import TourSelectionModal from "@/components/TourSelectionModal";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import dynamic from "next/dynamic";
 
 const QueueStatusIndicator = dynamic(
@@ -93,51 +94,56 @@ function Navbar() {
         </div>
 
         {/* User section */}
-        {user && (
-          <div className="flex items-center gap-3">
-            {/* Indicador de sincronización en segundo plano */}
-            <QueueStatusIndicator />
-            {/* User info */}
-            <div className="flex flex-col items-end hidden sm:flex">
-              <span className="text-xs text-gray-600 leading-tight">
-                {profile?.name
-                  ? `${profile.name}${profile.lastname ? " " + profile.lastname : ""}`
-                  : user.email}
-              </span>
-              {profile && (
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-blue-600 leading-tight mt-0.5">
-                  {profile.role}
+        <div className="flex items-center gap-2">
+          {/* Theme toggle — siempre visible */}
+          <ThemeToggle />
+
+          {user && (
+            <>
+              {/* Indicador de sincronización en segundo plano */}
+              <QueueStatusIndicator />
+              {/* User info */}
+              <div className="flex flex-col items-end hidden sm:flex">
+                <span className="text-xs text-gray-600 leading-tight">
+                  {profile?.name
+                    ? `${profile.name}${profile.lastname ? " " + profile.lastname : ""}`
+                    : user.email}
                 </span>
+                {profile && (
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-blue-600 leading-tight mt-0.5">
+                    {profile.role}
+                  </span>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+
+              {profile?.role === "admin" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsTourModalOpen(true)}
+                  title="Iniciar una visita guiada"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="hidden md:block">Tour</span>
+                </Button>
               )}
-            </div>
 
-            {/* Divider */}
-            <div className="w-px h-6 bg-gray-200 hidden sm:block" />
-
-            {profile?.role === "admin" && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => setIsTourModalOpen(true)}
-                title="Iniciar una visita guiada"
+                onClick={signOut}
+                disabled={isLoggingOut}
+                data-testid="logout-button"
               >
-                <HelpCircle className="w-4 h-4" />
-                <span className="hidden md:block">Tour</span>
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:block">Salir</span>
               </Button>
-            )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={signOut}
-              disabled={isLoggingOut}
-              data-testid="logout-button"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:block">Salir</span>
-            </Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <TourSelectionModal

@@ -7,6 +7,8 @@ import { AuthErrorBoundary } from "@/components/AuthErrorBoundary";
 import { SessionChecker } from "@/components/SessionChecker";
 import { SessionManager } from "@/components/SessionManager";
 import ClientProviders from "@/components/ClientProviders";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeSync } from "@/components/ThemeSync";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -37,21 +39,24 @@ export default function RootLayout({
   prefetchDNS("https://api.openai.com");
 
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body
         className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <AuthErrorBoundary>
-          <AuthProvider>
-            <ClientProviders>
-              {/* Validar token periódicamente en background */}
-              <SessionChecker />
-              {/* Gestionar timeout por inactividad con modal */}
-              <SessionManager />
-              {children}
-            </ClientProviders>
-          </AuthProvider>
-        </AuthErrorBoundary>
+        <ThemeProvider>
+          <AuthErrorBoundary>
+            <AuthProvider>
+              <ThemeSync />
+              <ClientProviders>
+                {/* Validar token periódicamente en background */}
+                <SessionChecker />
+                {/* Gestionar timeout por inactividad con modal */}
+                <SessionManager />
+                {children}
+              </ClientProviders>
+            </AuthProvider>
+          </AuthErrorBoundary>
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
       </body>
