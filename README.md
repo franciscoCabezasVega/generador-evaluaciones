@@ -205,8 +205,17 @@ cd generador-evaluaciones/app
 > Este proyecto usa **pnpm 10.x** vía Corepack. Tras clonar, habilita Corepack con `corepack enable`.
 
 ```bash
+# Dependencias de la aplicación
 pnpm install
 ```
+
+> **Pre-commit hooks (Husky):** Para activar lint y format automáticos al hacer commit, instala también las dependencias de la raíz del repositorio:
+> ```bash
+> cd ..
+> pnpm install   # instala Husky y configura los git hooks
+> cd app
+> ```
+> Cada `git commit` ejecutará automáticamente ESLint y Prettier sobre los archivos staged.
 
 ### 3. Configurar variables de entorno
 
