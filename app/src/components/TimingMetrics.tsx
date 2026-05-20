@@ -138,7 +138,7 @@ export function TimingMetricsDistributionChart({
         <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
           {metrics.map((metric, i) => {
             const pct = total > 0 ? (metric.total_hours / total) * 100 : 0;
-            const barPx = total > 0 ? Math.max((metric.total_hours / total) * 110, 4) : 0;
+            const barPx = total > 0 && metric.total_hours > 0 ? Math.max((metric.total_hours / total) * 110, 4) : 0;
             const label = `${metric.product_type}: ${formatTime(metric.total_hours)} (${pct.toFixed(1)}%)`;
             return (
               <div
@@ -767,7 +767,7 @@ export function QAHoursBarChart({
               <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
                 {sorted.map((qa, i) => {
                   const pct = totalHours > 0 ? (qa.total_hours / totalHours) * 100 : 0;
-                  const barPx = maxHours > 0 ? Math.max((qa.total_hours / maxHours) * 110, 4) : 0;
+                  const barPx = maxHours > 0 && qa.total_hours > 0 ? Math.max((qa.total_hours / maxHours) * 110, 4) : 0;
                   const label = `${qa.qa_name}: ${formatTime(qa.total_hours)} (${pct.toFixed(1)}%)`;
                   return (
                     <div

@@ -11,9 +11,9 @@ function computeCategoryBarPx(value: number, maxValue: number): number {
   return maxValue > 0 ? Math.max((value / maxValue) * 96, value > 0 ? 4 : 0) : 0;
 }
 
-/** Usada en "Distribución por Producto/QA": 110px cuando hours === total; sin cap superior (puede exceder si hours > total); mínimo 4px */
+/** Usada en "Distribución por Producto/QA": 110px cuando hours === total; sin cap superior (puede exceder si hours > total); mínimo 4px si hours > 0; 0 si hours === 0 */
 function computeDistributionBarPx(hours: number, total: number): number {
-  return total > 0 ? Math.max((hours / total) * 110, 4) : 0;
+  return total > 0 && hours > 0 ? Math.max((hours / total) * 110, 4) : 0;
 }
 
 /** Usada en "Horas promedio vs rango esperado": máx (chartH - 2)px */
@@ -69,6 +69,10 @@ describe("TimingMetrics — computeDistributionBarPx", () => {
 
   it("devuelve 0 cuando el total es 0", () => {
     expect(computeDistributionBarPx(0, 0)).toBe(0);
+  });
+
+  it("devuelve 0 cuando hours es 0 aunque haya total (sin barra visible)", () => {
+    expect(computeDistributionBarPx(0, 100)).toBe(0);
   });
 
   it("puede superar 110px cuando hours > total (caso anómalo sin cap)", () => {
