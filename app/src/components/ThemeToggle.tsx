@@ -54,6 +54,12 @@ export function ThemeToggle() {
   }
 
   const handleSelect = (value: ThemeOption) => {
+    // Habilitar transición solo para cambios iniciados por el usuario (no en hydration)
+    document.documentElement.classList.add("theme-transition");
+    window.setTimeout(() => {
+      document.documentElement.classList.remove("theme-transition");
+    }, 300);
+
     setTheme(value);
     setOpen(false);
     triggerRef.current?.focus();

@@ -215,6 +215,17 @@
     color: var(--foreground);
   }
 
+  /* Transición suave al cambiar de tema (solo activada por el usuario, no en hydration) */
+  html.theme-transition,
+  html.theme-transition * {
+    transition:
+      background-color 300ms ease,
+      color 300ms ease,
+      border-color 300ms ease,
+      fill 300ms ease,
+      stroke 300ms ease !important;
+  }
+
   /* Industrial input/select/textarea base styles */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,
