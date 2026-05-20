@@ -44,6 +44,8 @@ export const userProfileService = {
         role_id: data.role_id,
         created_at: data.created_at,
         updated_at: data.updated_at,
+        theme_preference:
+          (data.theme_preference as UserProfile["theme_preference"]) ?? null,
       };
 
       return profile;
@@ -116,6 +118,31 @@ export const userProfileService = {
     } catch (error) {
       console.error("Error in getAllUsers:", error);
       throw error;
+    }
+  },
+
+  // Actualizar preferencia de tema del usuario autenticado
+  async updateThemePreference(
+    value: "light" | "dark" | "system",
+  ): Promise<void> {
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await getCurrentUserViaManager();
+
+      if (authError || !user) return;
+
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ theme_preference: value })
+        .eq("id", user.id);
+
+      if (error) {
+        console.error("Error updating theme preference:", error);
+      }
+    } catch (err) {
+      console.error("Exception in updateThemePreference:", err);
     }
   },
 };

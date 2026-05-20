@@ -181,6 +181,7 @@ export interface UserProfile {
   role_id: number;
   created_at: string;
   updated_at: string;
+  theme_preference: "light" | "dark" | "system" | null;
 }
 
 export interface Role {

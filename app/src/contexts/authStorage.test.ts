@@ -19,6 +19,7 @@ const mockProfile: UserProfile = {
   role_id: 2,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
+  theme_preference: "system",
 };
 
 const STORAGE_KEY = "auth_user_profile";
