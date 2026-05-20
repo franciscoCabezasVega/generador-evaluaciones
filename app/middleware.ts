@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
  * 2. El AuthContext ya maneja redirects a login
  * 3. Evitamos loops infinitos de peticiones
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function middleware(_request: NextRequest) {
   // El middleware solo pasa las peticiones a través
   // La validación de autenticación ocurre en el cliente (AuthContext)
