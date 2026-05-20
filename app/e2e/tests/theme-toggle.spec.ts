@@ -19,7 +19,7 @@ test.describe('Theme Toggle', () => {
   });
 
   test('toggle visible in Navbar and switches to dark mode', async ({
-    authenticatedPage,
+    authenticatedPage: _authenticatedPage,
     page,
   }) => {
     const toggleButton = page.getByRole('button', { name: 'Selector de tema' });
@@ -34,25 +34,25 @@ test.describe('Theme Toggle', () => {
       await expect(oscuroOption).toBeVisible();
       await oscuroOption.click();
 
-      const htmlClass = await page.evaluate(
-        () => document.documentElement.className,
+      const hasDark = await page.evaluate(
+        () => document.documentElement.classList.contains('dark'),
       );
-      expect(htmlClass).toBe('dark');
+      expect(hasDark).toBe(true);
     });
 
     await test.step('Dark mode persists after page reload', async () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      const htmlClass = await page.evaluate(
-        () => document.documentElement.className,
+      const hasDark = await page.evaluate(
+        () => document.documentElement.classList.contains('dark'),
       );
-      expect(htmlClass).toBe('dark');
+      expect(hasDark).toBe(true);
     });
   });
 
   test('switches to light mode and persists', async ({
-    authenticatedPage,
+    authenticatedPage: _authenticatedPage,
     page,
   }) => {
     // Start from dark
@@ -66,25 +66,25 @@ test.describe('Theme Toggle', () => {
       await toggleButton.click();
       await page.getByRole('menuitemradio', { name: 'Claro' }).click();
 
-      const htmlClass = await page.evaluate(
-        () => document.documentElement.className,
+      const hasLight = await page.evaluate(
+        () => document.documentElement.classList.contains('light'),
       );
-      expect(htmlClass).toBe('light');
+      expect(hasLight).toBe(true);
     });
 
     await test.step('Light mode persists after page reload', async () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      const htmlClass = await page.evaluate(
-        () => document.documentElement.className,
+      const hasLight = await page.evaluate(
+        () => document.documentElement.classList.contains('light'),
       );
-      expect(htmlClass).toBe('light');
+      expect(hasLight).toBe(true);
     });
   });
 
   test('system theme removes explicit class preference', async ({
-    authenticatedPage,
+    authenticatedPage: _authenticatedPage,
     page,
   }) => {
     // Start from dark

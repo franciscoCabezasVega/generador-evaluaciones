@@ -226,6 +226,13 @@
       stroke 300ms ease !important;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-transition,
+    html.theme-transition * {
+      transition: none !important;
+    }
+  }
+
   /* Industrial input/select/textarea base styles */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,

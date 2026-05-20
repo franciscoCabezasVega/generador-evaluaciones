@@ -63,11 +63,9 @@ export function ThemeToggle() {
     setTheme(value);
     setOpen(false);
     triggerRef.current?.focus();
-    // Persistir en BD en background si hay usuario autenticado
+    // Persistir en BD en background; el servicio maneja los errores internamente
     if (user) {
-      userProfileService.updateThemePreference(value).catch(() => {
-        // Error silencioso — localStorage ya quedó guardado por next-themes
-      });
+      void userProfileService.updateThemePreference(value);
     }
   };
 
@@ -91,7 +89,10 @@ export function ThemeToggle() {
           {/* Overlay para cerrar al hacer click fuera */}
           <div
             className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              triggerRef.current?.focus();
+            }}
             aria-hidden
           />
           <div
