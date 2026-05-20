@@ -30,9 +30,9 @@ test.describe('Theme Toggle', () => {
 
     await test.step('Selecting "Oscuro" adds class dark to <html>', async () => {
       await toggleButton.click();
-      const oscuroOption = page.getByRole('option', { name: 'Oscuro' });
+      const oscuroOption = page.getByRole('menuitemradio', { name: 'Oscuro' });
       await expect(oscuroOption).toBeVisible();
-      await oscuroOption.getByRole('button').click();
+      await oscuroOption.click();
 
       const htmlClass = await page.evaluate(
         () => document.documentElement.className,
@@ -64,7 +64,7 @@ test.describe('Theme Toggle', () => {
 
     await test.step('Selecting "Claro" switches to light mode', async () => {
       await toggleButton.click();
-      await page.getByRole('option', { name: 'Claro' }).getByRole('button').click();
+      await page.getByRole('menuitemradio', { name: 'Claro' }).click();
 
       const htmlClass = await page.evaluate(
         () => document.documentElement.className,
@@ -96,10 +96,7 @@ test.describe('Theme Toggle', () => {
 
     await test.step('Selecting "Sistema" saves system as localStorage value', async () => {
       await toggleButton.click();
-      await page
-        .getByRole('option', { name: 'Sistema' })
-        .getByRole('button')
-        .click();
+      await page.getByRole('menuitemradio', { name: 'Sistema' }).click();
 
       const stored = await page.evaluate(() => localStorage.getItem('theme'));
       expect(stored).toBe('system');
