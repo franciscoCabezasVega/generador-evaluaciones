@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -11,16 +11,16 @@ import { useAuth } from "@/contexts/AuthContext";
  */
 export function ThemeSync() {
   const { profile } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { setTheme } = useTheme();
+  // Ref que registra qué valor ya fue aplicado para evitar re-aplicar en cada render
+  const syncedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!profile?.theme_preference) return;
-    if (profile.theme_preference !== theme) {
-      setTheme(profile.theme_preference);
-    }
-    // Solo sincronizar al cargar el perfil por primera vez, no en cada cambio de theme
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.theme_preference]);
+    const pref = profile?.theme_preference;
+    if (!pref || syncedRef.current === pref) return;
+    syncedRef.current = pref;
+    setTheme(pref);
+  }, [profile?.theme_preference, setTheme]);
 
   return null;
 }
