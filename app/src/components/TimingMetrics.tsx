@@ -88,6 +88,8 @@ export function TimingMetricsDistributionChart({
     y: 0,
     content: "",
   });
+  const { timingCategories } = useCatalogData();
+  const activeCategories = timingCategories.filter(isCategoryVisibleForQA);
 
   useEffect(() => {
     const hide = () => setTooltip((t) => ({ ...t, visible: false }));
@@ -112,150 +114,149 @@ export function TimingMetricsDistributionChart({
   }
 
   const colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B"];
+  const total = metrics.reduce((s, m) => s + m.total_hours, 0);
+  const totalTasks = metrics.reduce((s, m) => s + m.task_count, 0);
 
   const handleTooltipShow = (e: React.MouseEvent<Element>, content: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({
-      visible: true,
-      x: rect.left + rect.width / 2,
-      y: rect.top - 10,
-      content,
-    });
+    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
   };
-
-  const handleTooltipHide = () => {
-    setTooltip({ ...tooltip, visible: false });
-  };
+  const handleTooltipHide = () => setTooltip((t) => ({ ...t, visible: false }));
 
   return (
-    <div className="rounded-lg bg-white p-6">
-      <h3 className="mb-6 text-lg font-semibold">
-        Distribución General de Horas
-      </h3>
+    <div className="space-y-4">
+      {/* ① KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICard label="Total Horas" value={formatTime(total)} icon="⏱️" color="#F59E0B" />
+        <KPICard label="Total Tareas" value={totalTasks} icon="📋" color="#3B82F6" />
+        <KPICard label="Productos" value={metrics.length} icon="🗂️" color="#EC4899" />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Gráfico circular */}
-        <div className="flex flex-col items-center justify-center">
-          <div className="relative w-64 h-64">
-            {/* Círculo SVG simple */}
-            <svg
-              className="w-full h-full transform -rotate-90"
-              viewBox="0 0 100 100"
-            >
-              {metrics.map((metric, index) => {
-                const offset = metrics.slice(0, index).reduce((acc, m) => {
-                  return (
-                    acc +
-                    (m.total_hours /
-                      metrics.reduce((sum, x) => sum + x.total_hours, 0)) *
-                      360
-                  );
-                }, 0);
-
-                const percentage =
-                  (metric.total_hours /
-                    metrics.reduce((sum, x) => sum + x.total_hours, 0)) *
-                  360;
-                const radius = 35;
-                const circumference = 2 * Math.PI * radius;
-                const strokeDashoffset =
-                  circumference - (percentage / 360) * circumference;
-                const total = metrics.reduce(
-                  (sum, x) => sum + x.total_hours,
-                  0,
-                );
-                const percentageValue = (metric.total_hours / total) * 100;
-
-                return (
-                  <circle
-                    key={metric.product_type}
-                    cx="50"
-                    cy="50"
-                    r={radius}
-                    fill="none"
-                    stroke={colors[index % colors.length]}
-                    strokeWidth="8"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    className="cursor-pointer hover:opacity-80 transition-opacity"
-                    onMouseEnter={(e) =>
-                      handleTooltipShow(
-                        e,
-                        `${metric.product_type}: ${formatTime(metric.total_hours)} (${percentageValue.toFixed(1)}%)`,
-                      )
-                    }
-                    onMouseLeave={handleTooltipHide}
-                    style={{
-                      transform: `rotate(${offset}deg)`,
-                      transformOrigin: "50px 50px",
-                      transition: "all 0.3s ease",
-                    }}
-                  />
-                );
-              })}
-              <text
-                x="50"
-                y="55"
-                textAnchor="middle"
-                fontSize="12"
-                fontWeight="bold"
-                fill="#374151"
-              >
-                Total
-              </text>
-              <text
-                x="50"
-                y="65"
-                textAnchor="middle"
-                fontSize="10"
-                fill="#6B7280"
-              >
-                {formatTime(metrics.reduce((sum, m) => sum + m.total_hours, 0))}
-              </text>
-            </svg>
-          </div>
-        </div>
-
-        {/* Leyenda detallada */}
-        <div className="space-y-4">
-          {metrics.map((metric, index) => {
-            const total = metrics.reduce((sum, m) => sum + m.total_hours, 0);
-            const percentage = (metric.total_hours / total) * 100;
-
+      {/* Distribución por Producto — barras verticales */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <p className="text-xs font-semibold text-gray-700 mb-3">Distribución por Producto</p>
+        <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
+          {metrics.map((metric, i) => {
+            const pct = total > 0 ? (metric.total_hours / total) * 100 : 0;
+            const barPx = total > 0 ? Math.max((metric.total_hours / total) * 110, 4) : 0;
             return (
               <div
                 key={metric.product_type}
-                className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
+                className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                style={{ width: "56px", height: `${barPx}px`, backgroundColor: colors[i % colors.length] }}
                 onMouseEnter={(e) =>
-                  handleTooltipShow(
-                    e,
-                    `${metric.product_type}: ${formatTime(metric.total_hours)} (${percentage.toFixed(1)}%)`,
-                  )
+                  handleTooltipShow(e, `${metric.product_type}: ${formatTime(metric.total_hours)} (${pct.toFixed(1)}%)`)
                 }
                 onMouseLeave={handleTooltipHide}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: colors[index % colors.length] }}
-                    />
-                    <span className="font-medium text-gray-900">
-                      {metric.product_type}
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold text-gray-700">
-                    {percentage.toFixed(1)}%
-                  </span>
+              />
+            );
+          })}
+        </div>
+        {/* Fila de porcentajes */}
+        <div className="flex justify-center gap-4 mt-1">
+          {metrics.map((m, i) => (
+            <span
+              key={m.product_type}
+              className="text-xs font-bold text-center truncate"
+              style={{ width: "56px", color: colors[i % colors.length] }}
+            >
+              {total > 0 ? ((m.total_hours / total) * 100).toFixed(1) : 0}%
+            </span>
+          ))}
+        </div>
+        {/* Fila de etiquetas */}
+        <div className="flex justify-center gap-4 mt-0.5">
+          {metrics.map((m, i) => (
+            <span
+              key={`lbl-${m.product_type}`}
+              className="text-xs text-gray-600 text-center truncate"
+              style={{ width: "56px" }}
+              title={m.product_type}
+            >
+              {m.product_type}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ② Comparación Visual — grid de barras verticales por categoría */}
+      <div>
+        <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
+        {activeCategories.every((cat) =>
+          metrics.every((m) => (m.totals_by_category?.[cat.id] ?? 0) === 0),
+        ) ? (
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
+            <p className="text-sm text-gray-400">Sin datos de tiempos por categoría</p>
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeCategories.map((cat) => {
+            const allEntries = metrics.map((m, i) => ({
+              label: m.product_type,
+              value: m.totals_by_category?.[cat.id] ?? 0,
+              color: colors[i % colors.length],
+            }));
+            const entries = allEntries.filter((e) => e.value > 0);
+            const maxValue = Math.max(...entries.map((e) => e.value), 0);
+            // Omitir categorías sin datos en ningún producto
+            if (maxValue === 0) return null;
+
+            return (
+              <div key={cat.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                <h4
+                  className="text-sm font-semibold mb-3 truncate"
+                  style={{ color: cat.hex_color }}
+                  title={cat.name}
+                >
+                  {cat.name}
+                </h4>
+                {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
+                <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
+                  {entries.map((entry) => {
+                    const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
+                    return (
+                      <div
+                        key={entry.label}
+                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                        style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
+                        onMouseEnter={(e) =>
+                          handleTooltipShow(e, `${entry.label}: ${formatTime(entry.value)}`)
+                        }
+                        onMouseLeave={handleTooltipHide}
+                      />
+                    );
+                  })}
                 </div>
-                <p className="text-sm text-gray-600">
-                  {formatTime(metric.total_hours)} · {metric.task_count} tareas
-                </p>
+                {/* Fila de valores */}
+                <div className="flex justify-center gap-4 mt-1">
+                  {entries.map((entry) => (
+                    <span
+                      key={`val-${entry.label}`}
+                      className="text-xs font-bold text-center truncate"
+                      style={{ width: "56px", color: entry.color }}
+                    >
+                      {entry.value > 0 ? formatTime(entry.value) : "—"}
+                    </span>
+                  ))}
+                </div>
+                {/* Fila de etiquetas */}
+                <div className="flex justify-center gap-4 mt-0.5">
+                  {entries.map((entry) => (
+                    <span
+                      key={`name-${entry.label}`}
+                      className="text-xs text-gray-600 text-center truncate"
+                      style={{ width: "56px" }}
+                      title={entry.label}
+                    >
+                      {entry.label.split(" ")[0]}
+                    </span>
+                  ))}
+                </div>
               </div>
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Tooltip */}
@@ -714,81 +715,184 @@ export function QAHoursBarChart({
     );
   }
 
-  const maxTotal = Math.max(...qaMetrics.map((q) => q.total_hours));
-  const barMaxWidth = maxTotal > 0 ? maxTotal : 1;
+  const totalHours = qaMetrics.reduce((s, q) => s + q.total_hours, 0);
+  const avgEfficiency =
+    qaMetrics.length > 0
+      ? qaMetrics.reduce((s, q) => s + q.efficiency_rate, 0) / qaMetrics.length
+      : 0;
 
-  const handleBarSectionMouseEnter = (
-    e: React.MouseEvent<HTMLDivElement>,
-    content: string,
-  ) => {
+  const handleTooltipShow = (e: React.MouseEvent<Element>, content: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({
-      visible: true,
-      x: rect.left + rect.width / 2,
-      y: rect.top - 10,
-      content,
-    });
+    setTooltip({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, content });
   };
-
-  const handleMouseLeave = () => {
-    setTooltip({ ...tooltip, visible: false });
-  };
+  const handleTooltipHide = () => setTooltip((t) => ({ ...t, visible: false }));
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6">
-      <h3 className="mb-6 text-lg font-semibold text-gray-900">
-        Horas Totales por QA
-      </h3>
+    <div className="space-y-4">
+      {/* ① KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICard label="QAs Activos" value={qaMetrics.length} icon="👥" color="#F59E0B" />
+        <KPICard label="Total Horas" value={formatTime(totalHours)} icon="⏱️" color="#3B82F6" />
+        <KPICard
+          label="Ef. Promedio"
+          value={`${avgEfficiency.toFixed(0)}%`}
+          icon="⚡"
+          color={
+            avgEfficiency > 70
+              ? "#10B981"
+              : avgEfficiency > 50
+                ? "#F59E0B"
+                : "#EF4444"
+          }
+        />
+      </div>
 
-      <div className="space-y-4">
-        {qaMetrics
-          .sort((a, b) => b.total_hours - a.total_hours)
-          .map((qa) => {
-            return (
-              <div
-                key={qa.qa_name}
-                className="border border-gray-200 rounded-lg p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-900 flex-1 break-words">
-                    {qa.qa_name}
+      {/* Distribución por QA — barras verticales */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <p className="text-xs font-semibold text-gray-700 mb-3">Distribución por QA</p>
+        {(() => {
+          const sorted = [...qaMetrics].sort((a, b) => b.total_hours - a.total_hours);
+          const maxHours = sorted[0]?.total_hours ?? 0;
+          return (
+            <>
+              <div className="flex items-end justify-center gap-4" style={{ height: "120px" }}>
+                {sorted.map((qa, i) => {
+                  const pct = totalHours > 0 ? (qa.total_hours / totalHours) * 100 : 0;
+                  const barPx = maxHours > 0 ? Math.max((qa.total_hours / maxHours) * 110, 4) : 0;
+                  return (
+                    <div
+                      key={qa.qa_name}
+                      className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                      style={{
+                        width: "56px",
+                        height: `${barPx}px`,
+                        backgroundColor: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
+                      }}
+                      onMouseEnter={(e) =>
+                        handleTooltipShow(
+                          e,
+                          `${qa.qa_name}: ${formatTime(qa.total_hours)} (${pct.toFixed(1)}%)`,
+                        )
+                      }
+                      onMouseLeave={handleTooltipHide}
+                    />
+                  );
+                })}
+              </div>
+              {/* Fila de porcentajes */}
+              <div className="flex justify-center gap-4 mt-1">
+                {sorted.map((qa, i) => (
+                  <span
+                    key={qa.qa_name}
+                    className="text-xs font-bold text-center truncate"
+                    style={{ width: "56px", color: QA_CHART_COLORS[i % QA_CHART_COLORS.length] }}
+                  >
+                    {totalHours > 0 ? ((qa.total_hours / totalHours) * 100).toFixed(1) : 0}%
                   </span>
-                  <div className="flex items-center gap-3 text-xs text-gray-500 ml-3 flex-shrink-0">
-                    <span>
-                      {qa.task_count} tarea{qa.task_count !== 1 ? "s" : ""}
-                    </span>
-                    <span className="font-bold text-gray-700">
-                      {formatTime(qa.total_hours)}
-                    </span>
-                  </div>
-                </div>
+                ))}
+              </div>
+              {/* Fila de etiquetas */}
+              <div className="flex justify-center gap-4 mt-0.5">
+                {sorted.map((qa, i) => (
+                  <span
+                    key={`lbl-${qa.qa_name}`}
+                    className="text-xs text-gray-600 text-center truncate"
+                    style={{ width: "56px" }}
+                    title={qa.qa_name}
+                  >
+                    {qa.qa_name.split(" ")[0]}
+                  </span>
+                ))}
+              </div>
+            </>
+          );
+        })()}
+      </div>
 
-                {/* Stacked bar */}
-                <div className="flex h-8 w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                  {activeCategories.map((cat) => {
-                    const hours = qa.totals_by_category?.[cat.id] ?? 0;
+      {/* ② Comparación Visual — grid de barras verticales por categoría */}
+      <div>
+        <p className="text-sm font-semibold text-gray-800 mb-3">Comparación Visual</p>
+        {activeCategories.every((cat) =>
+          qaMetrics.every((q) => (q.totals_by_category?.[cat.id] ?? 0) === 0),
+        ) ? (
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
+            <p className="text-sm text-gray-400">Sin datos de tiempos por categoría</p>
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeCategories.map((cat) => {
+            const sortedQAs = [...qaMetrics].sort(
+              (a, b) => b.total_hours - a.total_hours,
+            );
+            const allEntries = sortedQAs.map((qa, i) => ({
+              label: qa.qa_name,
+              value: qa.totals_by_category?.[cat.id] ?? 0,
+              color: QA_CHART_COLORS[i % QA_CHART_COLORS.length],
+            }));
+            const entries = allEntries.filter((e) => e.value > 0);
+            const maxValue = Math.max(...entries.map((e) => e.value), 0);
+            // Omitir categorías sin datos en ningún QA
+            if (maxValue === 0) return null;
+
+            return (
+              <div key={cat.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                <h4
+                  className="text-sm font-semibold mb-3 truncate"
+                  style={{ color: cat.hex_color }}
+                  title={cat.name}
+                >
+                  {cat.name}
+                </h4>
+                {/* Área de barras con alto fijo en píxeles para evitar que height:% resuelva a 0 */}
+                <div className="flex items-end justify-center gap-4" style={{ height: "100px" }}>
+                  {entries.map((entry) => {
+                    const barPx = maxValue > 0 ? Math.max((entry.value / maxValue) * 96, entry.value > 0 ? 4 : 0) : 0;
                     return (
                       <div
-                        key={cat.id}
+                        key={entry.label}
+                        className="rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                        style={{ width: "56px", height: `${barPx}px`, backgroundColor: entry.color }}
                         onMouseEnter={(e) =>
-                          handleBarSectionMouseEnter(
+                          handleTooltipShow(
                             e,
-                            `${cat.name}: ${formatTime(hours)}`,
+                            `${entry.label}: ${formatTime(entry.value)}`,
                           )
                         }
-                        onMouseLeave={handleMouseLeave}
-                        className="h-full transition-all hover:opacity-80 cursor-pointer relative group"
-                        style={{
-                          width: `${(hours / barMaxWidth) * 100}%`,
-                          backgroundColor: cat.hex_color,
-                        }}
+                        onMouseLeave={handleTooltipHide}
                       />
                     );
                   })}
                 </div>
+                {/* Fila de valores */}
+                <div className="flex justify-center gap-4 mt-1">
+                  {entries.map((entry) => (
+                    <span
+                      key={`val-${entry.label}`}
+                      className="text-xs font-bold text-center truncate"
+                      style={{ width: "56px", color: entry.color }}
+                    >
+                      {entry.value > 0 ? formatTime(entry.value) : "—"}
+                    </span>
+                  ))}
+                </div>
+                {/* Fila de etiquetas */}
+                <div className="flex justify-center gap-4 mt-0.5">
+                  {entries.map((entry) => (
+                    <span
+                      key={`name-${entry.label}`}
+                      className="text-xs text-gray-600 text-center truncate"
+                      style={{ width: "56px" }}
+                      title={entry.label}
+                    >
+                      {entry.label.split(" ")[0]}
+                    </span>
+                  ))}
+                </div>
               </div>
             );
           })}
+        </div>
+        )}
       </div>
 
       {/* Tooltip */}
@@ -816,24 +920,6 @@ export function QAHoursBarChart({
             clipPath: "polygon(0 0, 100% 0, 50% 100%)",
           }}
         />
-      </div>
-
-      {/* Leyenda */}
-      <div className="mt-6 p-4 rounded-lg bg-gray-50 border border-gray-200">
-        <p className="text-xs font-semibold text-gray-700 mb-3">
-          Tipos de Actividades:
-        </p>
-        <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-          {activeCategories.map((cat) => (
-            <div key={cat.id} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded"
-                style={{ backgroundColor: cat.hex_color }}
-              />
-              <span>{cat.name}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -1973,72 +2059,97 @@ export function TshirtSizeComparison({
 
             {isExpanded && (
               <div className="border-t border-gray-200 p-4 space-y-4">
-                {/* Barra visual de promedios por QA vs esperado */}
+                {/* Barras verticales de promedios por QA vs esperado */}
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-3">
                     Horas promedio por QA vs rango esperado
                   </p>
-                  <div className="space-y-2">
-                    {qaList.map((qa) => {
-                      const maxBar = Math.max(
-                        group.expectedMax * 2,
-                        qa.avgHours * 1.2,
-                      );
-                      const devLevel = getDeviationLevel(
-                        qa.avgHours,
-                        group.expectedMin,
-                        group.expectedMax,
-                      );
-                      const barColor =
-                        devLevel === "ok" ? "bg-green-500" : "bg-red-500";
-
-                      return (
-                        <div key={qa.name} className="flex items-center gap-3">
-                          <span
-                            className="text-xs font-medium text-gray-700 w-32 truncate"
-                            title={qa.name}
-                          >
-                            {qa.name}
-                          </span>
-                          <div
-                            className="flex-1 relative cursor-pointer"
-                            onMouseEnter={(e) =>
-                              handleBarTooltipShow(
-                                e,
-                                `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`,
-                              )
-                            }
-                            onMouseLeave={handleBarTooltipHide}
-                          >
-                            {/* Expected range background */}
-                            <div
-                              className="absolute top-0 h-5 bg-green-100 border-l-2 border-r-2 border-green-300 rounded-sm opacity-50"
-                              style={{
-                                left: `${(group.expectedMin / maxBar) * 100}%`,
-                                width: `${((group.expectedMax - group.expectedMin) / maxBar) * 100}%`,
-                              }}
-                            />
-                            {/* Bar */}
-                            <div className="relative h-5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${barColor} transition-all`}
-                                style={{
-                                  width: `${Math.min((qa.avgHours / maxBar) * 100, 100)}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <span className="text-xs font-bold text-gray-700 w-20 text-right">
-                            {formatTime(qa.avgHours)} ({qa.count})
-                          </span>
+                  {(() => {
+                    const chartH = 130;
+                    const globalMax = Math.max(
+                      group.expectedMax * 2,
+                      ...qaList.map((qa) => qa.avgHours * 1.1),
+                    );
+                    const bandTop = chartH - (group.expectedMax / globalMax) * chartH;
+                    const bandHeight = ((group.expectedMax - group.expectedMin) / globalMax) * chartH;
+                    return (
+                      <>
+                        {/* Columnas centradas con ancho fijo para evitar barras demasiado anchas */}
+                        <div className="flex items-end justify-center gap-6" style={{ height: `${chartH}px` }}>
+                          {qaList.map((qa) => {
+                            const barPx = globalMax > 0
+                              ? Math.max((qa.avgHours / globalMax) * (chartH - 2), qa.avgHours > 0 ? 4 : 0)
+                              : 0;
+                            const devLevel = getDeviationLevel(qa.avgHours, group.expectedMin, group.expectedMax);
+                            const barColor = devLevel === "ok" ? "#22C55E" : "#EF4444";
+                            return (
+                              <div key={qa.name} className="relative flex flex-col items-center" style={{ width: "64px", height: "100%" }}>
+                                {/* Relleno del rango esperado para esta columna */}
+                                <div
+                                  className="absolute inset-x-0 bg-green-100 opacity-30 pointer-events-none"
+                                  style={{ top: `${bandTop}px`, height: `${Math.max(bandHeight, 1)}px` }}
+                                />
+                                {/* Línea superior del rango (expectedMax) */}
+                                <div
+                                  className="absolute inset-x-0 border-t border-dashed border-green-400 opacity-70 pointer-events-none"
+                                  style={{ top: `${bandTop}px` }}
+                                />
+                                {/* Línea inferior del rango (expectedMin) */}
+                                <div
+                                  className="absolute inset-x-0 border-t border-dashed border-green-400 opacity-70 pointer-events-none"
+                                  style={{ top: `${bandTop + Math.max(bandHeight, 1)}px` }}
+                                />
+                                {/* Barra */}
+                                <div
+                                  className="absolute bottom-0 inset-x-0 rounded-t-md cursor-pointer hover:opacity-80 transition-all"
+                                  style={{ height: `${barPx}px`, backgroundColor: barColor }}
+                                  onMouseEnter={(e) =>
+                                    handleBarTooltipShow(
+                                      e,
+                                      `${qa.name}: ${formatTime(qa.avgHours)} promedio · ${qa.count} tarea${qa.count !== 1 ? "s" : ""} · Esperado: ${group.expectedMin}-${group.expectedMax}h`,
+                                    )
+                                  }
+                                  onMouseLeave={handleBarTooltipHide}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-                    <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded-sm" />{" "}
-                    Rango esperado ({group.expectedMin}-{group.expectedMax}h)
-                  </div>
+                        {/* Fila de valores */}
+                        <div className="flex justify-center gap-6 mt-1">
+                          {qaList.map((qa) => {
+                            const devLevel = getDeviationLevel(qa.avgHours, group.expectedMin, group.expectedMax);
+                            return (
+                              <span
+                                key={`val-${qa.name}`}
+                                className="text-xs font-bold text-center truncate"
+                                style={{ width: "64px", color: devLevel === "ok" ? "#22C55E" : "#EF4444" }}
+                              >
+                                {formatTime(qa.avgHours)} ({qa.count})
+                              </span>
+                            );
+                          })}
+                        </div>
+                        {/* Fila de nombres */}
+                        <div className="flex justify-center gap-6 mt-0.5">
+                          {qaList.map((qa) => (
+                            <span
+                              key={`name-${qa.name}`}
+                              className="text-xs text-gray-600 text-center truncate"
+                              style={{ width: "64px" }}
+                              title={qa.name}
+                            >
+                              {qa.name.split(" ")[0]}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                          <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded-sm" />
+                          Rango esperado ({group.expectedMin}-{group.expectedMax}h)
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Insight narrativo */}
