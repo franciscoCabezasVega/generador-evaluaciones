@@ -126,6 +126,8 @@ export default function AuditTrailPage() {
         return "Tarea";
       case "REPORT":
         return "Reporte";
+      case "TIMING":
+        return "Timing";
       default:
         return entityType;
     }
@@ -150,6 +152,8 @@ export default function AuditTrailPage() {
         return "badge-violet";
       case "REPORT":
         return "badge-info";
+      case "TIMING":
+        return "badge-warning";
       default:
         return "badge-neutral";
     }
@@ -531,7 +535,8 @@ export default function AuditTrailPage() {
               Trazabilidad de Auditoría
             </h1>
             <p className="text-sm text-gray-600">
-              Historial completo de acciones realizadas en tareas y reportes
+              Historial completo de acciones realizadas en tareas, reportes y
+              timings
             </p>
           </div>
           <SkeletonAuditTable isAdmin={isAdmin} />
@@ -554,7 +559,8 @@ export default function AuditTrailPage() {
             Trazabilidad de Auditoría
           </h1>
           <p className="text-gray-600">
-            Historial completo de acciones realizadas en tareas y reportes
+            Historial completo de acciones realizadas en tareas, reportes y
+            timings
           </p>
         </div>
 
@@ -591,6 +597,7 @@ export default function AuditTrailPage() {
                 <option value="">Todos</option>
                 <option value="TASK">Tareas</option>
                 <option value="REPORT">Reportes</option>
+                <option value="TIMING">Timings</option>
               </select>
             </div>
 
