@@ -1591,8 +1591,8 @@ export default function AuditTrailPage() {
                         })()}
 
                       {selectedLog.new_values.synced_by === "clickup-cron" && (
-                        <div className="bg-amber-950/20 border border-amber-700/40 rounded-lg p-4 text-sm">
-                          <p className="text-amber-300 font-medium">
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700/40 rounded-lg p-4 text-sm">
+                          <p className="text-amber-700 dark:text-amber-300 font-medium">
                             Sincronización automática vía ClickUp Cron
                           </p>
                         </div>

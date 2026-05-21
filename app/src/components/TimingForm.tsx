@@ -728,7 +728,7 @@ function TimingFormComponent(
       {formData.task_id && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-900">
               <Users size={18} className="text-blue-600" />
               QA Asignados
               {syncingQA && (
