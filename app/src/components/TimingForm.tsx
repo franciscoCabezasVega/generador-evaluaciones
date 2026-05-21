@@ -741,7 +741,7 @@ function TimingFormComponent(
                 type="button"
                 onClick={() => setQaDropdownOpen((v) => !v)}
                 disabled={syncingQA}
-                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={13} /> Añadir QA
               </button>
