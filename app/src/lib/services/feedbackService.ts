@@ -7,24 +7,34 @@ import { CreateFeedbackInput } from "@/lib/types";
 // inicialización, causando contención bajo carga.
 const noOpLock: LockFunc = (_name, _acquireTimeout, fn) => fn();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error(
-    "[feedbackService] Variables de entorno requeridas no configuradas: " +
-      (!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL " : "") +
-      (!supabaseServiceKey ? "SUPABASE_SERVICE_ROLE_KEY" : ""),
-  );
+// Lazy getter que sigue el mismo patrón que getServiceClient() en auth.ts:
+// retorna null si faltan env vars en lugar de lanzar a nivel de módulo,
+// evitando que un deploy misconfig tumbe el runtime completo al cargar el handler.
+function getClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error(
+      "[feedbackService] Variables de entorno requeridas no configuradas: " +
+        (!url ? "NEXT_PUBLIC_SUPABASE_URL " : "") +
+        (!key ? "SUPABASE_SERVICE_ROLE_KEY" : ""),
+    );
+    return null;
+  }
+  // Usar Service Role Key para operaciones server-side (no depender de anon key sin contexto de RLS)
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, lock: noOpLock },
+  });
 }
 
-// Usar Service Role Key para operaciones server-side (no depender de anon key sin contexto de RLS)
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false, autoRefreshToken: false, lock: noOpLock },
-});
-
 export async function createFeedbackReport(input: CreateFeedbackInput) {
+  const supabase = getClient();
   try {
+    if (!supabase) {
+      throw new Error(
+        "[feedbackService] Variables de entorno requeridas no configuradas",
+      );
+    }
     // Create feedback report record
     const { data: feedbackData, error: feedbackError } = await supabase
       .from("feedback_reports")

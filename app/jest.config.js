@@ -11,6 +11,9 @@ const customJestConfig = {
   maxWorkers: '50%',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    // Stub server-only so Jest/jsdom (que no activa la condición react-server)
+    // no lance error al importar módulos marcados como server-only.
+    '^server-only$': '<rootDir>/src/__mocks__/server-only.js',
   },
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
