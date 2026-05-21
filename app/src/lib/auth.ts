@@ -1,8 +1,8 @@
 import {
   createClient,
-  LockFunc,
-  SupabaseClient,
-  User,
+  type LockFunc,
+  type SupabaseClient,
+  type User,
 } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { getRoleNameById } from "@/lib/cache/rolesCache";

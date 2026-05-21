@@ -1,4 +1,4 @@
-import { createClient, LockFunc } from "@supabase/supabase-js";
+import { createClient, type LockFunc } from "@supabase/supabase-js";
 import { CreateFeedbackInput } from "@/lib/types";
 
 // No-op lock: este cliente server-side usa service role key y nunca persiste

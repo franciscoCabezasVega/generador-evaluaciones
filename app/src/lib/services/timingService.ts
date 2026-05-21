@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { type SupabaseClient, LockFunc } from "@supabase/supabase-js";
+import { type SupabaseClient, type LockFunc } from "@supabase/supabase-js";
 import {
   TaskTiming,
   CreateTaskTimingInput,
