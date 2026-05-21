@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar devoluciones en cada squad
-    for (const squadData of body.squads) {
+    // Validar devoluciones en cada squad (normalizar a [] si Automatización QA omite squads)
+    for (const squadData of body.squads ?? []) {
       if (
         !validateReturns(squadData.low_returns) ||
         !validateReturns(squadData.medium_returns) ||
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       "/api/tasks",
       async (): Promise<{ status: number; body: unknown }> => {
         // Calcular scores para cada squad antes de enviar al RPC
-        const squadsWithScores = body.squads.map((sq) => ({
+        const squadsWithScores = (body.squads ?? []).map((sq) => ({
           squad: sq.squad,
           low_returns: sq.low_returns,
           medium_returns: sq.medium_returns,
