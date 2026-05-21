@@ -1,7 +1,19 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import {
+  createClient,
+  type LockFunc,
+  type SupabaseClient,
+  type User,
+} from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { getRoleNameById } from "@/lib/cache/rolesCache";
-import { User } from "@supabase/supabase-js";
+
+// No-op lock para clientes server-side stateless.
+// Con persistSession:false estos clientes no necesitan coordinar sesión, pero
+// Supabase igual adquiere el processLock compartido durante _loadSession() init,
+// causando el warning "Lock acquisition timed out" cuando N requests paralelos
+// compiten por el mismo mutex de proceso. Un no-op elimina esa contención.
+const noOpLock: LockFunc = (_name, _acquireTimeout, fn) => fn();
 
 // Singleton service-role client (reused across requests in the same process)
 let _serviceClient: SupabaseClient | null = null;
@@ -13,7 +25,9 @@ export function getServiceClient(): SupabaseClient | null {
     console.error("Missing Supabase configuration");
     return null;
   }
-  _serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  _serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false, lock: noOpLock },
+  });
   return _serviceClient;
 }
 
@@ -215,6 +229,12 @@ export async function getAuthContext(request: NextRequest): Promise<{
 
 /**
  * Obtener cliente autenticado de Supabase en servidor
+ *
+ * Este cliente es stateless: su único propósito es ejecutar queries con RLS
+ * usando el token del request. No necesita gestionar sesión ni refrescar
+ * tokens, por lo que desactivar persistSession/autoRefreshToken elimina
+ * la contienda por el lock de auth (causa del warning "Lock acquisition
+ * timed out") cuando múltiples requests paralelos crean clientes aquí.
  */
 export function getAuthenticatedSupabase(token: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -229,6 +249,13 @@ export function getAuthenticatedSupabase(token: string) {
       headers: {
         authorization: `Bearer ${token}`,
       },
+    },
+    auth: {
+      // Stateless: nunca toca localStorage ni intenta refrescar el token.
+      // noOpLock: evita que N requests paralelos compitan por processLock durante init.
+      persistSession: false,
+      autoRefreshToken: false,
+      lock: noOpLock,
     },
   });
 }

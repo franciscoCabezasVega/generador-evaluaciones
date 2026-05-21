@@ -3,10 +3,19 @@ import { authService } from "@/lib/services/authService";
 
 const LAST_ACTIVITY_KEY = "auth_last_activity";
 
+/**
+ * Tiempo de ausencia a partir del cual se fuerza un reload completo del bundle.
+ * Coincide con el staleTime del caché (5 min) — toda ausencia que ya superó
+ * el caché dispara reload en vez de un refetch sutil.
+ */
+export const RELOAD_THRESHOLD_MS = 5 * 60 * 1_000; // 5 min
+
 interface UseSessionTimeoutManagerOptions {
   enabled?: boolean; // Solo activo cuando hay usuario autenticado
   inactivityTimeout?: number; // ms hasta que sesión expire por inactividad (default: 30 min)
   warningTime?: number; // ms antes de expiración para mostrar modal (default: 60s)
+  /** Retorna true si hay mutaciones en vuelo — evita recargar con datos sin guardar. */
+  hasPendingMutations?: () => boolean;
 }
 
 interface SessionTimeoutState {
@@ -65,6 +74,7 @@ export function useSessionTimeoutManager(
     enabled = true,
     inactivityTimeout = 30 * 60 * 1000, // 30 minutos
     warningTime = 60 * 1000, // 60 segundos
+    hasPendingMutations,
   } = options;
 
   const [state, setState] = useState<SessionTimeoutState>({
@@ -82,6 +92,9 @@ export function useSessionTimeoutManager(
   const warningShownRef = useRef<boolean>(false);
   const isExpiringRef = useRef<boolean>(false);
   const isMountedRef = useRef<boolean>(true);
+  // Ref para leer siempre la última versión del guard sin añadirlo a los deps del effect
+  const hasPendingMutationsRef = useRef(hasPendingMutations);
+  hasPendingMutationsRef.current = hasPendingMutations;
 
   /* ========== Timer management ========== */
 
@@ -288,6 +301,18 @@ export function useSessionTimeoutManager(
         if (!warningShownRef.current) {
           clearAllTimers();
           startWarning(inactivityTimeout - elapsed);
+        }
+      } else if (elapsed >= RELOAD_THRESHOLD_MS) {
+        // Ausencia prolongada pero sesión activa → reload completo del bundle
+        // para evitar JS desactualizado tras deploys y estado divergente.
+        // No recargar si hay mutaciones en vuelo para no perder datos.
+        if (!hasPendingMutationsRef.current?.()) {
+          window.location.reload();
+          return;
+        }
+        // Hay mutaciones pendientes — re-programar normalmente
+        if (!warningShownRef.current) {
+          scheduleTimers(lastAct);
         }
       } else {
         // Re-programar timers (pueden haberse congelado mientras la pestaña estaba oculta)

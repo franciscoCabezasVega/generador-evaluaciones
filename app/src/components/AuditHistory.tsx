@@ -247,7 +247,9 @@ export default function AuditHistory({
           selectedLog?.action === "CREATE"
             ? "Nueva Tarea"
             : selectedLog?.action === "UPDATE"
-              ? "Actualización de Tarea"
+              ? selectedLog?.entity_type === "TIMING"
+                ? "Sincronización de Timing"
+                : "Actualización de Tarea"
               : selectedLog?.action === "DELETE"
                 ? "Eliminación de Tarea"
                 : "Detalles"
@@ -571,65 +573,198 @@ export default function AuditHistory({
                   )}
               </div>
             )}
-            {selectedLog.action === "UPDATE" && (
-              <div className="mb-6 p-4 bg-card rounded-lg border">
-                <h3 className="font-semibold text-gray-700 mb-3">
-                  Cambios en la Tarea
-                </h3>
-                {!selectedLog.changes ||
-                Object.keys(selectedLog.changes).filter(
-                  (k) => k !== "squads" && k !== "assigned_qa",
-                ).length === 0 ? (
-                  <div className="text-gray-500 italic text-sm">
-                    Sin cambios en los campos de la tarea
+            {/* Horas sincronizadas por ClickUp — solo para entidades TIMING */}
+            {selectedLog.action === "UPDATE" &&
+              selectedLog.entity_type === "TIMING" &&
+              (() => {
+                const extractH = (
+                  v: unknown,
+                ): Record<string, number> | null => {
+                  if (!v || typeof v !== "object") return null;
+                  const o = v as Record<string, unknown>;
+                  // Formato legado: { category_hours: { slug: hours } }
+                  if (
+                    o.category_hours &&
+                    typeof o.category_hours === "object"
+                  ) {
+                    const entries = Object.entries(
+                      o.category_hours as Record<string, unknown>,
+                    ).flatMap(([slug, raw]) => {
+                      const h = Number(raw);
+                      if (!Number.isFinite(h)) return [];
+                      return [
+                        [
+                          slug
+                            .replace(/_/g, " ")
+                            .replace(/\b\w/g, (c) => c.toUpperCase()),
+                          h,
+                        ],
+                      ] as [[string, number]];
+                    });
+                    return entries.length > 0
+                      ? Object.fromEntries(entries)
+                      : null;
+                  }
+                  // Formato nuevo: { qa_entries: [{ qa_name, categories: [{category_name, hours}] }] }
+                  if (Array.isArray(o.qa_entries)) {
+                    const agg: Record<string, number> = {};
+                    for (const e of o.qa_entries as Array<{
+                      qa_name: string;
+                      categories: Array<{
+                        category_name: string;
+                        hours: unknown;
+                      }>;
+                    }>) {
+                      for (const cat of e.categories ?? []) {
+                        const h = Number(cat.hours);
+                        if (!Number.isFinite(h)) continue;
+                        agg[cat.category_name] =
+                          (agg[cat.category_name] ?? 0) + h;
+                      }
+                    }
+                    return Object.keys(agg).length > 0 ? agg : null;
+                  }
+                  return null;
+                };
+                const newH = extractH(selectedLog.new_values);
+                const oldH = extractH(selectedLog.old_values);
+                if (!newH) return null;
+                const cats = Array.from(
+                  new Set([
+                    ...Object.keys(newH),
+                    ...(oldH ? Object.keys(oldH) : []),
+                  ]),
+                );
+                return (
+                  <div className="mb-6 p-4 bg-card rounded-lg border">
+                    <h3 className="font-semibold text-gray-700 mb-3">
+                      Horas registradas por ClickUp
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs text-gray-500 border-b border-gray-200">
+                            <th className="text-left py-1.5 font-medium">
+                              Categoría
+                            </th>
+                            {oldH && (
+                              <th className="text-right py-1.5 font-medium">
+                                Anterior
+                              </th>
+                            )}
+                            <th className="text-right py-1.5 font-medium">
+                              {oldH ? "Nuevo" : "Horas"}
+                            </th>
+                            {oldH && (
+                              <th className="text-right py-1.5 font-medium">
+                                Δ
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cats.map((cat) => {
+                            const nH = newH[cat] ?? 0;
+                            const oH = oldH?.[cat] ?? 0;
+                            const delta = nH - oH;
+                            return (
+                              <tr
+                                key={cat}
+                                className="border-b border-gray-100 last:border-0"
+                              >
+                                <td className="py-1.5 text-gray-700">{cat}</td>
+                                {oldH && (
+                                  <td className="py-1.5 text-right text-gray-500">
+                                    {oH.toFixed(2)}h
+                                  </td>
+                                )}
+                                <td className="py-1.5 text-right font-semibold text-gray-800">
+                                  {nH.toFixed(2)}h
+                                </td>
+                                {oldH && (
+                                  <td
+                                    className={`py-1.5 text-right text-xs font-semibold ${
+                                      delta > 0
+                                        ? "text-green-600"
+                                        : delta < 0
+                                          ? "text-red-600"
+                                          : "text-gray-400"
+                                    }`}
+                                  >
+                                    {delta > 0 ? "+" : ""}
+                                    {delta.toFixed(2)}h
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-3 text-sm">
-                    {Object.entries(selectedLog.changes).map(
-                      ([key, change]: [string, unknown]) => {
-                        // Ignorar squads y assigned_qa aquí (se manejan en otras secciones)
-                        if (key === "squads" || key === "assigned_qa")
-                          return null;
+                );
+              })()}
 
-                        // Ignorar campos de devoluciones (están en squads)
-                        const fieldsToIgnore = [
-                          "calculated_score",
-                          "low_returns",
-                          "medium_returns",
-                          "high_returns",
-                        ];
-                        if (fieldsToIgnore.includes(key)) return null;
+            {selectedLog.action === "UPDATE" &&
+              selectedLog.entity_type !== "TIMING" && (
+                <div className="mb-6 p-4 bg-card rounded-lg border">
+                  <h3 className="font-semibold text-gray-700 mb-3">
+                    Cambios en la Tarea
+                  </h3>
+                  {!selectedLog.changes ||
+                  Object.keys(selectedLog.changes).filter(
+                    (k) => k !== "squads" && k !== "assigned_qa",
+                  ).length === 0 ? (
+                    <div className="text-gray-500 italic text-sm">
+                      Sin cambios en los campos de la tarea
+                    </div>
+                  ) : (
+                    <div className="space-y-3 text-sm">
+                      {Object.entries(selectedLog.changes).map(
+                        ([key, change]: [string, unknown]) => {
+                          // Ignorar squads y assigned_qa aquí (se manejan en otras secciones)
+                          if (key === "squads" || key === "assigned_qa")
+                            return null;
 
-                        const typedChange = change as {
-                          old: unknown;
-                          new: unknown;
-                        };
-                        return (
-                          <div
-                            key={key}
-                            className="grid grid-cols-3 gap-2 p-2 bg-gray-50 rounded"
-                          >
-                            <div className="font-mono text-xs font-semibold text-gray-600">
-                              {key}
-                            </div>
-                            <div className="text-xs">
-                              <div className="text-gray-600">
-                                De: {String(typedChange.old) || "sin valor"}
+                          // Ignorar campos de devoluciones (están en squads)
+                          const fieldsToIgnore = [
+                            "calculated_score",
+                            "low_returns",
+                            "medium_returns",
+                            "high_returns",
+                          ];
+                          if (fieldsToIgnore.includes(key)) return null;
+
+                          const typedChange = change as {
+                            old: unknown;
+                            new: unknown;
+                          };
+                          return (
+                            <div
+                              key={key}
+                              className="grid grid-cols-3 gap-2 p-2 bg-gray-50 rounded"
+                            >
+                              <div className="font-mono text-xs font-semibold text-gray-600">
+                                {key}
+                              </div>
+                              <div className="text-xs">
+                                <div className="text-gray-600">
+                                  De: {String(typedChange.old) || "sin valor"}
+                                </div>
+                              </div>
+                              <div className="text-xs">
+                                <div className="text-gray-700 font-semibold">
+                                  A: {String(typedChange.new) || "sin valor"}
+                                </div>
                               </div>
                             </div>
-                            <div className="text-xs">
-                              <div className="text-gray-700 font-semibold">
-                                A: {String(typedChange.new) || "sin valor"}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      },
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* Cambios en QA Asignados */}
             {selectedLog.action === "UPDATE" &&

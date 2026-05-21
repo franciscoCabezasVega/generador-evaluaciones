@@ -296,19 +296,39 @@ export function useCachedFetch<T>({
       setIsReconnecting(false);
     }
 
-    if (cacheStore.isFresh(fullKey, staleTime)) {
-      const entry = cacheStore.get<T>(fullKey);
-      if (entry) setDataState(entry.data);
-      setLoading(false);
-      return;
-    }
-
     const controller = new AbortController();
     abortRef.current = controller;
     // Sólo hay "datos anteriores útiles" si la caché del nuevo key tiene algo.
     // Usar `data` (del estado React) llevaría a mostrar datos de una clave
     // distinta como si fueran relevantes (el bug al cambiar rango de fechas).
     const hasStaleCache = cacheStore.get(fullKey) != null;
+
+    if (cacheStore.isFresh(fullKey, staleTime)) {
+      // Caché fresco: servir datos al instante sin spinner.
+      // Disparar revalidación en background para que el usuario siempre vea
+      // datos frescos al navegar entre rutas, sin esperar al staleTime.
+      const entry = cacheStore.get<T>(fullKey);
+      if (entry) setDataState(entry.data);
+      setLoading(false);
+      // Limpiar estados de error/reconexión del ciclo anterior para evitar
+      // UI inconsistente (banner de error visible con datos frescos de nueva clave).
+      setError(null);
+      setIsReconnecting(false);
+      setIsRefreshing(false);
+      const timer = setTimeout(() => {
+        if (!controller.signal.aborted) {
+          doFetch(true, controller.signal);
+        }
+      }, getJitterDelay());
+      return () => {
+        clearTimeout(timer);
+        controller.abort();
+        if (abortRef.current && abortRef.current !== controller) {
+          abortRef.current.abort();
+        }
+        abortRef.current = null;
+      };
+    }
 
     if (!hasStaleCache) {
       // Sin caché para la nueva clave: reset a initialData + activar loading
@@ -354,22 +374,20 @@ export function useCachedFetch<T>({
     });
   }, [cacheKey, enabled, doFetch]);
 
-  // Revalidar al volver a la pestaña si la caché venció mientras estaba en background
+  // Revalidar siempre al volver a la pestaña, sin importar el estado del caché
   useEffect(() => {
     if (!enabled) return;
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
-      if (!cacheStore.isFresh(fullKeyRef.current, staleTime)) {
-        abortRef.current?.abort();
-        const controller = new AbortController();
-        abortRef.current = controller;
-        doFetch(true, controller.signal);
-      }
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      doFetch(true, controller.signal);
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [enabled, staleTime, doFetch]);
+  }, [enabled, doFetch]);
 
   const refresh = useCallback(() => {
     // Cancelar cualquier auto-retry pendiente antes de iniciar fetch manual
