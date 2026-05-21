@@ -435,7 +435,7 @@ export default function DateRangePicker({
         type="button"
         onClick={handleOpen}
         aria-label="Selector de rango de fechas"
-        className="flex items-center gap-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:border-blue-400 hover:bg-blue-50/30 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="flex items-center gap-2 w-full rounded-lg border border-gray-300 bg-input px-3 py-2 text-sm text-gray-700 hover:border-blue-400 hover:bg-blue-50/30 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30"
       >
         <Calendar size={16} className="text-gray-400 flex-shrink-0" />
         <span className="flex-1 text-left truncate">
@@ -460,7 +460,7 @@ export default function DateRangePicker({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-gray-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-gray-200 bg-card shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="flex">
             {/* Presets sidebar */}
             <div className="w-40 border-r border-gray-100 p-2 space-y-0.5 bg-gray-50/50 rounded-l-xl">

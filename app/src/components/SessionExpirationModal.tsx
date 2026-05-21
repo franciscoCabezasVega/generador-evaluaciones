@@ -64,9 +64,9 @@ export function SessionExpirationModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+        <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full">
           {/* Header */}
-          <div className="flex justify-between items-center sticky top-0 bg-white border-b p-6">
+          <div className="flex justify-between items-center sticky top-0 bg-card border-b p-6">
             <h2 className="text-xl font-semibold">Sesión por Expirar</h2>
             <button
               onClick={onExpire}

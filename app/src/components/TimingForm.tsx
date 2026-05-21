@@ -1388,7 +1388,7 @@ function ClickUpSyncInline({
             if (e.key === "Enter") void handleSync();
           }}
           placeholder="ID de subtarea ClickUp (ej: abc123xy)"
-          className="flex-1 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+          className="flex-1 rounded border border-violet-300 bg-input px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
           disabled={syncing}
         />
         <button

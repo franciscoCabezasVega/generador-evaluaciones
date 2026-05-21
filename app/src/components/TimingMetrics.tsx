@@ -55,7 +55,7 @@ function KPICard({
   color = "#3B82F6",
 }: KPICardProps) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 hover:shadow-md transition-shadow">
+    <div className="rounded-lg border border-gray-200 bg-card p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm text-gray-600 font-medium">{label}</p>
@@ -156,7 +156,7 @@ export function TimingMetricsDistributionChart({
       </div>
 
       {/* Distribución por Producto — barras verticales */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="rounded-lg border border-gray-200 bg-card p-4">
         <p className="text-xs font-semibold text-gray-700 mb-3">
           Distribución por Producto
         </p>
@@ -228,7 +228,7 @@ export function TimingMetricsDistributionChart({
         activeCategories.every((cat) =>
           metrics.every((m) => (m.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
-          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-card py-10">
             <p className="text-sm text-gray-400">
               Sin datos de tiempos por categoría
             </p>
@@ -249,7 +249,7 @@ export function TimingMetricsDistributionChart({
               return (
                 <div
                   key={cat.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4"
+                  className="rounded-lg border border-gray-200 bg-card p-4"
                 >
                   <h4
                     className="text-sm font-semibold mb-3 truncate"
@@ -386,7 +386,7 @@ export function TimingMetricsComparisonChart({
   }
 
   return (
-    <div className="rounded-lg bg-white p-6">
+    <div className="rounded-lg bg-card p-6">
       <h3 className="mb-6 text-lg font-semibold">
         Comparativa por Producto: Horas Promedio por Tarea
       </h3>
@@ -425,7 +425,7 @@ export function TimingMetricsComparisonChart({
             {metrics.map((metric, idx) => (
               <tr
                 key={metric.product_type}
-                className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}
+                className={idx % 2 === 0 ? "bg-gray-50" : "bg-card"}
               >
                 <td className="py-4 px-4 font-medium text-gray-900">
                   {metric.product_type}
@@ -573,7 +573,7 @@ export function SquadTimingSummaryCard({
   const qualityScore = Math.max(0, 100 - retestRate);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-lg border border-gray-200 bg-card overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 border-b border-gray-200">
         <h3 className="text-xl font-bold text-gray-900">
@@ -834,7 +834,7 @@ export function QAHoursBarChart({
       </div>
 
       {/* Distribución por QA — barras verticales */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="rounded-lg border border-gray-200 bg-card p-4">
         <p className="text-xs font-semibold text-gray-700 mb-3">
           Distribución por QA
         </p>
@@ -924,7 +924,7 @@ export function QAHoursBarChart({
         activeCategories.every((cat) =>
           qaMetrics.every((q) => (q.totals_by_category?.[cat.id] ?? 0) === 0),
         ) ? (
-          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-10">
+          <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-card py-10">
             <p className="text-sm text-gray-400">
               Sin datos de tiempos por categoría
             </p>
@@ -945,7 +945,7 @@ export function QAHoursBarChart({
               return (
                 <div
                   key={cat.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4"
+                  className="rounded-lg border border-gray-200 bg-card p-4"
                 >
                   <h4
                     className="text-sm font-semibold mb-3 truncate"
@@ -1729,7 +1729,7 @@ export function QASummaryCards({
             return (
               <div
                 key={qa.qa_name}
-                className="rounded-lg border border-gray-200 bg-white overflow-hidden"
+                className="rounded-lg border border-gray-200 bg-card overflow-hidden"
               >
                 {/* Header colored accent */}
                 <div className="h-1.5" style={{ backgroundColor: color }} />
@@ -2081,7 +2081,7 @@ export function TshirtSizeComparison({
       </div>
 
       {/* Barra visual resumen */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="rounded-lg border border-gray-200 bg-card p-4">
         <p className="text-xs font-semibold text-gray-600 mb-2">
           Distribución de desviaciones ({totalEntries} registros)
         </p>
@@ -2167,7 +2167,7 @@ export function TshirtSizeComparison({
         return (
           <div
             key={groupKey}
-            className="rounded-lg border border-gray-200 bg-white overflow-hidden"
+            className="rounded-lg border border-gray-200 bg-card overflow-hidden"
           >
             <button
               onClick={() => setExpandedGroup(isExpanded ? null : groupKey)}
@@ -2484,9 +2484,7 @@ export function TshirtSizeComparison({
                           return (
                             <tr
                               key={`${entry.qaName}-${entry.taskId}-${i}`}
-                              className={
-                                i % 2 === 0 ? "bg-gray-50" : "bg-white"
-                              }
+                              className={i % 2 === 0 ? "bg-gray-50" : "bg-card"}
                             >
                               <td className="py-1.5 px-3 font-medium text-gray-700 whitespace-nowrap">
                                 {entry.qaName}

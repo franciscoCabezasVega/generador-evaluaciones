@@ -49,7 +49,7 @@ export function FeedbackForm({ onClose, onSubmitSuccess }: FeedbackFormProps) {
 
   if (successMessage) {
     return (
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-md">
         <div className="flex flex-col items-center justify-center gap-3 text-center">
           <div className="bg-green-100 p-3 rounded-full">
             <Check className="text-green-600 w-6 h-6" />
@@ -66,7 +66,7 @@ export function FeedbackForm({ onClose, onSubmitSuccess }: FeedbackFormProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-gray-900">

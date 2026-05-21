@@ -289,7 +289,7 @@ export default function AuditHistory({
 
             {/* Detalles de Creación (CREATE) */}
             {selectedLog.action === "CREATE" && (
-              <div className="mb-6 p-4 bg-white rounded-lg border">
+              <div className="mb-6 p-4 bg-card rounded-lg border">
                 <h3 className="font-semibold text-gray-700 mb-4">
                   Detalles de Crear
                 </h3>
@@ -352,9 +352,9 @@ export default function AuditHistory({
                         ).map((squad: Partial<TaskSquad>, idx: number) => (
                           <div
                             key={idx}
-                            className="bg-white border border-blue-200 rounded p-3"
+                            className="bg-card border border-blue-200 dark:border-blue-800 rounded p-3"
                           >
-                            <div className="font-semibold text-blue-800 mb-2">
+                            <div className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
                               {squad.squad}
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-xs mb-3">
@@ -390,7 +390,7 @@ export default function AuditHistory({
                                 <div className="text-xs font-semibold text-gray-600 mb-1">
                                   Notas Adicionales:
                                 </div>
-                                <div className="text-xs text-gray-700 bg-white rounded p-2 max-h-20 overflow-y-auto">
+                                <div className="text-xs text-gray-700 bg-muted rounded p-2 max-h-20 overflow-y-auto">
                                   {squad.additional_notes}
                                 </div>
                               </div>
@@ -420,7 +420,7 @@ export default function AuditHistory({
                         ).map((qa: string) => (
                           <span
                             key={qa}
-                            className="inline-block bg-white border border-purple-200 text-purple-700 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                            className="inline-block bg-card border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded-full px-2.5 py-0.5 text-xs font-medium"
                           >
                             {qa}
                           </span>
@@ -432,7 +432,7 @@ export default function AuditHistory({
             )}
 
             {selectedLog.action === "DELETE" && (
-              <div className="mb-6 p-4 bg-white rounded-lg border">
+              <div className="mb-6 p-4 bg-card rounded-lg border">
                 <h3 className="font-semibold text-gray-700 mb-4">
                   Información Eliminada
                 </h3>
@@ -493,9 +493,9 @@ export default function AuditHistory({
                         ).map((squad: Partial<TaskSquad>, idx: number) => (
                           <div
                             key={idx}
-                            className="bg-white border border-red-200 rounded p-3"
+                            className="bg-card border border-red-200 dark:border-red-800 rounded p-3"
                           >
-                            <div className="font-semibold text-red-800 mb-2">
+                            <div className="font-semibold text-red-800 dark:text-red-300 mb-2">
                               {squad.squad}
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-xs mb-3">
@@ -531,7 +531,7 @@ export default function AuditHistory({
                                 <div className="text-xs font-semibold text-gray-600 mb-1">
                                   Notas Adicionales:
                                 </div>
-                                <div className="text-xs text-gray-700 bg-white rounded p-2 max-h-20 overflow-y-auto">
+                                <div className="text-xs text-gray-700 bg-muted rounded p-2 max-h-20 overflow-y-auto">
                                   {squad.additional_notes}
                                 </div>
                               </div>
@@ -561,7 +561,7 @@ export default function AuditHistory({
                         ).map((qa: string) => (
                           <span
                             key={qa}
-                            className="inline-block bg-white border border-purple-200 text-purple-700 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                            className="inline-block bg-card border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded-full px-2.5 py-0.5 text-xs font-medium"
                           >
                             {qa}
                           </span>
@@ -572,7 +572,7 @@ export default function AuditHistory({
               </div>
             )}
             {selectedLog.action === "UPDATE" && (
-              <div className="mb-6 p-4 bg-white rounded-lg border">
+              <div className="mb-6 p-4 bg-card rounded-lg border">
                 <h3 className="font-semibold text-gray-700 mb-3">
                   Cambios en la Tarea
                 </h3>
@@ -634,7 +634,7 @@ export default function AuditHistory({
             {/* Cambios en QA Asignados */}
             {selectedLog.action === "UPDATE" &&
               selectedLog.changes?.assigned_qa && (
-                <div className="mb-6 p-4 bg-white rounded-lg border">
+                <div className="mb-6 p-4 bg-card rounded-lg border">
                   <h3 className="font-semibold text-gray-700 mb-3">
                     Cambios en QA Asignados
                   </h3>
@@ -727,7 +727,7 @@ export default function AuditHistory({
 
             {/* Cambios en Equipos */}
             {selectedLog.action === "UPDATE" && selectedLog.changes?.squads && (
-              <div className="mb-6 p-4 bg-white rounded-lg border">
+              <div className="mb-6 p-4 bg-card rounded-lg border">
                 <h3 className="font-semibold text-gray-700 mb-3">
                   Cambios en Equipos
                 </h3>
