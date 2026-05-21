@@ -28,5 +28,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     flowType: "pkce",
     lock: processLock,
+    // Por defecto lockAcquireTimeout es 10000ms. Si una operación en la cola
+    // espera >10s (p. ej. auto-refresh tarda), las siguientes hacen timeout.
+    // Con processLock (in-memory FIFO) las operaciones siempre terminan, así
+    // que esperar indefinidamente es seguro y elimina los warnings del browser.
+    lockAcquireTimeout: -1,
   },
 });

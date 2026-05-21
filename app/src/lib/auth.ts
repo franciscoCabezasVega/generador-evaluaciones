@@ -1,7 +1,18 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  LockFunc,
+  SupabaseClient,
+  User,
+} from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { getRoleNameById } from "@/lib/cache/rolesCache";
-import { User } from "@supabase/supabase-js";
+
+// No-op lock para clientes server-side stateless.
+// Con persistSession:false estos clientes no necesitan coordinar sesión, pero
+// Supabase igual adquiere el processLock compartido durante _loadSession() init,
+// causando el warning "Lock acquisition timed out" cuando N requests paralelos
+// compiten por el mismo mutex de proceso. Un no-op elimina esa contención.
+const noOpLock: LockFunc = (_name, _acquireTimeout, fn) => fn();
 
 // Singleton service-role client (reused across requests in the same process)
 let _serviceClient: SupabaseClient | null = null;
@@ -14,7 +25,7 @@ export function getServiceClient(): SupabaseClient | null {
     return null;
   }
   _serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: { persistSession: false, autoRefreshToken: false, lock: noOpLock },
   });
   return _serviceClient;
 }
@@ -240,9 +251,10 @@ export function getAuthenticatedSupabase(token: string) {
     },
     auth: {
       // Stateless: nunca toca localStorage ni intenta refrescar el token.
-      // Evita que N requests paralelos compitan por el mismo lock de auth.
+      // noOpLock: evita que N requests paralelos compitan por processLock durante init.
       persistSession: false,
       autoRefreshToken: false,
+      lock: noOpLock,
     },
   });
 }

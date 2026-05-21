@@ -1,12 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, LockFunc } from "@supabase/supabase-js";
 import { CreateFeedbackInput } from "@/lib/types";
+
+// No-op lock: este cliente server-side usa service role key y nunca persiste
+// sesión. Sin esto, Supabase adquiere el processLock compartido durante la
+// inicialización, causando contención bajo carga.
+const noOpLock: LockFunc = (_name, _acquireTimeout, fn) => fn();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // Usar Service Role Key para operaciones server-side (no depender de anon key sin contexto de RLS)
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
+  auth: { persistSession: false, autoRefreshToken: false, lock: noOpLock },
 });
 
 export async function createFeedbackReport(input: CreateFeedbackInput) {
