@@ -916,7 +916,7 @@ export default function TasksPage() {
                   <th className="px-4 py-3 text-left text-sm font-semibold w-12">
                     N°
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold min-w-max">
+                  <th className="px-4 py-3 text-left text-sm font-semibold">
                     Nombre
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">
@@ -1078,7 +1078,7 @@ export default function TasksPage() {
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                   Eliminar tarea
                                 </div>
                               </div>
