@@ -13,7 +13,9 @@ export function getServiceClient(): SupabaseClient | null {
     console.error("Missing Supabase configuration");
     return null;
   }
-  _serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  _serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   return _serviceClient;
 }
 
@@ -215,6 +217,12 @@ export async function getAuthContext(request: NextRequest): Promise<{
 
 /**
  * Obtener cliente autenticado de Supabase en servidor
+ *
+ * Este cliente es stateless: su único propósito es ejecutar queries con RLS
+ * usando el token del request. No necesita gestionar sesión ni refrescar
+ * tokens, por lo que desactivar persistSession/autoRefreshToken elimina
+ * la contienda por el lock de auth (causa del warning "Lock acquisition
+ * timed out") cuando múltiples requests paralelos crean clientes aquí.
  */
 export function getAuthenticatedSupabase(token: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -229,6 +237,12 @@ export function getAuthenticatedSupabase(token: string) {
       headers: {
         authorization: `Bearer ${token}`,
       },
+    },
+    auth: {
+      // Stateless: nunca toca localStorage ni intenta refrescar el token.
+      // Evita que N requests paralelos compitan por el mismo lock de auth.
+      persistSession: false,
+      autoRefreshToken: false,
     },
   });
 }
