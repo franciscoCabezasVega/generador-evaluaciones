@@ -1292,38 +1292,160 @@ export default function AuditTrailPage() {
                   selectedLog.entity_type === "TIMING" &&
                   selectedLog.new_values && (
                     <div className="space-y-4">
-                      {Array.isArray(selectedLog.new_values.qa_entries) && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-                            QA Entries Actualizados
-                          </h4>
-                          <div className="space-y-2">
-                            {(
-                              selectedLog.new_values.qa_entries as {
-                                qa_name: string;
-                                hours_by_category: Record<string, number>;
-                              }[]
-                            ).map((entry, i) => {
-                              const total = Object.values(
-                                entry.hours_by_category ?? {},
-                              ).reduce((s, h) => s + (h as number), 0);
-                              return (
+                      {Array.isArray(selectedLog.new_values.qa_entries) &&
+                        (() => {
+                          type QAEntry = {
+                            qa_name: string;
+                            total_hours?: number;
+                            hours_by_category?: Record<string, number>;
+                          };
+                          const getTotal = (e: QAEntry) =>
+                            typeof e.total_hours === "number"
+                              ? e.total_hours
+                              : Object.values(e.hours_by_category ?? {}).reduce(
+                                  (s, h) => s + (h as number),
+                                  0,
+                                );
+
+                          const newEntries = selectedLog.new_values!
+                            .qa_entries as QAEntry[];
+                          const oldEntries = Array.isArray(
+                            selectedLog.old_values?.qa_entries,
+                          )
+                            ? (selectedLog.old_values!.qa_entries as QAEntry[])
+                            : [];
+
+                          const newMap = Object.fromEntries(
+                            newEntries.map((e) => [e.qa_name, getTotal(e)]),
+                          );
+                          const oldMap = Object.fromEntries(
+                            oldEntries.map((e) => [e.qa_name, getTotal(e)]),
+                          );
+
+                          const allNames = Array.from(
+                            new Set([
+                              ...Object.keys(oldMap),
+                              ...Object.keys(newMap),
+                            ]),
+                          ).sort();
+
+                          const hasOldData = oldEntries.length > 0;
+
+                          const changedRows = hasOldData
+                            ? allNames.filter((name) => {
+                                const oldH = oldMap[name] ?? null;
+                                const newH = newMap[name] ?? null;
+                                return (
+                                  Math.abs((oldH ?? 0) - (newH ?? 0)) > 0.005 ||
+                                  (oldH === null) !== (newH === null)
+                                );
+                              })
+                            : allNames;
+
+                          if (hasOldData && changedRows.length === 0) {
+                            return (
+                              <p className="text-sm text-gray-500 italic px-2 py-3">
+                                Sin cambios detectados en las horas.
+                              </p>
+                            );
+                          }
+
+                          return (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                                {hasOldData
+                                  ? "Cambios en Horas QA"
+                                  : "QA Entries Actualizados"}
+                              </h4>
+                              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                {/* Encabezados */}
                                 <div
-                                  key={i}
-                                  className="bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-sm flex justify-between"
+                                  className={`grid bg-gray-200 border-b border-gray-200 ${hasOldData ? "grid-cols-3" : "grid-cols-2"}`}
                                 >
-                                  <span className="font-medium text-gray-900">
-                                    {entry.qa_name}
-                                  </span>
-                                  <span className="text-gray-600 font-mono">
-                                    {total.toFixed(2)} h
-                                  </span>
+                                  <div className="px-4 py-3 font-semibold text-sm text-gray-700">
+                                    QA
+                                  </div>
+                                  {hasOldData ? (
+                                    <>
+                                      <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                        Antes
+                                      </div>
+                                      <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                        Después
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Horas
+                                    </div>
+                                  )}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                                {/* Filas */}
+                                <div className="divide-y divide-gray-200">
+                                  {changedRows.map((name) => {
+                                    const oldH = oldMap[name] ?? null;
+                                    const newH = newMap[name] ?? null;
+                                    const isAdded = oldH === null;
+                                    const isRemoved = newH === null;
+                                    return (
+                                      <div
+                                        key={name}
+                                        className={`grid bg-gray-100 ${hasOldData ? "grid-cols-3" : "grid-cols-2"}`}
+                                      >
+                                        <div className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2">
+                                          {name}
+                                          {isAdded && (
+                                            <span className="text-xs text-emerald-600 font-semibold">
+                                              nuevo
+                                            </span>
+                                          )}
+                                          {isRemoved && (
+                                            <span className="text-xs text-red-500 font-semibold">
+                                              eliminado
+                                            </span>
+                                          )}
+                                        </div>
+                                        {hasOldData ? (
+                                          <>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {isAdded ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-red-400 bg-red-950/30 border border-red-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {oldH!.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {isRemoved ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {newH!.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                            <span className="text-gray-700 font-mono text-xs">
+                                              {(newMap[name] ?? 0).toFixed(2)} h
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                       {selectedLog.new_values.synced_by === "clickup-cron" && (
                         <div className="bg-amber-950/20 border border-amber-700/40 rounded-lg p-4 text-sm">
                           <p className="text-amber-300 font-medium">

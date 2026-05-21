@@ -141,6 +141,20 @@ export async function PUT(
       );
     }
 
+    // Capture current state BEFORE updating for audit diff
+    let oldQAEntries: { qa_name: string; total_hours: number }[] = [];
+    try {
+      const existing = await timingService.getTimingById(id, token);
+      if (existing?.qa_entries) {
+        oldQAEntries = existing.qa_entries.map((e) => ({
+          qa_name: e.qa_name,
+          total_hours: e.total_hours,
+        }));
+      }
+    } catch {
+      // Non-fatal: proceed without old values
+    }
+
     const timing = await timingService.updateTiming(id, body, token);
 
     if (!timing) {
@@ -176,6 +190,13 @@ export async function PUT(
           .eq("id", timing.task_id)
           .maybeSingle();
         const taskName = taskData?.name ?? timing.task_id;
+        const newQAEntries = body.qa_entries.map((e) => ({
+          qa_name: e.qa_name,
+          total_hours: Object.values(e.hours_by_category ?? {}).reduce(
+            (s: number, h: unknown) => s + (h as number),
+            0,
+          ),
+        }));
         await supabase.from("audit_logs").insert({
           user_id: user.id,
           user_email: userEmailPut,
@@ -183,7 +204,8 @@ export async function PUT(
           entity_type: "TIMING",
           entity_id: timing.id,
           entity_name: `${taskName} ${timing.month}/${timing.year}`,
-          new_values: { qa_entries: body.qa_entries },
+          old_values: { qa_entries: oldQAEntries },
+          new_values: { qa_entries: newQAEntries },
           timestamp: new Date().toISOString(),
         });
       } catch (auditError) {
