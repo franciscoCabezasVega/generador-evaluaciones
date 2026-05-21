@@ -310,6 +310,11 @@ export function useCachedFetch<T>({
       const entry = cacheStore.get<T>(fullKey);
       if (entry) setDataState(entry.data);
       setLoading(false);
+      // Limpiar estados de error/reconexión del ciclo anterior para evitar
+      // UI inconsistente (banner de error visible con datos frescos de nueva clave).
+      setError(null);
+      setIsReconnecting(false);
+      setIsRefreshing(false);
       const timer = setTimeout(() => {
         if (!controller.signal.aborted) {
           doFetch(true, controller.signal);

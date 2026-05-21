@@ -587,16 +587,23 @@ export default function AuditHistory({
                     o.category_hours &&
                     typeof o.category_hours === "object"
                   ) {
-                    return Object.fromEntries(
-                      Object.entries(
-                        o.category_hours as Record<string, number>,
-                      ).map(([slug, h]) => [
-                        slug
-                          .replace(/_/g, " ")
-                          .replace(/\b\w/g, (c) => c.toUpperCase()),
-                        h,
-                      ]),
-                    );
+                    const entries = Object.entries(
+                      o.category_hours as Record<string, unknown>,
+                    ).flatMap(([slug, raw]) => {
+                      const h = Number(raw);
+                      if (!Number.isFinite(h)) return [];
+                      return [
+                        [
+                          slug
+                            .replace(/_/g, " ")
+                            .replace(/\b\w/g, (c) => c.toUpperCase()),
+                          h,
+                        ],
+                      ] as [[string, number]];
+                    });
+                    return entries.length > 0
+                      ? Object.fromEntries(entries)
+                      : null;
                   }
                   // Formato nuevo: { qa_entries: [{ qa_name, categories: [{category_name, hours}] }] }
                   if (Array.isArray(o.qa_entries)) {
@@ -605,12 +612,14 @@ export default function AuditHistory({
                       qa_name: string;
                       categories: Array<{
                         category_name: string;
-                        hours: number;
+                        hours: unknown;
                       }>;
                     }>) {
                       for (const cat of e.categories ?? []) {
+                        const h = Number(cat.hours);
+                        if (!Number.isFinite(h)) continue;
                         agg[cat.category_name] =
-                          (agg[cat.category_name] ?? 0) + cat.hours;
+                          (agg[cat.category_name] ?? 0) + h;
                       }
                     }
                     return Object.keys(agg).length > 0 ? agg : null;

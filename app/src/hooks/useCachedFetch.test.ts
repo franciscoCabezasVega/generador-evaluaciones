@@ -167,6 +167,50 @@ describe("useCachedFetch – visibilitychange integration", () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
+  it("serves data immediately on mount when cache is fresh (no spinner + background refetch)", async () => {
+    const STALE_TIME = 60_000;
+    const cacheKey = `mount-fresh-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["cached"]);
+
+    // First mount: populate the cache
+    const { unmount } = renderHook(() =>
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+        staleTime: STALE_TIME,
+      }),
+    );
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    unmount();
+
+    // Second mount: cache is still fresh
+    fetchFn.mockClear();
+    const { result } = renderHook(() =>
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+        staleTime: STALE_TIME,
+      }),
+    );
+
+    // Must serve cached data immediately without a loading spinner
+    expect(result.current.loading).toBe(false);
+    expect(result.current.data).toEqual(["cached"]);
+
+    // Must still dispatch a background refetch after the jitter delay
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it("does NOT call fetchFn when tab goes to background (hidden)", async () => {
     const STALE_TIME = 100;
     const cacheKey = `vis-hidden-${Math.random()}`;
