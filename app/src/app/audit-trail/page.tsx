@@ -1294,18 +1294,16 @@ export default function AuditTrailPage() {
                     <div className="space-y-4">
                       {Array.isArray(selectedLog.new_values.qa_entries) &&
                         (() => {
+                          type CategoryDetail = {
+                            category_name: string;
+                            hours: number;
+                          };
                           type QAEntry = {
                             qa_name: string;
+                            categories?: CategoryDetail[];
                             total_hours?: number;
                             hours_by_category?: Record<string, number>;
                           };
-                          const getTotal = (e: QAEntry) =>
-                            typeof e.total_hours === "number"
-                              ? e.total_hours
-                              : Object.values(e.hours_by_category ?? {}).reduce(
-                                  (s, h) => s + (h as number),
-                                  0,
-                                );
 
                           const newEntries = selectedLog.new_values!
                             .qa_entries as QAEntry[];
@@ -1315,26 +1313,174 @@ export default function AuditTrailPage() {
                             ? (selectedLog.old_values!.qa_entries as QAEntry[])
                             : [];
 
+                          // ── Formato nuevo: categories[] con nombres resueltos ──
+                          const hasCategories =
+                            newEntries.length > 0 &&
+                            Array.isArray(newEntries[0].categories) &&
+                            oldEntries.length > 0 &&
+                            Array.isArray(oldEntries[0].categories);
+
+                          if (hasCategories) {
+                            const buildCatMap = (entries: QAEntry[]) =>
+                              Object.fromEntries(
+                                entries.map((e) => [
+                                  e.qa_name,
+                                  Object.fromEntries(
+                                    (e.categories ?? []).map((c) => [
+                                      c.category_name,
+                                      c.hours,
+                                    ]),
+                                  ),
+                                ]),
+                              );
+
+                            const oldCatMap = buildCatMap(oldEntries);
+                            const newCatMap = buildCatMap(newEntries);
+
+                            const allQANames = Array.from(
+                              new Set([
+                                ...Object.keys(oldCatMap),
+                                ...Object.keys(newCatMap),
+                              ]),
+                            ).sort();
+
+                            type DiffRow = {
+                              category_name: string;
+                              oldH: number | null;
+                              newH: number | null;
+                            };
+                            const byQA: Record<string, DiffRow[]> = {};
+
+                            for (const qaName of allQANames) {
+                              const oldCats = oldCatMap[qaName] ?? {};
+                              const newCats = newCatMap[qaName] ?? {};
+                              const allCats = Array.from(
+                                new Set([
+                                  ...Object.keys(oldCats),
+                                  ...Object.keys(newCats),
+                                ]),
+                              ).sort();
+                              for (const catName of allCats) {
+                                const oldH = oldCats[catName] ?? 0;
+                                const newH = newCats[catName] ?? 0;
+                                if (Math.abs(oldH - newH) > 0.005) {
+                                  if (!byQA[qaName]) byQA[qaName] = [];
+                                  byQA[qaName].push({
+                                    category_name: catName,
+                                    oldH:
+                                      catName in oldCats
+                                        ? oldCats[catName]
+                                        : null,
+                                    newH:
+                                      catName in newCats
+                                        ? newCats[catName]
+                                        : null,
+                                  });
+                                }
+                              }
+                            }
+
+                            const qaWithChanges = Object.keys(byQA);
+                            if (qaWithChanges.length === 0) {
+                              return (
+                                <p className="text-sm text-gray-500 italic px-2 py-3">
+                                  Sin cambios detectados en las horas.
+                                </p>
+                              );
+                            }
+
+                            return (
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                                  Cambios en Horas QA
+                                </h4>
+                                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                  <div className="grid grid-cols-3 bg-gray-200 border-b border-gray-200">
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700">
+                                      Categoría
+                                    </div>
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Antes
+                                    </div>
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Después
+                                    </div>
+                                  </div>
+                                  <div>
+                                    {qaWithChanges.map((qaName) => (
+                                      <div
+                                        key={qaName}
+                                        className="border-b border-gray-200 last:border-b-0"
+                                      >
+                                        <div className="px-4 py-2 bg-gray-200/50 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                          {qaName}
+                                        </div>
+                                        {byQA[qaName].map((row) => (
+                                          <div
+                                            key={row.category_name}
+                                            className="grid grid-cols-3 bg-gray-100 border-t border-gray-200/60"
+                                          >
+                                            <div className="px-4 py-3 text-sm text-gray-800 pl-6">
+                                              {row.category_name}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {row.oldH === null ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-red-400 bg-red-950/30 border border-red-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {row.oldH.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {row.newH === null ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {row.newH.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // ── Fallback: formato anterior (solo total_hours) ──
+                          const getTotal = (e: QAEntry) =>
+                            typeof e.total_hours === "number"
+                              ? e.total_hours
+                              : Object.values(e.hours_by_category ?? {}).reduce(
+                                  (s, h) => s + (h as number),
+                                  0,
+                                );
+
                           const newMap = Object.fromEntries(
                             newEntries.map((e) => [e.qa_name, getTotal(e)]),
                           );
-                          const oldMap = Object.fromEntries(
+                          const oldMapFallback = Object.fromEntries(
                             oldEntries.map((e) => [e.qa_name, getTotal(e)]),
                           );
-
                           const allNames = Array.from(
                             new Set([
-                              ...Object.keys(oldMap),
+                              ...Object.keys(oldMapFallback),
                               ...Object.keys(newMap),
                             ]),
                           ).sort();
-
-                          const hasOldData = oldEntries.length > 0;
-
-                          const changedRows = hasOldData
-                            ? allNames.filter((name) => {
-                                const oldH = oldMap[name] ?? null;
-                                const newH = newMap[name] ?? null;
+                          const hasOldFallback = oldEntries.length > 0;
+                          const rowsToShow = hasOldFallback
+                            ? allNames.filter((n) => {
+                                const oldH = oldMapFallback[n] ?? null;
+                                const newH = newMap[n] ?? null;
                                 return (
                                   Math.abs((oldH ?? 0) - (newH ?? 0)) > 0.005 ||
                                   (oldH === null) !== (newH === null)
@@ -1342,7 +1488,7 @@ export default function AuditTrailPage() {
                               })
                             : allNames;
 
-                          if (hasOldData && changedRows.length === 0) {
+                          if (hasOldFallback && rowsToShow.length === 0) {
                             return (
                               <p className="text-sm text-gray-500 italic px-2 py-3">
                                 Sin cambios detectados en las horas.
@@ -1353,19 +1499,18 @@ export default function AuditTrailPage() {
                           return (
                             <div>
                               <h4 className="text-sm font-semibold text-gray-900 mb-3">
-                                {hasOldData
+                                {hasOldFallback
                                   ? "Cambios en Horas QA"
                                   : "QA Entries Actualizados"}
                               </h4>
                               <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                {/* Encabezados */}
                                 <div
-                                  className={`grid bg-gray-200 border-b border-gray-200 ${hasOldData ? "grid-cols-3" : "grid-cols-2"}`}
+                                  className={`grid bg-gray-200 border-b border-gray-200 ${hasOldFallback ? "grid-cols-3" : "grid-cols-2"}`}
                                 >
                                   <div className="px-4 py-3 font-semibold text-sm text-gray-700">
                                     QA
                                   </div>
-                                  {hasOldData ? (
+                                  {hasOldFallback ? (
                                     <>
                                       <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
                                         Antes
@@ -1380,17 +1525,16 @@ export default function AuditTrailPage() {
                                     </div>
                                   )}
                                 </div>
-                                {/* Filas */}
                                 <div className="divide-y divide-gray-200">
-                                  {changedRows.map((name) => {
-                                    const oldH = oldMap[name] ?? null;
+                                  {rowsToShow.map((name) => {
+                                    const oldH = oldMapFallback[name] ?? null;
                                     const newH = newMap[name] ?? null;
                                     const isAdded = oldH === null;
                                     const isRemoved = newH === null;
                                     return (
                                       <div
                                         key={name}
-                                        className={`grid bg-gray-100 ${hasOldData ? "grid-cols-3" : "grid-cols-2"}`}
+                                        className={`grid bg-gray-100 ${hasOldFallback ? "grid-cols-3" : "grid-cols-2"}`}
                                       >
                                         <div className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2">
                                           {name}
@@ -1405,7 +1549,7 @@ export default function AuditTrailPage() {
                                             </span>
                                           )}
                                         </div>
-                                        {hasOldData ? (
+                                        {hasOldFallback ? (
                                           <>
                                             <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
                                               {isAdded ? (

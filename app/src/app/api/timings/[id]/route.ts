@@ -142,13 +142,30 @@ export async function PUT(
     }
 
     // Capture current state BEFORE updating for audit diff
-    let oldQAEntries: { qa_name: string; total_hours: number }[] = [];
+    type AuditQAEntry = {
+      qa_name: string;
+      categories: { category_name: string; hours: number }[];
+    };
+    let oldQAEntries: AuditQAEntry[] = [];
+    let catIdToName: Record<string, string> = {};
     try {
+      const snapshotClient = getAuthenticatedSupabase(token);
+      const { data: cats } = await snapshotClient
+        .from("timing_categories")
+        .select("id, name");
+      catIdToName = Object.fromEntries(
+        (cats ?? []).map((c: { id: string; name: string }) => [c.id, c.name]),
+      );
       const existing = await timingService.getTimingById(id, token);
       if (existing?.qa_entries) {
         oldQAEntries = existing.qa_entries.map((e) => ({
           qa_name: e.qa_name,
-          total_hours: e.total_hours,
+          categories: Object.entries(e.hours_by_category ?? {})
+            .filter(([, h]) => (h as number) > 0)
+            .map(([catId, hours]) => ({
+              category_name: catIdToName[catId] ?? catId,
+              hours: hours as number,
+            })),
         }));
       }
     } catch {
@@ -190,12 +207,14 @@ export async function PUT(
           .eq("id", timing.task_id)
           .maybeSingle();
         const taskName = taskData?.name ?? timing.task_id;
-        const newQAEntries = body.qa_entries.map((e) => ({
+        const newQAEntries: AuditQAEntry[] = body.qa_entries.map((e) => ({
           qa_name: e.qa_name,
-          total_hours: Object.values(e.hours_by_category ?? {}).reduce(
-            (s: number, h: unknown) => s + (h as number),
-            0,
-          ),
+          categories: Object.entries(e.hours_by_category ?? {})
+            .filter(([, h]) => (h as unknown as number) > 0)
+            .map(([catId, hours]) => ({
+              category_name: catIdToName[catId] ?? catId,
+              hours: hours as unknown as number,
+            })),
         }));
         await supabase.from("audit_logs").insert({
           user_id: user.id,
