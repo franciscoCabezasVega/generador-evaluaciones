@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { type SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient, LockFunc } from "@supabase/supabase-js";
 import {
   TaskTiming,
   CreateTaskTimingInput,
@@ -64,7 +64,7 @@ async function getClient(token?: string) {
   // noOpLock: este cliente es stateless (token fijo, sin persistencia de sesión).
   // Usando processLock compartido, cada llamada a getClient() competía por el
   // mismo mutex de proceso, causando el warning "Lock acquisition timed out".
-  const noOpLock = (_n: string, _t: number, fn: () => Promise<unknown>) => fn();
+  const noOpLock: LockFunc = (_n, _t, fn) => fn();
   return createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { authorization: `Bearer ${token}` } },
     auth: {
