@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient, type LockFunc } from "@supabase/supabase-js";
 import { CreateFeedbackInput } from "@/lib/types";
 
@@ -6,8 +7,16 @@ import { CreateFeedbackInput } from "@/lib/types";
 // inicialización, causando contención bajo carga.
 const noOpLock: LockFunc = (_name, _acquireTimeout, fn) => fn();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error(
+    "[feedbackService] Variables de entorno requeridas no configuradas: " +
+      (!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL " : "") +
+      (!supabaseServiceKey ? "SUPABASE_SERVICE_ROLE_KEY" : ""),
+  );
+}
 
 // Usar Service Role Key para operaciones server-side (no depender de anon key sin contexto de RLS)
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
