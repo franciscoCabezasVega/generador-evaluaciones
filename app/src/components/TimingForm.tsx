@@ -929,42 +929,50 @@ function TimingFormComponent(
                                   {formatTime(catHours)}
                                 </span>
                               )}
-                              <input
-                                id={fieldId}
-                                name={fieldId}
-                                type="text"
-                                inputMode="decimal"
-                                value={catHours === 0 ? "" : catHours}
-                                onChange={(ev) =>
-                                  updateQAHours(
-                                    entry.qa_name,
-                                    cat.id,
-                                    ev.target.value,
-                                  )
-                                }
-                                onKeyPress={(ev) => {
-                                  // Allow digits and one decimal point
-                                  if (!/[0-9.]/.test(ev.key))
-                                    ev.preventDefault();
-                                  // Block second dot
-                                  if (
-                                    ev.key === "." &&
-                                    (
-                                      ev.currentTarget as HTMLInputElement
-                                    ).value.includes(".")
-                                  )
-                                    ev.preventDefault();
-                                }}
-                                onBlur={(ev) => {
-                                  if (ev.target.value === "") {
-                                    updateQAHours(entry.qa_name, cat.id, "0");
+                              <div className="relative flex items-center">
+                                <input
+                                  id={fieldId}
+                                  name={fieldId}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={catHours === 0 ? "" : catHours}
+                                  onChange={(ev) =>
+                                    updateQAHours(
+                                      entry.qa_name,
+                                      cat.id,
+                                      ev.target.value,
+                                    )
                                   }
-                                }}
-                                className="w-16 rounded border border-white/20 bg-white/10 px-2 py-0.5 text-center text-sm"
-                                disabled={isLoading}
-                                placeholder="0"
-                                aria-label={`${cat.name} para ${entry.qa_name}`}
-                              />
+                                  onKeyPress={(ev) => {
+                                    // Allow digits and one decimal point
+                                    if (!/[0-9.]/.test(ev.key))
+                                      ev.preventDefault();
+                                    // Block second dot
+                                    if (
+                                      ev.key === "." &&
+                                      (
+                                        ev.currentTarget as HTMLInputElement
+                                      ).value.includes(".")
+                                    )
+                                      ev.preventDefault();
+                                  }}
+                                  onBlur={(ev) => {
+                                    if (ev.target.value === "") {
+                                      updateQAHours(entry.qa_name, cat.id, "0");
+                                    }
+                                  }}
+                                  className="w-20 rounded border border-white/20 bg-white/10 py-0.5 pl-2 pr-6 text-center text-sm"
+                                  disabled={isLoading}
+                                  placeholder="0"
+                                  aria-label={`${cat.name} en horas para ${entry.qa_name}`}
+                                />
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute right-2 text-xs text-muted-foreground"
+                                >
+                                  h
+                                </span>
+                              </div>
                             </div>
                           </div>
                           {errors[errorKey] && (

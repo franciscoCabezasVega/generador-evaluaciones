@@ -382,6 +382,36 @@ export async function syncTaskTimings(
               );
             }
 
+            // Step 5c: Emit audit log for the cron sync (fire-and-forget).
+            const systemUserId = process.env.SYSTEM_USER_ID ?? "system";
+            void (async () => {
+              try {
+                const { data: taskRow } = await supabase
+                  .from("tasks")
+                  .select("name")
+                  .eq("id", internalTaskId)
+                  .maybeSingle();
+                const name = taskRow?.name ?? internalTaskId;
+                const month = taskMeta?.month ?? 0;
+                const year = taskMeta?.year ?? 0;
+                await supabase.from("audit_logs").insert({
+                  user_id: systemUserId,
+                  user_email: "system@cron.local",
+                  action: "UPDATE",
+                  entity_type: "TIMING",
+                  entity_id: latestTiming.id,
+                  entity_name: `${name} ${month}/${year}`,
+                  new_values: {
+                    synced_by: "clickup-cron",
+                    category_hours: categoryHours,
+                  },
+                  timestamp: new Date().toISOString(),
+                });
+              } catch {
+                // Audit failure must never abort the sync
+              }
+            })();
+
             return {
               taskId: internalTaskId,
               clickupTaskId: clickupQaTaskId,

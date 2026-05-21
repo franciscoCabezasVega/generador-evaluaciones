@@ -123,6 +123,19 @@ export async function PATCH(
 
     // Validar devoluciones ANTES de entrar en la sección de escritura
     if (squads && Array.isArray(squads)) {
+      // Squad is required unless the project type is "Automatización QA".
+      // Only enforce when project_type is explicitly provided in the PATCH body;
+      // partial updates that omit project_type should not re-validate squads.
+      const squadRequired =
+        body.project_type !== undefined &&
+        body.project_type !== "Automatización QA";
+      if (squadRequired && squads.length === 0) {
+        return NextResponse.json(
+          { error: "Missing required fields or empty squads array" },
+          { status: 400 },
+        );
+      }
+
       for (const squadData of squads) {
         if (
           !validateReturns(squadData.low_returns) ||

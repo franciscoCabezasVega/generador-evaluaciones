@@ -126,6 +126,8 @@ export default function AuditTrailPage() {
         return "Tarea";
       case "REPORT":
         return "Reporte";
+      case "TIMING":
+        return "Timing";
       default:
         return entityType;
     }
@@ -150,6 +152,8 @@ export default function AuditTrailPage() {
         return "badge-violet";
       case "REPORT":
         return "badge-info";
+      case "TIMING":
+        return "badge-warning";
       default:
         return "badge-neutral";
     }
@@ -182,6 +186,7 @@ export default function AuditTrailPage() {
       assigned_qa: "QA Asignados",
       tshirt_size: "Complejidad",
       effort_score_date: "Fecha Esfuerzo",
+      task_id: "ID de Tarea",
       // Puntuaciones
       calculated_score: "Nota Calculada",
       score: "Nota",
@@ -531,7 +536,8 @@ export default function AuditTrailPage() {
               Trazabilidad de Auditoría
             </h1>
             <p className="text-sm text-gray-600">
-              Historial completo de acciones realizadas en tareas y reportes
+              Historial completo de acciones realizadas en tareas, reportes y
+              timings
             </p>
           </div>
           <SkeletonAuditTable isAdmin={isAdmin} />
@@ -554,7 +560,8 @@ export default function AuditTrailPage() {
             Trazabilidad de Auditoría
           </h1>
           <p className="text-gray-600">
-            Historial completo de acciones realizadas en tareas y reportes
+            Historial completo de acciones realizadas en tareas, reportes y
+            timings
           </p>
         </div>
 
@@ -591,6 +598,7 @@ export default function AuditTrailPage() {
                 <option value="">Todos</option>
                 <option value="TASK">Tareas</option>
                 <option value="REPORT">Reportes</option>
+                <option value="TIMING">Timings</option>
               </select>
             </div>
 
@@ -1214,6 +1222,414 @@ export default function AuditTrailPage() {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — CREATE */}
+                {selectedLog.action === "CREATE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.new_values && (
+                    <div className="space-y-4">
+                      <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-lg p-4 text-sm space-y-2">
+                        {(["month", "year", "task_id"] as const)
+                          .filter(
+                            (k) => selectedLog.new_values?.[k] !== undefined,
+                          )
+                          .map((key) => (
+                            <div
+                              key={key}
+                              className="flex justify-between gap-4"
+                            >
+                              <span className="text-gray-700 font-medium">
+                                {getFieldLabel(key)}:
+                              </span>
+                              <span className="text-gray-900 text-right font-mono">
+                                {cleanJsonValue(
+                                  selectedLog.new_values![key],
+                                  key,
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                      {Array.isArray(selectedLog.new_values.qa_entries) && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                            QA Entries Creados
+                          </h4>
+                          <div className="space-y-2">
+                            {(
+                              selectedLog.new_values.qa_entries as {
+                                qa_name: string;
+                                hours_by_category: Record<string, number>;
+                              }[]
+                            ).map((entry, i) => {
+                              const total = Object.values(
+                                entry.hours_by_category ?? {},
+                              ).reduce((s, h) => s + (h as number), 0);
+                              return (
+                                <div
+                                  key={i}
+                                  className="bg-emerald-950/20 border border-emerald-800/30 rounded-lg px-4 py-3 text-sm flex justify-between"
+                                >
+                                  <span className="font-medium text-gray-900">
+                                    {entry.qa_name}
+                                  </span>
+                                  <span className="text-gray-600 font-mono">
+                                    {total.toFixed(2)} h
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — UPDATE */}
+                {selectedLog.action === "UPDATE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.new_values && (
+                    <div className="space-y-4">
+                      {Array.isArray(selectedLog.new_values.qa_entries) &&
+                        (() => {
+                          type CategoryDetail = {
+                            category_name: string;
+                            hours: number;
+                          };
+                          type QAEntry = {
+                            qa_name: string;
+                            categories?: CategoryDetail[];
+                            total_hours?: number;
+                            hours_by_category?: Record<string, number>;
+                          };
+
+                          const newEntries = selectedLog.new_values!
+                            .qa_entries as QAEntry[];
+                          const oldEntries = Array.isArray(
+                            selectedLog.old_values?.qa_entries,
+                          )
+                            ? (selectedLog.old_values!.qa_entries as QAEntry[])
+                            : [];
+
+                          // ── Formato nuevo: categories[] con nombres resueltos ──
+                          const hasCategories =
+                            newEntries.length > 0 &&
+                            Array.isArray(newEntries[0].categories) &&
+                            oldEntries.length > 0 &&
+                            Array.isArray(oldEntries[0].categories);
+
+                          if (hasCategories) {
+                            const buildCatMap = (entries: QAEntry[]) =>
+                              Object.fromEntries(
+                                entries.map((e) => [
+                                  e.qa_name,
+                                  Object.fromEntries(
+                                    (e.categories ?? []).map((c) => [
+                                      c.category_name,
+                                      c.hours,
+                                    ]),
+                                  ),
+                                ]),
+                              );
+
+                            const oldCatMap = buildCatMap(oldEntries);
+                            const newCatMap = buildCatMap(newEntries);
+
+                            const allQANames = Array.from(
+                              new Set([
+                                ...Object.keys(oldCatMap),
+                                ...Object.keys(newCatMap),
+                              ]),
+                            ).sort();
+
+                            type DiffRow = {
+                              category_name: string;
+                              oldH: number | null;
+                              newH: number | null;
+                            };
+                            const byQA: Record<string, DiffRow[]> = {};
+
+                            for (const qaName of allQANames) {
+                              const oldCats = oldCatMap[qaName] ?? {};
+                              const newCats = newCatMap[qaName] ?? {};
+                              const allCats = Array.from(
+                                new Set([
+                                  ...Object.keys(oldCats),
+                                  ...Object.keys(newCats),
+                                ]),
+                              ).sort();
+                              for (const catName of allCats) {
+                                const oldH = oldCats[catName] ?? 0;
+                                const newH = newCats[catName] ?? 0;
+                                if (Math.abs(oldH - newH) > 0.005) {
+                                  if (!byQA[qaName]) byQA[qaName] = [];
+                                  byQA[qaName].push({
+                                    category_name: catName,
+                                    oldH:
+                                      catName in oldCats
+                                        ? oldCats[catName]
+                                        : null,
+                                    newH:
+                                      catName in newCats
+                                        ? newCats[catName]
+                                        : null,
+                                  });
+                                }
+                              }
+                            }
+
+                            const qaWithChanges = Object.keys(byQA);
+                            if (qaWithChanges.length === 0) {
+                              return (
+                                <p className="text-sm text-gray-500 italic px-2 py-3">
+                                  Sin cambios detectados en las horas.
+                                </p>
+                              );
+                            }
+
+                            return (
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                                  Cambios en Horas QA
+                                </h4>
+                                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                  <div className="grid grid-cols-3 bg-gray-200 border-b border-gray-200">
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700">
+                                      Categoría
+                                    </div>
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Antes
+                                    </div>
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Después
+                                    </div>
+                                  </div>
+                                  <div>
+                                    {qaWithChanges.map((qaName) => (
+                                      <div
+                                        key={qaName}
+                                        className="border-b border-gray-200 last:border-b-0"
+                                      >
+                                        <div className="px-4 py-2 bg-gray-200/50 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                          {qaName}
+                                        </div>
+                                        {byQA[qaName].map((row) => (
+                                          <div
+                                            key={row.category_name}
+                                            className="grid grid-cols-3 bg-gray-100 border-t border-gray-200/60"
+                                          >
+                                            <div className="px-4 py-3 text-sm text-gray-800 pl-6">
+                                              {row.category_name}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {row.oldH === null ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-red-400 bg-red-950/30 border border-red-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {row.oldH.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {row.newH === null ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {row.newH.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // ── Fallback: formato anterior (solo total_hours) ──
+                          const getTotal = (e: QAEntry) =>
+                            typeof e.total_hours === "number"
+                              ? e.total_hours
+                              : Object.values(e.hours_by_category ?? {}).reduce(
+                                  (s, h) => s + (h as number),
+                                  0,
+                                );
+
+                          const newMap = Object.fromEntries(
+                            newEntries.map((e) => [e.qa_name, getTotal(e)]),
+                          );
+                          const oldMapFallback = Object.fromEntries(
+                            oldEntries.map((e) => [e.qa_name, getTotal(e)]),
+                          );
+                          const allNames = Array.from(
+                            new Set([
+                              ...Object.keys(oldMapFallback),
+                              ...Object.keys(newMap),
+                            ]),
+                          ).sort();
+                          const hasOldFallback = oldEntries.length > 0;
+                          const rowsToShow = hasOldFallback
+                            ? allNames.filter((n) => {
+                                const oldH = oldMapFallback[n] ?? null;
+                                const newH = newMap[n] ?? null;
+                                return (
+                                  Math.abs((oldH ?? 0) - (newH ?? 0)) > 0.005 ||
+                                  (oldH === null) !== (newH === null)
+                                );
+                              })
+                            : allNames;
+
+                          if (hasOldFallback && rowsToShow.length === 0) {
+                            return (
+                              <p className="text-sm text-gray-500 italic px-2 py-3">
+                                Sin cambios detectados en las horas.
+                              </p>
+                            );
+                          }
+
+                          return (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                                {hasOldFallback
+                                  ? "Cambios en Horas QA"
+                                  : "QA Entries Actualizados"}
+                              </h4>
+                              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                <div
+                                  className={`grid bg-gray-200 border-b border-gray-200 ${hasOldFallback ? "grid-cols-3" : "grid-cols-2"}`}
+                                >
+                                  <div className="px-4 py-3 font-semibold text-sm text-gray-700">
+                                    QA
+                                  </div>
+                                  {hasOldFallback ? (
+                                    <>
+                                      <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                        Antes
+                                      </div>
+                                      <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                        Después
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="px-4 py-3 font-semibold text-sm text-gray-700 border-l border-gray-200">
+                                      Horas
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="divide-y divide-gray-200">
+                                  {rowsToShow.map((name) => {
+                                    const oldH = oldMapFallback[name] ?? null;
+                                    const newH = newMap[name] ?? null;
+                                    const isAdded = oldH === null;
+                                    const isRemoved = newH === null;
+                                    return (
+                                      <div
+                                        key={name}
+                                        className={`grid bg-gray-100 ${hasOldFallback ? "grid-cols-3" : "grid-cols-2"}`}
+                                      >
+                                        <div className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2">
+                                          {name}
+                                          {isAdded && (
+                                            <span className="text-xs text-emerald-600 font-semibold">
+                                              nuevo
+                                            </span>
+                                          )}
+                                          {isRemoved && (
+                                            <span className="text-xs text-red-500 font-semibold">
+                                              eliminado
+                                            </span>
+                                          )}
+                                        </div>
+                                        {hasOldFallback ? (
+                                          <>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {isAdded ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-red-400 bg-red-950/30 border border-red-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {oldH!.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                              {isRemoved ? (
+                                                <span className="text-gray-400 italic text-xs">
+                                                  —
+                                                </span>
+                                              ) : (
+                                                <span className="text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-2 py-1 rounded font-mono text-xs">
+                                                  {newH!.toFixed(2)} h
+                                                </span>
+                                              )}
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="px-4 py-3 text-sm border-l border-gray-200 flex items-center">
+                                            <span className="text-gray-700 font-mono text-xs">
+                                              {(newMap[name] ?? 0).toFixed(2)} h
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      {selectedLog.new_values.synced_by === "clickup-cron" && (
+                        <div className="bg-amber-950/20 border border-amber-700/40 rounded-lg p-4 text-sm">
+                          <p className="text-amber-300 font-medium">
+                            Sincronización automática vía ClickUp Cron
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — DELETE */}
+                {selectedLog.action === "DELETE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.old_values && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                        Timing Eliminado
+                      </h4>
+                      <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-4 text-sm space-y-2">
+                        {(["month", "year", "task_id"] as const)
+                          .filter(
+                            (k) => selectedLog.old_values?.[k] !== undefined,
+                          )
+                          .map((key) => (
+                            <div
+                              key={key}
+                              className="flex justify-between gap-4"
+                            >
+                              <span className="text-gray-700 font-medium">
+                                {getFieldLabel(key)}:
+                              </span>
+                              <span className="text-gray-900 text-right font-mono">
+                                {cleanJsonValue(
+                                  selectedLog.old_values![key],
+                                  key,
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   )}
               </div>

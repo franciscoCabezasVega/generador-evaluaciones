@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskTimingInput } from "@/lib/types";
 import { getUserFromRequest, getAuthenticatedSupabase } from "@/lib/auth";
@@ -140,6 +141,37 @@ export async function PUT(
       );
     }
 
+    // Capture current state BEFORE updating for audit diff
+    type AuditQAEntry = {
+      qa_name: string;
+      categories: { category_name: string; hours: number }[];
+    };
+    let oldQAEntries: AuditQAEntry[] = [];
+    let catIdToName: Record<string, string> = {};
+    try {
+      const snapshotClient = getAuthenticatedSupabase(token);
+      const { data: cats } = await snapshotClient
+        .from("timing_categories")
+        .select("id, name");
+      catIdToName = Object.fromEntries(
+        (cats ?? []).map((c: { id: string; name: string }) => [c.id, c.name]),
+      );
+      const existing = await timingService.getTimingById(id, token);
+      if (existing?.qa_entries) {
+        oldQAEntries = existing.qa_entries.map((e) => ({
+          qa_name: e.qa_name,
+          categories: Object.entries(e.hours_by_category ?? {})
+            .filter(([, h]) => (h as number) > 0)
+            .map(([catId, hours]) => ({
+              category_name: catIdToName[catId] ?? catId,
+              hours: hours as number,
+            })),
+        }));
+      }
+    } catch {
+      // Non-fatal: proceed without old values
+    }
+
     const timing = await timingService.updateTiming(id, body, token);
 
     if (!timing) {
@@ -163,6 +195,42 @@ export async function PUT(
     } catch (syncError) {
       console.error("Error syncing assigned_qa to task:", syncError);
     }
+
+    // Register audit log async (does not block the response)
+    const userEmailPut = user.email || "unknown";
+    after(async () => {
+      try {
+        const supabase = getAuthenticatedSupabase(token);
+        const { data: taskData } = await supabase
+          .from("tasks")
+          .select("name")
+          .eq("id", timing.task_id)
+          .maybeSingle();
+        const taskName = taskData?.name ?? timing.task_id;
+        const newQAEntries: AuditQAEntry[] = body.qa_entries.map((e) => ({
+          qa_name: e.qa_name,
+          categories: Object.entries(e.hours_by_category ?? {})
+            .filter(([, h]) => (h as unknown as number) > 0)
+            .map(([catId, hours]) => ({
+              category_name: catIdToName[catId] ?? catId,
+              hours: hours as unknown as number,
+            })),
+        }));
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: userEmailPut,
+          action: "UPDATE",
+          entity_type: "TIMING",
+          entity_id: timing.id,
+          entity_name: `${taskName} ${timing.month}/${timing.year}`,
+          old_values: { qa_entries: oldQAEntries },
+          new_values: { qa_entries: newQAEntries },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
     return NextResponse.json(timing, { status: 200 });
   } catch (error) {
@@ -197,7 +265,56 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // Fetch timing info before deletion to capture entity details for audit
+    let timingSnapshot: {
+      task_id: string;
+      month: number;
+      year: number;
+    } | null = null;
+    try {
+      const existing = await timingService.getTimingById(id, token);
+      if (existing) {
+        timingSnapshot = {
+          task_id: existing.task_id,
+          month: existing.month,
+          year: existing.year,
+        };
+      }
+    } catch {
+      // Non-fatal: proceed with deletion even if snapshot fails
+    }
+
     await timingService.deleteTiming(id, token);
+
+    // Register audit log async (does not block the response)
+    const userEmailDel = user.email || "unknown";
+    after(async () => {
+      try {
+        const supabase = getAuthenticatedSupabase(token);
+        let entityName = id;
+        if (timingSnapshot) {
+          const { data: taskData } = await supabase
+            .from("tasks")
+            .select("name")
+            .eq("id", timingSnapshot.task_id)
+            .maybeSingle();
+          const taskName = taskData?.name ?? timingSnapshot.task_id;
+          entityName = `${taskName} ${timingSnapshot.month}/${timingSnapshot.year}`;
+        }
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: userEmailDel,
+          action: "DELETE",
+          entity_type: "TIMING",
+          entity_id: id,
+          entity_name: entityName,
+          old_values: timingSnapshot ?? undefined,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

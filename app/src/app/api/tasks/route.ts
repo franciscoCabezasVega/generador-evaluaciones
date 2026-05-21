@@ -27,13 +27,16 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CreateTaskInput;
 
     // Validaciones
-    if (
-      !body.name?.trim() ||
-      !body.task_link?.trim() ||
-      !body.product_type ||
-      !body.squads ||
-      body.squads.length === 0
-    ) {
+    if (!body.name?.trim() || !body.task_link?.trim() || !body.product_type) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    // Squad is required for all project types except "Automatización QA"
+    const squadRequired = body.project_type !== "Automatización QA";
+    if (squadRequired && (!body.squads || body.squads.length === 0)) {
       return NextResponse.json(
         { error: "Missing required fields or empty squads array" },
         { status: 400 },
@@ -97,8 +100,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar devoluciones en cada squad
-    for (const squadData of body.squads) {
+    // Validar devoluciones en cada squad (normalizar a [] si Automatización QA omite squads)
+    for (const squadData of body.squads ?? []) {
       if (
         !validateReturns(squadData.low_returns) ||
         !validateReturns(squadData.medium_returns) ||
@@ -129,7 +132,7 @@ export async function POST(request: NextRequest) {
       "/api/tasks",
       async (): Promise<{ status: number; body: unknown }> => {
         // Calcular scores para cada squad antes de enviar al RPC
-        const squadsWithScores = body.squads.map((sq) => ({
+        const squadsWithScores = (body.squads ?? []).map((sq) => ({
           squad: sq.squad,
           low_returns: sq.low_returns,
           medium_returns: sq.medium_returns,

@@ -85,7 +85,15 @@ export default function LoginPage() {
             data: { session },
           } = await getSessionViaManager();
           if (session?.user?.id) {
-            window.location.href = "/";
+            const redirectTo = searchParams.get("redirectTo");
+            // Guard against open-redirect: only allow relative paths
+            const safeRedirect =
+              redirectTo &&
+              redirectTo.startsWith("/") &&
+              !redirectTo.startsWith("//")
+                ? redirectTo
+                : "/";
+            window.location.href = safeRedirect;
             return;
           }
         } catch {
