@@ -409,7 +409,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={value}>
       {isLoggingOut && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-background"
           aria-live="assertive"
         >
           <div className="flex flex-col items-center gap-3">

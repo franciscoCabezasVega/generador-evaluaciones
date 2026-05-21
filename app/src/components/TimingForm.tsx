@@ -728,7 +728,7 @@ function TimingFormComponent(
       {formData.task_id && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-900">
               <Users size={18} className="text-blue-600" />
               QA Asignados
               {syncingQA && (
@@ -741,7 +741,7 @@ function TimingFormComponent(
                 type="button"
                 onClick={() => setQaDropdownOpen((v) => !v)}
                 disabled={syncingQA}
-                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={13} /> Añadir QA
               </button>
@@ -1388,7 +1388,7 @@ function ClickUpSyncInline({
             if (e.key === "Enter") void handleSync();
           }}
           placeholder="ID de subtarea ClickUp (ej: abc123xy)"
-          className="flex-1 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+          className="flex-1 rounded border border-violet-300 bg-input px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
           disabled={syncing}
         />
         <button

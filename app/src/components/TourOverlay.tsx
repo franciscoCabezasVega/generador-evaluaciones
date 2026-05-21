@@ -243,7 +243,7 @@ export default function TourOverlay() {
 
       {/* Content card */}
       <div
-        className="fixed bg-white rounded-lg shadow-2xl z-50 p-6 border border-gray-200 max-h-[500px] overflow-y-auto"
+        className="fixed bg-card rounded-lg shadow-2xl z-50 p-6 border border-gray-200 max-h-[500px] overflow-y-auto"
         style={{
           width: "450px",
           top: Math.max(10, Math.min(tooltipPos.top, window.innerHeight - 500)),

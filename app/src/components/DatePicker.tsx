@@ -272,7 +272,7 @@ export default function DatePicker({
 
       {/* Dropdown calendar */}
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-gray-200 bg-white shadow-xl">
+        <div className="absolute left-0 top-full z-50 mt-1 rounded-xl border border-gray-200 bg-card shadow-xl">
           <div className="p-3 w-56 select-none">
             {/* Month/Year navigation */}
             <div className="flex items-center justify-between mb-2 px-1">

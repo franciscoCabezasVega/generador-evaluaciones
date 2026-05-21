@@ -294,9 +294,12 @@ export async function syncTaskTimings(
 
       if (latestTiming) {
         // 4b. Find all QA entries for this (single) timing row only.
+        //     qa_name lives in the task_qa table (FK: task_qa_id) — not a
+        //     direct column of timing_qa_entries. Use the nested join syntax
+        //     that timingService uses (task_qa!inner(qa_name)).
         const { data: qaEntries, error: qaError } = await supabase
           .from("timing_qa_entries")
-          .select("id")
+          .select("id, task_qa_id, task_qa!inner(qa_name)")
           .eq("timing_id", latestTiming.id);
 
         if (qaError) {
@@ -306,10 +309,10 @@ export async function syncTaskTimings(
         }
 
         if (qaEntries && qaEntries.length > 0) {
-          // 4c. Resolve category IDs by slug.
+          // 4c. Resolve category IDs by slug (also capture name for audit display).
           const { data: categories, error: catError } = await supabase
             .from("timing_categories")
-            .select("id, slug")
+            .select("id, slug, name")
             .in("slug", slugs);
 
           if (catError) {
@@ -321,15 +324,59 @@ export async function syncTaskTimings(
           const categoryMap = new Map<string, string>(
             (categories ?? []).map((c) => [c.slug as string, c.id as string]),
           );
+          const categoryIdToName = new Map<string, string>(
+            (categories ?? []).map((c) => [c.id as string, c.name as string]),
+          );
 
           // 4d. Divide hours equally among all QA entries so no member gets
           //     the full total when multiple QAs share the task.
-          //     We first DELETE existing rows for these entries/categories so
-          //     the sync always reflects the latest ClickUp data (no stale
-          //     leftovers from previous syncs).
+          //     We first capture OLD state, then DELETE existing rows so
+          //     the sync always reflects the latest ClickUp data.
           const qaCount = qaEntries.length;
           const entryIds = qaEntries.map((e) => e.id as string);
           const categoryIds = Array.from(categoryMap.values());
+
+          // Capture old state BEFORE deleting (for audit diff)
+          type AuditQAEntry = {
+            qa_name: string;
+            categories: { category_name: string; hours: number }[];
+          };
+          // Helper: extract qa_name from the nested task_qa join result
+          // (same pattern as flattenQAEntries in timingService.ts)
+          const extractQaName = (qe: Record<string, unknown>): string => {
+            const raw = qe["task_qa"];
+            return (
+              (Array.isArray(raw)
+                ? (raw[0] as { qa_name?: string })?.qa_name
+                : (raw as { qa_name?: string } | undefined)?.qa_name) ?? ""
+            );
+          };
+          let oldQAEntries: AuditQAEntry[] = [];
+          if (categoryIds.length > 0) {
+            const { data: currentHours } = await supabase
+              .from("timing_qa_category_hours")
+              .select("timing_qa_entry_id, category_id, hours")
+              .in("timing_qa_entry_id", entryIds)
+              .in("category_id", categoryIds);
+
+            oldQAEntries = (qaEntries as Record<string, unknown>[])
+              .map((qe) => {
+                const cats = (currentHours ?? [])
+                  .filter(
+                    (h) =>
+                      h.timing_qa_entry_id === (qe.id as string) &&
+                      (h.hours as number) > 0,
+                  )
+                  .map((h) => ({
+                    category_name:
+                      categoryIdToName.get(h.category_id as string) ??
+                      (h.category_id as string),
+                    hours: h.hours as number,
+                  }));
+                return { qa_name: extractQaName(qe), categories: cats };
+              })
+              .filter((e) => e.categories.length > 0);
+          }
 
           if (categoryIds.length > 0) {
             const { error: deleteError } = await supabase
@@ -352,6 +399,21 @@ export async function syncTaskTimings(
                 hours: Math.round((hours / qaCount) * 100) / 100,
               })),
           );
+
+          // Build new QA entries for audit (mirrors rows being inserted)
+          const newQAEntries: AuditQAEntry[] = (
+            qaEntries as Record<string, unknown>[]
+          ).map((qe) => ({
+            qa_name: extractQaName(qe),
+            categories: Object.entries(categoryHours)
+              .filter(([slug]) => categoryMap.has(slug))
+              .map(([slug, hours]) => ({
+                category_name:
+                  (categories ?? []).find((c) => c.slug === slug)?.name ?? slug,
+                hours: Math.round((hours / qaCount) * 100) / 100,
+              }))
+              .filter((c) => c.hours > 0),
+          }));
 
           if (rows.length > 0) {
             const { error: upsertError } = await supabase
@@ -401,9 +463,10 @@ export async function syncTaskTimings(
                   entity_type: "TIMING",
                   entity_id: latestTiming.id,
                   entity_name: `${name} ${month}/${year}`,
+                  old_values: { qa_entries: oldQAEntries },
                   new_values: {
+                    qa_entries: newQAEntries,
                     synced_by: "clickup-cron",
-                    category_hours: categoryHours,
                   },
                   timestamp: new Date().toISOString(),
                 });

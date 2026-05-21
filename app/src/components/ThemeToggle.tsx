@@ -84,7 +84,7 @@ export function ThemeToggle() {
     document.documentElement.classList.add("theme-transition");
     window.setTimeout(() => {
       document.documentElement.classList.remove("theme-transition");
-    }, 300);
+    }, 500);
 
     setTheme(value);
     setOpen(false);

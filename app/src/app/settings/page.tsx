@@ -382,7 +382,7 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-card rounded-xl shadow overflow-hidden">
           {/* Tabs */}
           <div className="border-b bg-gray-50 px-6 pt-4">
             <nav className="flex gap-1" role="tablist">
@@ -394,8 +394,8 @@ export default function SettingsPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
                     activeTab === tab.id
-                      ? "text-blue-600 border-blue-600 bg-white"
-                      : "text-gray-500 border-transparent hover:text-gray-800 hover:bg-white/60"
+                      ? "text-blue-600 border-blue-600 bg-card"
+                      : "text-gray-500 border-transparent hover:text-gray-800 hover:bg-card/60"
                   }`}
                 >
                   {tab.label}

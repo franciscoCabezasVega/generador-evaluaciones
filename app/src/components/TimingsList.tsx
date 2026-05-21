@@ -64,7 +64,7 @@ export default function TimingsList({
             key={entry.id}
             className={`rounded-lg border p-4 transition-colors ${
               hasRegistered
-                ? "border-gray-200 bg-white"
+                ? "border-gray-200 bg-card"
                 : "border-dashed border-gray-300 bg-gray-50"
             }`}
           >

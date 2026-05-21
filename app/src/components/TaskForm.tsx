@@ -826,7 +826,7 @@ function TaskFormComponent(
                     >
                       Bajas
                     </label>
-                    <div className="flex items-center justify-center gap-1 bg-white border rounded-lg px-2 py-2">
+                    <div className="flex items-center justify-center gap-1 bg-card border rounded-lg px-2 py-2">
                       <button
                         type="button"
                         onClick={(e) =>
@@ -901,7 +901,7 @@ function TaskFormComponent(
                     >
                       Medias
                     </label>
-                    <div className="flex items-center justify-center gap-1 bg-white border rounded-lg px-2 py-2">
+                    <div className="flex items-center justify-center gap-1 bg-card border rounded-lg px-2 py-2">
                       <button
                         type="button"
                         onClick={(e) =>
@@ -976,7 +976,7 @@ function TaskFormComponent(
                     >
                       Graves
                     </label>
-                    <div className="flex items-center justify-center gap-1 bg-white border rounded-lg px-2 py-2">
+                    <div className="flex items-center justify-center gap-1 bg-card border rounded-lg px-2 py-2">
                       <button
                         type="button"
                         onClick={(e) =>
@@ -1079,7 +1079,7 @@ function TaskFormComponent(
                       handleUpdateSquadNotes(squadData.squad, e.target.value)
                     }
                     rows={3}
-                    className="w-full border rounded-lg px-4 py-2 bg-white"
+                    className="w-full border rounded-lg px-4 py-2 bg-input"
                     placeholder="Contexto adicional para la IA..."
                   />
                 </div>
@@ -1141,7 +1141,7 @@ function TaskFormComponent(
             id="qa-task-selector-button"
             type="button"
             onClick={() => setShowQASelector(!showQASelector)}
-            className="w-full flex items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left hover:border-blue-400 transition-colors"
+            className="w-full flex items-center justify-between rounded-lg border border-gray-300 bg-input px-4 py-2.5 text-left hover:border-blue-400 transition-colors"
             aria-expanded={showQASelector}
             aria-controls="qa-task-selector-options"
           >
@@ -1187,7 +1187,7 @@ function TaskFormComponent(
           {showQASelector && (
             <div
               id="qa-task-selector-options"
-              className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-64 overflow-y-auto"
+              className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-card shadow-lg max-h-64 overflow-y-auto"
               role="listbox"
             >
               {qaMembers.map((qa) => {
@@ -1274,7 +1274,7 @@ function TaskFormComponent(
               }}
             />
             <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg p-6 max-w-md shadow-lg">
+              <div className="bg-card rounded-lg p-6 max-w-md shadow-lg">
                 <h3 className="text-lg font-semibold mb-2">
                   Cambios sin guardar
                 </h3>

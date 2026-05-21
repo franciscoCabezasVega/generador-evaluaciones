@@ -121,7 +121,7 @@ export default function ReportDetailPage() {
         <div className="space-y-8">
           {/* Tareas por Squad */}
           {report.report_data?.tasksBySquad && (
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-card rounded-lg shadow p-6">
               <h2 className="text-xl font-semibold mb-6">Tareas por Squad</h2>
               {sortSquadsByNumber(
                 Object.keys(report.report_data.tasksBySquad),
@@ -271,7 +271,7 @@ export default function ReportDetailPage() {
             Object.values(report.report_data.deprecatedPendingBySquad).some(
               (tasks: unknown) => Array.isArray(tasks) && tasks.length > 0,
             ) && (
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-card rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold mb-6">
                   Tareas Deprecadas y Pendientes
                 </h2>
