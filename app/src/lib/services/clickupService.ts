@@ -294,9 +294,12 @@ export async function syncTaskTimings(
 
       if (latestTiming) {
         // 4b. Find all QA entries for this (single) timing row only.
+        //     qa_name lives in the task_qa table (FK: task_qa_id) — not a
+        //     direct column of timing_qa_entries. Use the nested join syntax
+        //     that timingService uses (task_qa!inner(qa_name)).
         const { data: qaEntries, error: qaError } = await supabase
           .from("timing_qa_entries")
-          .select("id, qa_name")
+          .select("id, task_qa_id, task_qa!inner(qa_name)")
           .eq("timing_id", latestTiming.id);
 
         if (qaError) {
@@ -338,6 +341,16 @@ export async function syncTaskTimings(
             qa_name: string;
             categories: { category_name: string; hours: number }[];
           };
+          // Helper: extract qa_name from the nested task_qa join result
+          // (same pattern as flattenQAEntries in timingService.ts)
+          const extractQaName = (qe: Record<string, unknown>): string => {
+            const raw = qe["task_qa"];
+            return (
+              (Array.isArray(raw)
+                ? (raw[0] as { qa_name?: string })?.qa_name
+                : (raw as { qa_name?: string } | undefined)?.qa_name) ?? ""
+            );
+          };
           let oldQAEntries: AuditQAEntry[] = [];
           if (categoryIds.length > 0) {
             const { data: currentHours } = await supabase
@@ -346,12 +359,13 @@ export async function syncTaskTimings(
               .in("timing_qa_entry_id", entryIds)
               .in("category_id", categoryIds);
 
-            oldQAEntries = qaEntries
+            oldQAEntries = (qaEntries as Record<string, unknown>[])
               .map((qe) => {
                 const cats = (currentHours ?? [])
                   .filter(
                     (h) =>
-                      h.timing_qa_entry_id === qe.id && (h.hours as number) > 0,
+                      h.timing_qa_entry_id === (qe.id as string) &&
+                      (h.hours as number) > 0,
                   )
                   .map((h) => ({
                     category_name:
@@ -359,7 +373,7 @@ export async function syncTaskTimings(
                       (h.category_id as string),
                     hours: h.hours as number,
                   }));
-                return { qa_name: qe.qa_name as string, categories: cats };
+                return { qa_name: extractQaName(qe), categories: cats };
               })
               .filter((e) => e.categories.length > 0);
           }
@@ -387,8 +401,10 @@ export async function syncTaskTimings(
           );
 
           // Build new QA entries for audit (mirrors rows being inserted)
-          const newQAEntries: AuditQAEntry[] = qaEntries.map((qe) => ({
-            qa_name: qe.qa_name as string,
+          const newQAEntries: AuditQAEntry[] = (
+            qaEntries as Record<string, unknown>[]
+          ).map((qe) => ({
+            qa_name: extractQaName(qe),
             categories: Object.entries(categoryHours)
               .filter(([slug]) => categoryMap.has(slug))
               .map(([slug, hours]) => ({
