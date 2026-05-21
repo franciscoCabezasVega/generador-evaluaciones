@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { CreateTaskTimingInput } from "@/lib/types";
 import { getUserFromRequest, getAuthenticatedSupabase } from "@/lib/auth";
@@ -173,6 +174,38 @@ export async function POST(request: NextRequest) {
     } catch (syncError) {
       console.error("Error syncing assigned_qa to task:", syncError);
     }
+
+    // Register audit log async (does not block the response)
+    const userEmail = user.email || "unknown";
+    const timingId = timing?.id;
+    after(async () => {
+      try {
+        const supabase = getAuthenticatedSupabase(token);
+        const { data: taskData } = await supabase
+          .from("tasks")
+          .select("name")
+          .eq("id", body.task_id)
+          .maybeSingle();
+        const taskName = taskData?.name ?? body.task_id;
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: userEmail,
+          action: "CREATE",
+          entity_type: "TIMING",
+          entity_id: timingId,
+          entity_name: `${taskName} ${body.month}/${body.year}`,
+          new_values: {
+            task_id: body.task_id,
+            month: body.month,
+            year: body.year,
+            qa_entries: body.qa_entries,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
     return NextResponse.json(timing, { status: 201 });
   } catch (error) {

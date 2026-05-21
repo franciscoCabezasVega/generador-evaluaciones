@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskTimingInput } from "@/lib/types";
 import { getUserFromRequest, getAuthenticatedSupabase } from "@/lib/auth";
@@ -164,6 +165,32 @@ export async function PUT(
       console.error("Error syncing assigned_qa to task:", syncError);
     }
 
+    // Register audit log async (does not block the response)
+    const userEmailPut = user.email || "unknown";
+    after(async () => {
+      try {
+        const supabase = getAuthenticatedSupabase(token);
+        const { data: taskData } = await supabase
+          .from("tasks")
+          .select("name")
+          .eq("id", timing.task_id)
+          .maybeSingle();
+        const taskName = taskData?.name ?? timing.task_id;
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: userEmailPut,
+          action: "UPDATE",
+          entity_type: "TIMING",
+          entity_id: timing.id,
+          entity_name: `${taskName} ${timing.month}/${timing.year}`,
+          new_values: { qa_entries: body.qa_entries },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
+
     return NextResponse.json(timing, { status: 200 });
   } catch (error) {
     console.error("Error in PUT /api/timings/[id]:", error);
@@ -197,7 +224,56 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // Fetch timing info before deletion to capture entity details for audit
+    let timingSnapshot: {
+      task_id: string;
+      month: number;
+      year: number;
+    } | null = null;
+    try {
+      const existing = await timingService.getTimingById(id, token);
+      if (existing) {
+        timingSnapshot = {
+          task_id: existing.task_id,
+          month: existing.month,
+          year: existing.year,
+        };
+      }
+    } catch {
+      // Non-fatal: proceed with deletion even if snapshot fails
+    }
+
     await timingService.deleteTiming(id, token);
+
+    // Register audit log async (does not block the response)
+    const userEmailDel = user.email || "unknown";
+    after(async () => {
+      try {
+        const supabase = getAuthenticatedSupabase(token);
+        let entityName = id;
+        if (timingSnapshot) {
+          const { data: taskData } = await supabase
+            .from("tasks")
+            .select("name")
+            .eq("id", timingSnapshot.task_id)
+            .maybeSingle();
+          const taskName = taskData?.name ?? timingSnapshot.task_id;
+          entityName = `${taskName} ${timingSnapshot.month}/${timingSnapshot.year}`;
+        }
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: userEmailDel,
+          action: "DELETE",
+          entity_type: "TIMING",
+          entity_id: id,
+          entity_name: entityName,
+          old_values: timingSnapshot ?? undefined,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (auditError) {
+        console.error("Error logging audit action:", auditError);
+      }
+    });
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

@@ -446,12 +446,14 @@ function TaskFormComponent(
   );
 
   // Validar si el formulario es válido
+  const isSquadRequired = formData.project_type !== "Automatización QA";
+
   const isFormValid = () => {
     const hasNoErrors = !errors.name && !errors.task_link;
     return (
       formData.name.trim() !== "" &&
       formData.task_link.trim() !== "" &&
-      formData.squads.length > 0 &&
+      (!isSquadRequired || formData.squads.length > 0) &&
       formData.assigned_qa.length > 0 &&
       formData.effort_score_date !== "" &&
       !!formData.tshirt_size &&
@@ -474,7 +476,7 @@ function TaskFormComponent(
       } else if (!isValidUrl(formData.task_link)) {
         newErrors.task_link = "El link debe ser una URL válida";
       }
-      if (formData.squads.length === 0) {
+      if (isSquadRequired && formData.squads.length === 0) {
         newErrors.squads = "Debes agregar al menos un squad";
       }
       if (formData.assigned_qa.length === 0) {
@@ -529,7 +531,7 @@ function TaskFormComponent(
         setLocalSubmitting(false);
       }
     },
-    [formData, onSubmit],
+    [formData, isSquadRequired, onSubmit],
   );
 
   // Computed at render-time so the list always includes the current year,
@@ -785,7 +787,9 @@ function TaskFormComponent(
         data-tour="task-form-squads"
       >
         <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-lg">Squads *</h3>
+          <h3 className="font-semibold text-lg">
+            Squads{isSquadRequired ? " *" : ""}
+          </h3>
           {errors.squads && (
             <p className="text-red-600 text-sm">{errors.squads}</p>
           )}

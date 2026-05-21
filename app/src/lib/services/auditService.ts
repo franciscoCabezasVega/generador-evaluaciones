@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { AuditLog, CreateAuditLogInput } from "@/lib/types";
+import { AuditEntityType, AuditLog, CreateAuditLogInput } from "@/lib/types";
 
 export const auditService = {
   /**
@@ -40,7 +40,7 @@ export const auditService = {
    * Obtiene el historial de auditoría con filtros
    */
   async getAuditLogs(filters: {
-    entity_type?: "TASK" | "REPORT";
+    entity_type?: AuditEntityType;
     entity_id?: string;
     user_id?: string;
     action?: "CREATE" | "UPDATE" | "DELETE";

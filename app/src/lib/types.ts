@@ -192,7 +192,7 @@ export interface Role {
 
 // Audit Trail Types
 export type AuditAction = "CREATE" | "UPDATE" | "DELETE";
-export type AuditEntityType = "TASK" | "REPORT";
+export type AuditEntityType = "TASK" | "REPORT" | "TIMING";
 
 // Audit log values with known fields typed
 export interface AuditLogValues {

@@ -27,13 +27,16 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CreateTaskInput;
 
     // Validaciones
-    if (
-      !body.name?.trim() ||
-      !body.task_link?.trim() ||
-      !body.product_type ||
-      !body.squads ||
-      body.squads.length === 0
-    ) {
+    if (!body.name?.trim() || !body.task_link?.trim() || !body.product_type) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    // Squad is required for all project types except "Automatización QA"
+    const squadRequired = body.project_type !== "Automatización QA";
+    if (squadRequired && (!body.squads || body.squads.length === 0)) {
       return NextResponse.json(
         { error: "Missing required fields or empty squads array" },
         { status: 400 },
