@@ -186,6 +186,7 @@ export default function AuditTrailPage() {
       assigned_qa: "QA Asignados",
       tshirt_size: "Complejidad",
       effort_score_date: "Fecha Esfuerzo",
+      task_id: "ID de Tarea",
       // Puntuaciones
       calculated_score: "Nota Calculada",
       score: "Nota",
@@ -1221,6 +1222,148 @@ export default function AuditTrailPage() {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — CREATE */}
+                {selectedLog.action === "CREATE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.new_values && (
+                    <div className="space-y-4">
+                      <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-lg p-4 text-sm space-y-2">
+                        {(["month", "year", "task_id"] as const)
+                          .filter(
+                            (k) => selectedLog.new_values?.[k] !== undefined,
+                          )
+                          .map((key) => (
+                            <div
+                              key={key}
+                              className="flex justify-between gap-4"
+                            >
+                              <span className="text-gray-700 font-medium">
+                                {getFieldLabel(key)}:
+                              </span>
+                              <span className="text-gray-900 text-right font-mono">
+                                {cleanJsonValue(
+                                  selectedLog.new_values![key],
+                                  key,
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                      {Array.isArray(selectedLog.new_values.qa_entries) && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                            QA Entries Creados
+                          </h4>
+                          <div className="space-y-2">
+                            {(
+                              selectedLog.new_values.qa_entries as {
+                                qa_name: string;
+                                hours_by_category: Record<string, number>;
+                              }[]
+                            ).map((entry, i) => {
+                              const total = Object.values(
+                                entry.hours_by_category ?? {},
+                              ).reduce((s, h) => s + (h as number), 0);
+                              return (
+                                <div
+                                  key={i}
+                                  className="bg-emerald-950/20 border border-emerald-800/30 rounded-lg px-4 py-3 text-sm flex justify-between"
+                                >
+                                  <span className="font-medium text-gray-900">
+                                    {entry.qa_name}
+                                  </span>
+                                  <span className="text-gray-600 font-mono">
+                                    {total.toFixed(2)} h
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — UPDATE */}
+                {selectedLog.action === "UPDATE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.new_values && (
+                    <div className="space-y-4">
+                      {Array.isArray(selectedLog.new_values.qa_entries) && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                            QA Entries Actualizados
+                          </h4>
+                          <div className="space-y-2">
+                            {(
+                              selectedLog.new_values.qa_entries as {
+                                qa_name: string;
+                                hours_by_category: Record<string, number>;
+                              }[]
+                            ).map((entry, i) => {
+                              const total = Object.values(
+                                entry.hours_by_category ?? {},
+                              ).reduce((s, h) => s + (h as number), 0);
+                              return (
+                                <div
+                                  key={i}
+                                  className="bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-sm flex justify-between"
+                                >
+                                  <span className="font-medium text-gray-900">
+                                    {entry.qa_name}
+                                  </span>
+                                  <span className="text-gray-600 font-mono">
+                                    {total.toFixed(2)} h
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {selectedLog.new_values.synced_by === "clickup-cron" && (
+                        <div className="bg-amber-950/20 border border-amber-700/40 rounded-lg p-4 text-sm">
+                          <p className="text-amber-300 font-medium">
+                            Sincronización automática vía ClickUp Cron
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Vista TIMING — DELETE */}
+                {selectedLog.action === "DELETE" &&
+                  selectedLog.entity_type === "TIMING" &&
+                  selectedLog.old_values && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                        Timing Eliminado
+                      </h4>
+                      <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-4 text-sm space-y-2">
+                        {(["month", "year", "task_id"] as const)
+                          .filter(
+                            (k) => selectedLog.old_values?.[k] !== undefined,
+                          )
+                          .map((key) => (
+                            <div
+                              key={key}
+                              className="flex justify-between gap-4"
+                            >
+                              <span className="text-gray-700 font-medium">
+                                {getFieldLabel(key)}:
+                              </span>
+                              <span className="text-gray-900 text-right font-mono">
+                                {cleanJsonValue(
+                                  selectedLog.old_values![key],
+                                  key,
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   )}
               </div>
