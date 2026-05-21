@@ -136,7 +136,7 @@ describe("useCachedFetch – visibilitychange integration", () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
-  it("does NOT call fetchFn when tab becomes visible and cache is still fresh", async () => {
+  it("calls fetchFn even when tab becomes visible and cache is still fresh", async () => {
     const STALE_TIME = 60_000;
     const cacheKey = `vis-fresh-${Math.random()}`;
     const fetchFn = jest.fn().mockResolvedValue(["data"]);
@@ -157,14 +157,14 @@ describe("useCachedFetch – visibilitychange integration", () => {
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
-    // Cache is still fresh — tab visibility change should be a no-op
+    // Cache is still fresh — hook should still trigger a background refetch on visibility
     await act(async () => {
       setVisibilityState("visible");
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await act(async () => {});
 
-    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
   it("does NOT call fetchFn when tab goes to background (hidden)", async () => {

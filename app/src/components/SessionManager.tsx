@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useMutationQueue } from "@/contexts/MutationQueueContext";
 import { useSessionTimeoutManager } from "@/hooks/useSessionTimeoutManager";
 import { SessionExpirationModal } from "./SessionExpirationModal";
 
@@ -12,8 +13,13 @@ import { SessionExpirationModal } from "./SessionExpirationModal";
  */
 export function SessionManager() {
   const { user } = useAuth();
+  const { queueStatus } = useMutationQueue();
   const { isWarningVisible, timeRemaining, handleContinue, handleExpire } =
-    useSessionTimeoutManager({ enabled: !!user?.id });
+    useSessionTimeoutManager({
+      enabled: !!user?.id,
+      hasPendingMutations: () =>
+        queueStatus.pending > 0 || queueStatus.processing,
+    });
 
   // No renderizar nada si no hay usuario
   if (!user?.id) {

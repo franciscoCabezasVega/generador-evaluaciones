@@ -57,12 +57,20 @@ interface TaskInfoRow {
 
 async function getClient(token?: string) {
   if (!token) return supabase;
-  const { createClient } = await import("@supabase/supabase-js");
+  const { createClient, processLock } = await import("@supabase/supabase-js");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) return supabase;
   return createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { authorization: `Bearer ${token}` } },
+    auth: {
+      // Este cliente es stateless (solo ejecuta queries con un token dado);
+      // no necesita gestionar sesión en localStorage, lo que elimina la
+      // contienda con el singleton de supabase.ts por el mismo lock.
+      lock: processLock,
+      persistSession: false,
+      autoRefreshToken: false,
+    },
   });
 }
 
