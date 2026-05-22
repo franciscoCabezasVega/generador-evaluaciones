@@ -380,10 +380,10 @@ export default function TimingsPage() {
     });
   };
 
-  // Handle editar timing — siempre fetchea datos frescos del servidor para
-  // evitar que el form se abra con valores stale del cache del listado.
-  // Esto garantiza que el usuario vea (y eventualmente guarde) el estado
-  // real de la DB, incluso si el cron actualizó el timing mientras tanto.
+  // Handle editar timing — intenta fetchear datos frescos del servidor para
+  // reducir la chance de abrir el form con valores stale del listado.
+  // Si el GET falla o responde no-ok, abre con los datos disponibles en la
+  // lista como fallback para no bloquear la edición.
   const handleEdit = async (timing: TaskTiming) => {
     setEditLoading(true);
     try {
