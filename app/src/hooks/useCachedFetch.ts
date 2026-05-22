@@ -86,6 +86,25 @@ function getJitterDelay(): number {
   return Math.random() * 100;
 }
 
+/**
+ * Delay con jitter para reintentos automáticos tras error transitorio.
+ * El jitter desincroniza los retries cuando múltiples hooks montan
+ * simultáneamente (/timings tiene 6 hooks, /settings tiene 7).
+ *
+ * intento 0: 0–100ms (casi inmediato)
+ * intento 1: 200–400ms (~300ms promedio)
+ * default  : 200–400ms (fallback)
+ */
+const RETRY_JITTER_RANGES_MS: [number, number][] = [
+  [0, 100],
+  [200, 400],
+];
+
+function getRetryDelay(attempt: number): number {
+  const [min, max] = RETRY_JITTER_RANGES_MS[attempt] ?? [200, 400];
+  return min + Math.random() * (max - min);
+}
+
 function buildFilterKey(filters: Record<string, unknown>): string {
   return Object.keys(filters)
     .sort()
@@ -249,15 +268,16 @@ export function useCachedFetch<T>({
           return;
         }
 
-        // ── Auto-retry silencioso ──────────────────────────────────────────────
+        // ── Auto-retry silencioso con jitter ──────────────────────────────────
         // Si el error es transitorio (timeout, red, 5xx) y aún no hemos agotado
-        // el presupuesto de reintentos, esperar 8s y volver a intentar en background.
-        // El usuario ve datos stale (si los hay) con un indicador sutil de "reconectando".
-        // Si el auto-retry también falla, entonces sí mostramos el error duro.
-        const MAX_AUTO_RETRIES = 1;
+        // el presupuesto, reintentamos con delay aleatorio para evitar
+        // "thundering herd" cuando varios hooks montan al mismo tiempo.
+        // intento 1: 0–100ms | intento 2: 200–400ms | luego error duro.
+        const MAX_AUTO_RETRIES = 2;
         if (isRetryableDataError(err) && autoRetryAttempt < MAX_AUTO_RETRIES) {
+          const delay = getRetryDelay(autoRetryAttempt);
           console.warn(
-            `[useCachedFetch:${cacheKey}] Error transitorio (intento ${autoRetryAttempt + 1}/${MAX_AUTO_RETRIES + 1}), auto-retry en 8s...`,
+            `[useCachedFetch:${cacheKey}] Error transitorio (intento ${autoRetryAttempt + 1}/${MAX_AUTO_RETRIES}), auto-retry en ${Math.round(delay)}ms...`,
             err,
           );
           setIsReconnecting(true);
@@ -267,7 +287,7 @@ export function useCachedFetch<T>({
             const retryController = new AbortController();
             abortRef.current = retryController;
             void doFetch(true, retryController.signal, autoRetryAttempt + 1);
-          }, 8_000);
+          }, delay);
           return;
         }
 
@@ -374,20 +394,37 @@ export function useCachedFetch<T>({
     });
   }, [cacheKey, enabled, doFetch]);
 
-  // Revalidar siempre al volver a la pestaña, sin importar el estado del caché
+  // Revalidar al volver a la pestaña, al recuperar foco o al reconectar a la red.
+  // Guard: si hay un auto-retry programado, ignorar el evento para no acumular
+  // fetches paralelos.
   useEffect(() => {
     if (!enabled) return;
-    const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
+
+    const revalidate = (_reason?: string) => {
+      if (autoRetryTimerRef.current !== null) return; // ya hay retry programado
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       doFetch(true, controller.signal);
     };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible")
+        revalidate("visibilitychange");
+    };
+    const handleFocus = () => revalidate("focus");
+    const handleOnline = () => revalidate("online");
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [enabled, doFetch]);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [enabled, doFetch, cacheKey]);
 
   const refresh = useCallback(() => {
     // Cancelar cualquier auto-retry pendiente antes de iniciar fetch manual

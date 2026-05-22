@@ -43,6 +43,7 @@ import { RefreshCw, BarChart3, List, Users } from "lucide-react";
 
 export default function TimingsPage() {
   const [submitting, setSubmitting] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const { products } = useCatalogData();
   const [showForm, setShowForm] = useState(false);
   const [editingTiming, setEditingTiming] = useState<TaskTiming | null>(null);
@@ -66,6 +67,21 @@ export default function TimingsPage() {
   const [viewMode, setViewMode] = useState<"list" | "metrics" | "qa-metrics">(
     "list",
   );
+
+  // Invalidar la caché de la vista que se activa para forzar datos frescos.
+  // Evita que el usuario vea datos stale al cambiar de tab.
+  // Guard de primer render: viewMode inicia en "list" pero no queremos borrar
+  // el caché en el mount inicial — solo en cambios explícitos del usuario.
+  const viewModeInitialized = useRef(false);
+  useEffect(() => {
+    if (!viewModeInitialized.current) {
+      viewModeInitialized.current = true;
+      return;
+    }
+    if (viewMode === "metrics") invalidateCache("timings-metrics");
+    if (viewMode === "qa-metrics") invalidateCache("timings-qa-metrics");
+    if (viewMode === "list") invalidateCache("timings");
+  }, [viewMode]);
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -364,9 +380,22 @@ export default function TimingsPage() {
     });
   };
 
-  // Handle editar timing
-  const handleEdit = (timing: TaskTiming) => {
-    setEditingTiming(timing);
+  // Handle editar timing — intenta fetchear datos frescos del servidor para
+  // reducir la chance de abrir el form con valores stale del listado.
+  // Si el GET falla o responde no-ok, abre con los datos disponibles en la
+  // lista como fallback para no bloquear la edición.
+  const handleEdit = async (timing: TaskTiming) => {
+    setEditLoading(true);
+    try {
+      const response = await safeFetch(`/api/timings/${timing.id}`);
+      const fresh: TaskTiming = response.ok ? await response.json() : timing;
+      setEditingTiming(fresh);
+    } catch {
+      // Fallback: abrir con datos del listado si el fetch falla
+      setEditingTiming(timing);
+    } finally {
+      setEditLoading(false);
+    }
     setRegisteringTask(null);
     setShowForm(true);
   };
@@ -549,6 +578,7 @@ export default function TimingsPage() {
             <TimingsList
               entries={entries}
               loading={loading || tasksLoading}
+              editLoading={editLoading}
               onEdit={handleEdit}
               onDelete={(id) => setDeleteConfirm(id)}
               onRegister={handleRegisterTime}
