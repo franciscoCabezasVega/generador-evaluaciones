@@ -658,6 +658,8 @@ export default function CatalogManager({
                                 : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
                             }`}
                             title={ISO_DAY_LABELS[day]}
+                            aria-label={`Seleccionar ${ISO_DAY_LABELS[day]}`}
+                            aria-pressed={selected}
                           >
                             {ISO_DAY_LABELS[day]}
                           </button>
@@ -703,6 +705,7 @@ export default function CatalogManager({
                                 }
                                 className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                                 title="Eliminar período"
+                                aria-label="Eliminar período OOO"
                               >
                                 <X size={14} />
                               </button>

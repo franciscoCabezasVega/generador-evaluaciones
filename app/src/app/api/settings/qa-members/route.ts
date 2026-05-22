@@ -84,7 +84,8 @@ export async function POST(request: NextRequest) {
   const calendarFields: Record<string, unknown> = {};
 
   if (body.country_code !== undefined) {
-    // Normalizar string vacío a null (usuario limpió el campo)
+    // En POST: string vacío = "no provisto" → omitir para que aplique DEFAULT 'CO'.
+    // (null explícito sobrescribiría el DEFAULT de BD; solo PATCH usa null para limpiar)
     const cc =
       typeof body.country_code === "string" && !body.country_code.trim()
         ? null
@@ -98,15 +99,18 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    calendarFields.country_code = cc;
+    // Solo asignar si hay valor real; omitir cuando vacío → BD usa DEFAULT 'CO'
+    if (cc !== null) calendarFields.country_code = cc;
   }
 
   // city: valor libre (ej: "Cartagena", "Monterrey")
   if (body.city !== undefined) {
-    calendarFields.city =
+    const cityVal =
       typeof body.city === "string" && body.city.trim()
         ? body.city.trim()
         : null;
+    // Solo asignar si hay valor real; omitir cuando vacío → BD usa DEFAULT 'Bogotá'
+    if (cityVal !== null) calendarFields.city = cityVal;
   }
 
   // timezone: derivada automáticamente del país + ciudad
@@ -117,16 +121,21 @@ export async function POST(request: NextRequest) {
     calendarFields.timezone = deriveTimezone(finalCountryCode, finalCity);
   }
 
-  if (body.work_start_time !== undefined)
-    calendarFields.work_start_time =
+  // Solo asignar si hay valor real; omitir cuando vacío → BD usa DEFAULT '09:00'/'18:00'
+  if (body.work_start_time !== undefined) {
+    const wst =
       typeof body.work_start_time === "string" && body.work_start_time.trim()
         ? body.work_start_time.trim()
         : null;
-  if (body.work_end_time !== undefined)
-    calendarFields.work_end_time =
+    if (wst !== null) calendarFields.work_start_time = wst;
+  }
+  if (body.work_end_time !== undefined) {
+    const wet =
       typeof body.work_end_time === "string" && body.work_end_time.trim()
         ? body.work_end_time.trim()
         : null;
+    if (wet !== null) calendarFields.work_end_time = wet;
+  }
 
   if (body.lunch_hours !== undefined) {
     const lh = Number(body.lunch_hours);

@@ -200,6 +200,9 @@ export function isTerminalStatus(status: string): boolean {
 function extractTaskQAWindow(
   statusHistory: ClickUpTimeInStatus[],
   taskMeta: { year: number; month: number },
+  // Estado actual reportado por ClickUp — más fiable que orderindex (que es
+  // la posición de la columna en el workflow, no el orden cronológico).
+  currentStatus?: ClickUpTimeInStatus,
 ): TaskQAWindow | undefined {
   const monthStart = new Date(taskMeta.year, taskMeta.month - 1, 1);
   const monthEnd = endOfMonth(monthStart);
@@ -226,10 +229,18 @@ function extractTaskQAWindow(
         : fromRaw;
 
   // ── to: cierre de tarea o hoy ─────────────────────────────────────────────
-  const latestEntry = statusHistory.reduce(
-    (prev, curr) => (curr.orderindex > prev.orderindex ? curr : prev),
-    statusHistory[0],
-  );
+  // Preferir current_status (enviado por ClickUp como estado definitivo).
+  // Fallback: el entry con el mayor `since` ms — NO orderindex, que es la
+  // posición de columna del workflow y no el orden temporal de transiciones.
+  const latestEntry =
+    currentStatus ??
+    statusHistory.reduce(
+      (prev, curr) =>
+        Number(curr.total_time.since) > Number(prev.total_time.since)
+          ? curr
+          : prev,
+      statusHistory[0],
+    );
 
   let toRaw: Date;
   if (latestEntry && isTerminalStatus(latestEntry.status)) {
@@ -351,7 +362,11 @@ export async function syncTaskTimings(
       // Factory: construir la ventana [from, to] que la tarea estuvo en QA.
       // Usada para pro-ratear el factor calendario al período real de trabajo.
       const qaWindow = taskMeta
-        ? extractTaskQAWindow(timeData.status_history ?? [], taskMeta)
+        ? extractTaskQAWindow(
+            timeData.status_history ?? [],
+            taskMeta,
+            timeData.current_status,
+          )
         : undefined;
 
       let latestTiming: { id: string } | null = null;

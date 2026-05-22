@@ -72,10 +72,20 @@ export async function POST(request: NextRequest) {
   }
 
   // 2. Obtener datos frescos desde Nager.Date
+  // Timeout de 10 s: en serverless un upstream colgado consumiría todo el budget.
   const nagerRes = await fetch(
     `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`,
-    { headers: { Accept: "application/json" } },
-  );
+    {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    },
+  ).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw Object.assign(
+      new Error(`Nager.Date timeout o error de red: ${msg}`),
+      { status: 504 },
+    );
+  });
 
   if (!nagerRes.ok) {
     if (nagerRes.status === 404) {
