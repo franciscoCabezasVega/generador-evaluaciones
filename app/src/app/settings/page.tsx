@@ -39,6 +39,52 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "integrations", label: "Integraciones" },
 ];
 
+// ─── Datos de países, ciudades y zonas horarias ──────────────────────────────
+
+const COUNTRY_CITY_MAP: Record<
+  string,
+  {
+    label: string;
+    timezone: string;
+    cities: { value: string; label: string }[];
+    defaultCity: string;
+  }
+> = {
+  CO: {
+    label: "Colombia",
+    timezone: "America/Bogota",
+    cities: [
+      { value: "Cartagena", label: "Cartagena" },
+      { value: "Bogotá", label: "Bogotá" },
+      { value: "Medellín", label: "Medellín" },
+      { value: "Cali", label: "Cali" },
+      { value: "Barranquilla", label: "Barranquilla" },
+    ],
+    defaultCity: "Cartagena",
+  },
+  EC: {
+    label: "Ecuador",
+    timezone: "America/Guayaquil",
+    cities: [
+      { value: "Quito", label: "Quito" },
+      { value: "Cuenca", label: "Cuenca" },
+      { value: "Guayaquil", label: "Guayaquil" },
+    ],
+    defaultCity: "Quito",
+  },
+  MX: {
+    label: "México",
+    timezone: "America/Mexico_City",
+    cities: [
+      { value: "Monterrey", label: "Monterrey" },
+      { value: "Ciudad de México", label: "Ciudad de México" },
+      { value: "Guadalajara", label: "Guadalajara" },
+      { value: "Cancún", label: "Cancún" },
+    ],
+    defaultCity: "Monterrey",
+  },
+};
+
 // ─── Definición de campos por entidad ────────────────────────────────────────
 
 const PRODUCT_FIELDS: FieldDef[] = [
@@ -101,12 +147,98 @@ const QA_FIELDS: FieldDef[] = [
     required: true,
   },
   {
-    key: "clickup_user_id",
-    label: "ClickUp User ID",
-    type: "text",
-    placeholder: "Ej: 12345678 (opcional)",
+    key: "country_code",
+    label: "País",
+    type: "select",
+    options: [
+      { value: "CO", label: "🇨🇴 Colombia" },
+      { value: "EC", label: "🇪🇨 Ecuador" },
+      { value: "MX", label: "🇲🇽 México" },
+    ],
     description:
-      "ID numérico del miembro en ClickUp. Requerido para sincronizar tiempos automáticamente.",
+      "Determina los festivos que se registrarán como OOO automáticamente.",
+    required: false,
+    cascadeOnChange: (newCC) => {
+      const countryData = COUNTRY_CITY_MAP[newCC as string];
+      if (!countryData) return { city: "" };
+      return { city: countryData.defaultCity };
+    },
+  },
+  {
+    key: "city",
+    label: "Ciudad",
+    type: "select",
+    optionsFn: (formValues) => {
+      const cc = formValues.country_code as string;
+      return COUNTRY_CITY_MAP[cc]?.cities ?? [];
+    },
+    description: "Ciudad para festivos locales.",
+    required: false,
+  },
+  {
+    key: "work_start_time",
+    label: "Inicio de jornada",
+    type: "time",
+    required: false,
+  },
+  {
+    key: "work_end_time",
+    label: "Fin de jornada",
+    type: "time",
+    required: false,
+  },
+  {
+    key: "lunch_hours",
+    label: "Horas de almuerzo",
+    type: "number",
+    min: 0,
+    description: "Horas descontadas por almuerzo (ej: 1).",
+    required: false,
+  },
+  {
+    key: "work_days",
+    label: "Días laborables",
+    type: "multi-day",
+    description: "Selecciona los días de la semana que trabaja este QA.",
+    required: false,
+  },
+  {
+    key: "is_ooo",
+    label: "Actualmente fuera de oficina",
+    type: "toggle",
+    required: false,
+  },
+  {
+    key: "oo_periods",
+    label: "Períodos OOO",
+    type: "date-range-list",
+    description:
+      "Festivos nacionales incluidos automáticamente. Agrega vacaciones o licencias extra.",
+    required: false,
+    subApiPath: (id) => `/api/settings/qa-members/${id}/oo`,
+  },
+];
+
+const QA_SECTIONS = [
+  {
+    title: "Identificación",
+    fieldKeys: ["name"],
+  },
+  {
+    title: "Calendario laboral",
+    fieldKeys: [
+      "country_code",
+      "city",
+      "work_start_time",
+      "work_end_time",
+      "lunch_hours",
+      "work_days",
+      "is_ooo",
+    ],
+  },
+  {
+    title: "Ausencias programadas (OOO)",
+    fieldKeys: ["oo_periods"],
   },
 ];
 
@@ -300,6 +432,43 @@ export default function SettingsPage() {
     },
   ];
 
+  const qaExtraColumns = [
+    {
+      header: "País",
+      render: (item: CatalogItem) => {
+        const cc = item.country_code as string | null;
+        if (!cc) return <span className="text-gray-400 text-xs">—</span>;
+        const flag =
+          cc === "CO" ? "🇨🇴" : cc === "EC" ? "🇪🇨" : cc === "MX" ? "🇲🇽" : "";
+        const label = COUNTRY_CITY_MAP[cc]?.label ?? cc;
+        return (
+          <span className="text-xs text-gray-700">
+            {flag} {label}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Ciudad",
+      render: (item: CatalogItem) => (
+        <span className="text-xs text-gray-600">
+          {(item.city as string | null) ?? "—"}
+        </span>
+      ),
+    },
+    {
+      header: "OOO",
+      render: (item: CatalogItem) =>
+        item.is_ooo ? (
+          <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+            Fuera
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        ),
+    },
+  ];
+
   const timingCategoryExtraColumns = [
     {
       header: "Color",
@@ -471,7 +640,9 @@ export default function SettingsPage() {
                     items={qaMembers}
                     fields={QA_FIELDS}
                     onRefresh={handleRefresh}
+                    extraColumns={qaExtraColumns}
                     itemLabel="miembro QA"
+                    sections={QA_SECTIONS}
                   />
                 )}
                 {activeTab === "timing-categories" && (

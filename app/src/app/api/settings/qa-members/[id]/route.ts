@@ -1,5 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth";
+import { syncHolidaysAsOOO } from "@/lib/services/workCalendarService";
+
+const COUNTRY_CODE_RE = /^[A-Z]{2}$/;
+
+// Timezone derivada del país + ciudad
+const TIMEZONE_MAP: Record<string, Record<string, string>> = {
+  CO: { default: "America/Bogota" },
+  EC: { default: "America/Guayaquil" },
+  MX: {
+    default: "America/Mexico_City",
+    Monterrey: "America/Monterrey",
+    Cancún: "America/Cancun",
+  },
+};
+function deriveTimezone(country_code: string, city?: string | null): string {
+  const map = TIMEZONE_MAP[country_code];
+  if (!map) return "UTC";
+  if (city && map[city]) return map[city];
+  return map.default;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -56,6 +76,123 @@ export async function PATCH(
         : null;
   }
 
+  // ── Campos de calendario laboral ─────────────────────────────────────────
+
+  if (body.country_code !== undefined) {
+    // Normalizar string vacío a null (usuario limpió el campo)
+    const cc =
+      typeof body.country_code === "string" && !body.country_code.trim()
+        ? null
+        : body.country_code;
+    if (cc !== null && !COUNTRY_CODE_RE.test(String(cc))) {
+      return NextResponse.json(
+        {
+          error:
+            "country_code debe ser un código ISO 3166-1 de 2 letras mayúsculas (ej: CO)",
+        },
+        { status: 400 },
+      );
+    }
+    updates.country_code = cc;
+  }
+
+  // city: texto libre (ej: "Cartagena", "Monterrey")
+  if (body.city !== undefined) {
+    updates.city =
+      typeof body.city === "string" && body.city.trim()
+        ? body.city.trim()
+        : null;
+  }
+
+  // timezone: derivada automáticamente del país + ciudad
+  const finalCountryCode = (updates.country_code ?? body.country_code) as
+    | string
+    | null;
+  const finalCity = (updates.city ?? body.city) as string | null;
+  if (finalCountryCode) {
+    updates.timezone = deriveTimezone(finalCountryCode, finalCity);
+  } else if (updates.country_code !== undefined) {
+    // country_code fue explícitamente limpiado → limpiar timezone también
+    updates.timezone = null;
+  }
+
+  const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
+  if (body.work_start_time !== undefined) {
+    if (
+      typeof body.work_start_time === "string" &&
+      body.work_start_time.trim()
+    ) {
+      if (!TIME_RE.test(body.work_start_time.trim())) {
+        return NextResponse.json(
+          { error: "work_start_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      updates.work_start_time = body.work_start_time.trim();
+    } else {
+      updates.work_start_time = null;
+    }
+  }
+  if (body.work_end_time !== undefined) {
+    if (typeof body.work_end_time === "string" && body.work_end_time.trim()) {
+      if (!TIME_RE.test(body.work_end_time.trim())) {
+        return NextResponse.json(
+          { error: "work_end_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      updates.work_end_time = body.work_end_time.trim();
+    } else {
+      updates.work_end_time = null;
+    }
+  }
+
+  if (body.lunch_hours !== undefined) {
+    const lh = Number(body.lunch_hours);
+    if (isNaN(lh) || lh < 0 || lh > 4) {
+      return NextResponse.json(
+        { error: "lunch_hours debe ser un número entre 0 y 4" },
+        { status: 400 },
+      );
+    }
+    updates.lunch_hours = lh;
+  }
+
+  if (body.work_days !== undefined) {
+    if (!Array.isArray(body.work_days)) {
+      return NextResponse.json(
+        { error: "work_days debe ser un arreglo de números" },
+        { status: 400 },
+      );
+    }
+    const wd = body.work_days as unknown[];
+    if (
+      wd.some(
+        (d) => typeof d !== "number" || d < 1 || d > 7 || !Number.isInteger(d),
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "work_days solo puede contener enteros entre 1 (Lun) y 7 (Dom)",
+        },
+        { status: 400 },
+      );
+    }
+    updates.work_days = wd;
+  }
+
+  if (body.is_ooo !== undefined) {
+    // Exigir boolean estricto — Boolean("false") = true (erróneo si llega string)
+    if (typeof body.is_ooo !== "boolean") {
+      return NextResponse.json(
+        { error: "is_ooo debe ser un boolean" },
+        { status: 400 },
+      );
+    }
+    updates.is_ooo = body.is_ooo;
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No hay campos para actualizar" },
@@ -77,6 +214,16 @@ export async function PATCH(
       { status: 500 },
     );
   }
+
+  // Si cambió el país, re-sincronizar festivos para el año en curso
+  const cc = data.country_code as string | null;
+  if (cc && (body.country_code !== undefined || body.city !== undefined)) {
+    const year = new Date().getFullYear();
+    syncHolidaysAsOOO(id, cc, year).catch((err) =>
+      console.error("[PATCH qa-members] syncHolidaysAsOOO failed:", err),
+    );
+  }
+
   return NextResponse.json(data);
 }
 

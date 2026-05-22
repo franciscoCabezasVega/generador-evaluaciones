@@ -54,6 +54,32 @@ Los RPCs ejecutan `SET LOCAL statement_timeout = '10s'` dentro de su propio tran
 
 En un entorno multi-Lambda, un `DELETE` que devuelve 404 significa "ya fue eliminado por otra instancia". `mutationQueue.ts` trata este caso como éxito en lugar de error, evitando revertir el optimistic update innecesariamente.
 
+### Retry con jitter en `useCachedFetch` (P1)
+
+Los reintentos de fetch usan backoff exponencial con jitter aleatorio `(0.5–1.5 × baseDelay)` para evitar thundering herd cuando múltiples componentes fallan simultáneamente. La invalidación de caché al montar también omite el primer render para no forzar refetch innecesario en cold start.
+
+### Audit trail — cliente de servicio en `after()` (A1)
+
+El bloque `after()` del `PUT /api/timings/[id]` usa `getServiceClient()` (service role key) en lugar del Bearer token del usuario para insertar en `audit_logs`. El token del usuario puede fallar silenciosamente en el contexto async post-response de `after()` debido a que la sesión Supabase ya no está activa al momento de la escritura. La identidad del usuario (`user_id`, `user_email`) se captura por closure desde el scope del request principal.
+
+### Audit trail — skip cuando no hay cambios reales (A2)
+
+Tanto el `PUT /api/timings/[id]` como `syncTaskTimings` comparan el estado anterior vs el nuevo con `normalizeEntries()` (serialización + sort estable) antes de insertar en `audit_logs`. Si los valores son idénticos, se omite el registro para evitar entradas de audit vacías.
+
+### Audit trail — sync manual atribuido al usuario real (A3)
+
+Cuando el usuario hace clic en "Sincronizar" desde el formulario de timing (ruta `POST /api/tasks/[id]/clickup-sync`), se pasa `userCtx: { userId, userEmail }` a `syncTaskTimings`. El audit log queda atribuido al email real del usuario en lugar de `system@cron.local`. El cron job sigue usando `system@cron.local` al no pasar `userCtx`.
+
+### `handleEdit` fetcha datos frescos del servidor (A4)
+
+`handleEdit` en `timings/page.tsx` hace un `GET /api/timings/[id]` directo (no cacheado) antes de abrir el formulario de edición. Esto evita abrir el form con datos stale del listado cuando un sync de ClickUp actualizó la BD entre la carga del listado y el clic en "Editar".
+
+### Work Calendar Adjustment (W1)
+
+`getAdjustmentFactor(qa: QAWorkConfig, year, month, window?)` en `workCalendarService.ts` calcula el ratio `workHours / calendarHours` para cada QA, descontando días OOO (Out-of-Office) y feriados nacionales (multi-país vía `country_code`). El factor (~0.215 para un mes completo de 8h/24h) se aplica a las horas calendario de ClickUp para obtener horas efectivas de trabajo. La feature está controlada por el flag `ENABLE_WORK_CALENDAR_ADJUSTMENT` en `vercel.json`.
+
+Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local (Colombia, UTC-5). Nunca se usa `toISOString()` para evitar desfase de un día.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
