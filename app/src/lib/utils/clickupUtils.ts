@@ -4,7 +4,10 @@
 
 /**
  * Returns true if the input looks like a ClickUp URL or a bare ClickUp task ID.
- * Used by the frontend to enable/disable the AI autofill button.
+ *
+ * In the UI (TaskForm), the autofill button only activates when the field also
+ * passes `isValidUrl()`, so in practice only ClickUp URLs reach the button.
+ * The bare-ID branch is still supported for server-side usage (ai-autofill route).
  */
 export function isClickUpUrl(input: string): boolean {
   const trimmed = input.trim();

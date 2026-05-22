@@ -9,6 +9,7 @@
  * All DB access uses the service-role Supabase client (bypasses RLS).
  * ClickUp API key is stored encrypted and decrypted at runtime.
  */
+import "server-only";
 
 import { getServiceClient } from "@/lib/auth";
 import { decryptText } from "@/lib/encryption";

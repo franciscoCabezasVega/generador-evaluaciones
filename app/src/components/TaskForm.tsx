@@ -479,10 +479,16 @@ function TaskFormComponent(
         body: JSON.stringify({ linkOrId: formData.task_link }),
       });
 
-      const data = (await response.json()) as {
-        suggestions?: AISuggestions;
-        error?: string;
-      };
+      let data: { suggestions?: AISuggestions; error?: string };
+      try {
+        data = (await response.json()) as {
+          suggestions?: AISuggestions;
+          error?: string;
+        };
+      } catch {
+        setAiError("Error al autocompletar con IA");
+        return;
+      }
 
       if (!response.ok) {
         setAiError(data.error ?? "Error al autocompletar con IA");
@@ -560,18 +566,18 @@ function TaskFormComponent(
     setFormData((prev) => {
       const next = { ...prev, ...selected };
       // Si se cambió el producto, limpiar squads del prev (los del diff ya están incluidos)
+      // Preservar additional_notes de squads existentes para no perder notas del usuario
+      const preserveNotes = (s: NonNullable<typeof selected.squads>[0]) => {
+        const existing = prev.squads.find((p) => p.squad === s.squad);
+        return { ...s, additional_notes: existing?.additional_notes ?? "" };
+      };
       if (
         selected.product_type &&
         selected.product_type !== prev.product_type
       ) {
-        next.squads = selected.squads
-          ? selected.squads.map((s) => ({ ...s, additional_notes: "" }))
-          : [];
+        next.squads = selected.squads ? selected.squads.map(preserveNotes) : [];
       } else if (selected.squads) {
-        next.squads = selected.squads.map((s) => ({
-          ...s,
-          additional_notes: "",
-        }));
+        next.squads = selected.squads.map(preserveNotes);
       }
       return next;
     });

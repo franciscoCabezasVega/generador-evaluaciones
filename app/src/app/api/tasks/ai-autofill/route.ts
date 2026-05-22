@@ -55,10 +55,9 @@ async function fetchClickUpTask(
   }
   if (!response.ok) {
     const body = await response.text().catch(() => "");
+    console.error(`ClickUp API error ${response.status}:`, body.slice(0, 500));
     throw Object.assign(
-      new Error(
-        `Error de la API de ClickUp ${response.status}: ${body.slice(0, 200)}`,
-      ),
+      new Error(`Error al comunicarse con ClickUp (status ${response.status})`),
       { code: "CLICKUP_ERROR" },
     );
   }
@@ -342,11 +341,12 @@ ${JSON.stringify(taskContext, null, 2)}`;
           ? parsed.year
           : null;
       })(),
-      effort_score_date:
-        typeof parsed.effort_score_date === "string" &&
-        /^\d{4}-\d{2}-\d{2}$/.test(parsed.effort_score_date)
-          ? parsed.effort_score_date
-          : null,
+      effort_score_date: (() => {
+        if (typeof parsed.effort_score_date !== "string") return null;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.effort_score_date)) return null;
+        const ts = Date.parse(parsed.effort_score_date);
+        return isNaN(ts) ? null : parsed.effort_score_date;
+      })(),
       squads: Array.isArray(parsed.squads)
         ? (
             parsed.squads as Array<{
