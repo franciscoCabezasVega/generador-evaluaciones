@@ -1,12 +1,16 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
   // turbopack.root solo se activa fuera de Vercel.
-  // - Localmente: apunta a app/ para silenciar el warning "multiple lockfiles".
+  // - Localmente: apunta a la raíz del monorepo (../) para que Turbopack
+  //   encuentre next/package.json aunque pnpm lo hoisteé ahí.
   // - En Vercel: se omite para que no conflictúe con outputFileTracingRoot
   //   que Vercel inyecta automáticamente.
-  ...(process.env.VERCEL ? {} : { turbopack: { root: __dirname } }),
+  ...(process.env.VERCEL
+    ? {}
+    : { turbopack: { root: path.join(__dirname, "..") } }),
   async headers() {
     return [
       {

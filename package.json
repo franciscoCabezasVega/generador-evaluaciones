@@ -3,9 +3,27 @@
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
+    "dev": "pnpm --filter app dev",
+    "build": "pnpm --filter app build",
     "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.1.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "core-js",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ],
+    "allowedDeprecatedVersions": {
+      "@ungap/structured-clone": "1",
+      "glob": "7 || 10",
+      "inflight": "1",
+      "rimraf": "2 || 3",
+      "uuid": "8",
+      "whatwg-encoding": "3"
+    }
   }
 }
