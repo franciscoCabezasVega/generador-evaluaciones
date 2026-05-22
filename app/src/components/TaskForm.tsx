@@ -323,6 +323,8 @@ function TaskFormComponent(
     >,
   ) => {
     const { name, value } = e.target;
+    // Registrar que el usuario tocó este campo (para detección de edición en autofill)
+    setTouched((prev) => ({ ...prev, [name]: true }));
 
     // Si cambia el producto, limpiar squads/equipos
     if (name === "product_type") {
@@ -503,11 +505,15 @@ function TaskFormComponent(
       const suggestions = data.suggestions;
 
       // Si es modo creación y los campos están en sus valores iniciales → aplicar directo
+      // task_link se excluye del check porque siempre está tocado al habilitar el botón
       const isCreationMode = !initialData;
       const hasUserInput =
         formData.name.trim() !== "" ||
         formData.squads.length > 0 ||
-        formData.assigned_qa.length > 0;
+        formData.assigned_qa.length > 0 ||
+        Object.entries(touched).some(
+          ([key, val]) => val && key !== "task_link",
+        );
 
       if (isCreationMode && !hasUserInput) {
         // Aplicar directamente sin diff
@@ -531,11 +537,8 @@ function TaskFormComponent(
             next.year = suggestions.year;
           if (suggestions.effort_score_date)
             next.effort_score_date = suggestions.effort_score_date;
-          if (suggestions.squads && suggestions.squads.length > 0)
-            next.squads = suggestions.squads.map((s) => ({
-              ...s,
-              additional_notes: "",
-            }));
+          // INTENTIONALLY: squads se omiten en aplicación directa — el usuario los asigna manualmente.
+          // Si la IA los sugiere, quedarán disponibles solo en el diff panel (modo edición).
           if (suggestions.assigned_qa && suggestions.assigned_qa.length > 0)
             next.assigned_qa = suggestions.assigned_qa;
           return next;

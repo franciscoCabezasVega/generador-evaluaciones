@@ -45,7 +45,7 @@ async function fetchClickUpTask(
   const url = `${CLICKUP_API_BASE}/task/${taskId}`;
   const response = await fetch(url, {
     headers: { Authorization: apiKey },
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (response.status === 404) {
@@ -179,12 +179,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 6. Extraer task ID y fetch de ClickUp
+    // 6. Extraer task ID y cargar catálogos en paralelo con el fetch de ClickUp
     const taskId = extractClickUpTaskId(linkOrId.trim());
 
     let clickupTask: ClickUpTaskResponse;
+    let catalogs: Awaited<ReturnType<typeof loadActiveCatalogs>>;
     try {
-      clickupTask = await fetchClickUpTask(taskId, clickupApiKey);
+      [clickupTask, catalogs] = await Promise.all([
+        fetchClickUpTask(taskId, clickupApiKey),
+        loadActiveCatalogs(),
+      ]);
     } catch (err) {
       const e = err as Error & { code?: string };
       if (e.code === "NOT_FOUND") {
@@ -193,16 +197,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           { status: 404 },
         );
       }
+      if (e.message?.includes("Service client unavailable")) {
+        return NextResponse.json(
+          { error: "Error interno al cargar catálogos" },
+          { status: 500 },
+        );
+      }
       return NextResponse.json(
         { error: e.message || "Error al consultar ClickUp" },
         { status: 502 },
       );
     }
 
-    // 7. Cargar catálogos
-    const catalogs = await loadActiveCatalogs();
-
-    // 8. Construir contexto para el prompt (sanitizado)
+    // 7. Construir contexto para el prompt (sanitizado)
     const taskContext = {
       id: clickupTask.id,
       name: sanitizeForPrompt(clickupTask.name ?? "", 200),

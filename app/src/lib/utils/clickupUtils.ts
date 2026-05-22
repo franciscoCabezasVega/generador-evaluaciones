@@ -12,12 +12,15 @@
 export function isClickUpUrl(input: string): boolean {
   const trimmed = input.trim();
   if (!trimmed) return false;
-  // Validate as URL: require http/https and hostname *.clickup.com
+  // Validate as URL: require http/https, hostname *.clickup.com, and task path /t/<id>
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "http:" && url.protocol !== "https:") return false;
     const hostname = url.hostname.toLowerCase();
-    return hostname === "clickup.com" || hostname.endsWith(".clickup.com");
+    const validHost =
+      hostname === "clickup.com" || hostname.endsWith(".clickup.com");
+    const hasTaskPath = /\/t\/[a-zA-Z0-9]+/.test(url.pathname);
+    return validHost && hasTaskPath;
   } catch {
     // Not a URL — check if it's a bare task ID: alphanumeric, 5-15 chars
     return /^[a-zA-Z0-9]{5,15}$/.test(trimmed);
