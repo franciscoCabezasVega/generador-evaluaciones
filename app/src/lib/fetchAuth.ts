@@ -1,5 +1,19 @@
 import { supabase } from "./supabase";
 
+/**
+ * Error tipado para el estado transitorio donde la sesión aún no está
+ * disponible (el auto-refresh no terminó). Usar `instanceof` en lugar de
+ * `message.includes(...)` para que el idioma del mensaje no afecte la lógica.
+ */
+export class SessionUnavailableError extends Error {
+  constructor(
+    message = "Sesión no disponible — el token puede estar renovándose",
+  ) {
+    super(message);
+    this.name = "SessionUnavailableError";
+  }
+}
+
 type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
 type RefreshSessionResult = Awaited<
   ReturnType<typeof supabase.auth.refreshSession>
@@ -373,7 +387,7 @@ export async function authenticatedFetch(
 
   if (!result.data.session) {
     // Estado transitorio: el auto-refresh aún no terminó. El caller reintentará.
-    throw new Error("Sesión no disponible — el token puede estar renovándose");
+    throw new SessionUnavailableError();
   }
 
   const headers = new Headers(options.headers || {});

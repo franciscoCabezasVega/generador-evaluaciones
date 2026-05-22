@@ -1,6 +1,6 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useEffect } from "react";
-import { authenticatedFetch } from "@/lib/fetchAuth";
+import { authenticatedFetch, SessionUnavailableError } from "@/lib/fetchAuth";
 import { isSessionExpiredError } from "@/lib/utils";
 import { authService } from "@/lib/services/authService";
 import { TimeoutError } from "@/lib/withTimeout";
@@ -292,10 +292,7 @@ export function useSafeAuthFetch() {
         }
 
         // Sesión no disponible temporalmente — intentar refresh
-        if (
-          error instanceof Error &&
-          error.message.includes("Session not available")
-        ) {
+        if (error instanceof SessionUnavailableError) {
           console.warn(
             "Sesión no disponible, intentando renovar silenciosamente...",
           );
