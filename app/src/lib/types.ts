@@ -46,9 +46,39 @@ export interface CatalogSquad {
 export interface CatalogQAMember {
   id: string;
   name: string;
+  clickup_user_id?: string | null;
+  // Campos de calendario laboral (opcionales: valor null = sin configurar → fallback legacy)
+  country_code?: string | null;
+  city?: string | null;
+  timezone?: string | null;
+  work_start_time?: string | null; // "HH:MM:SS"
+  work_end_time?: string | null; // "HH:MM:SS"
+  lunch_hours?: number | null;
+  work_days?: number[] | null; // ISO weekdays: 1=Lun, 7=Dom
+  is_ooo?: boolean | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** Período Out-of-Office de un QA member. */
+export interface OOOPeriod {
+  id: string;
+  qa_id: string;
+  date_from: string; // "YYYY-MM-DD"
+  date_to: string; // "YYYY-MM-DD"
+  reason?: string | null;
+  created_at: string;
+}
+
+/** Festivo cacheado desde Nager.Date. */
+export interface HolidayEntry {
+  id?: string;
+  country_code: string;
+  holiday_date: string; // "YYYY-MM-DD"
+  name: string;
+  source?: string;
+  fetched_at?: string;
 }
 
 export interface CatalogTimingCategory {
