@@ -9,6 +9,7 @@
  * All DB access uses the service-role Supabase client (bypasses RLS).
  * ClickUp API key is stored encrypted and decrypted at runtime.
  */
+import "server-only";
 
 import { getServiceClient } from "@/lib/auth";
 import { decryptText } from "@/lib/encryption";
@@ -76,7 +77,7 @@ const STATUS_CATEGORY_MAP: Record<string, string> = {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Retrieve and decrypt the stored ClickUp API key. Returns null if not set. */
-async function getClickUpApiKey(): Promise<string | null> {
+export async function getClickUpApiKey(): Promise<string | null> {
   const supabase = getServiceClient();
   if (!supabase) return null;
   // maybeSingle() returns { data: null, error: null } for 0 rows (not configured),
@@ -104,6 +105,9 @@ async function getClickUpApiKey(): Promise<string | null> {
     );
   }
 }
+
+// Re-export para que el código servidor pueda usarlo sin importar el módulo cliente
+export { isClickUpUrl } from "@/lib/utils/clickupUtils";
 
 /**
  * Extract just the ClickUp task ID from a full ClickUp URL or return the

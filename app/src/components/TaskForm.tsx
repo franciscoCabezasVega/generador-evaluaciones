@@ -30,8 +30,13 @@ import {
   Calendar,
   Ruler,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import type { RetryInfo } from "@/hooks/useSafeAuthFetch";
+import { authenticatedFetch } from "@/lib/fetchAuth";
+import { isClickUpUrl } from "@/lib/utils/clickupUtils";
+import type { AISuggestions } from "@/lib/types";
+import { AIAutofillDiffPanel } from "@/components/AIAutofillDiffPanel";
 
 interface TaskFormProps {
   onSubmit: (
@@ -121,6 +126,13 @@ function TaskFormComponent(
   const linkInputRef = useRef<HTMLInputElement>(null);
   const [showQASelector, setShowQASelector] = useState(false);
   const qaDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── AI Autofill state ──────────────────────────────────────────────────────
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestions | null>(
+    null,
+  );
 
   const {
     products,
@@ -311,6 +323,8 @@ function TaskFormComponent(
     >,
   ) => {
     const { name, value } = e.target;
+    // Registrar que el usuario tocó este campo (para detección de edición en autofill)
+    setTouched((prev) => ({ ...prev, [name]: true }));
 
     // Si cambia el producto, limpiar squads/equipos
     if (name === "product_type") {
@@ -448,6 +462,131 @@ function TaskFormComponent(
   // Validar si el formulario es válido
   const isSquadRequired = formData.project_type !== "Automatización QA";
 
+  // ── AI Autofill handler ────────────────────────────────────────────────────
+
+  const isAutofillEnabled =
+    !aiLoading &&
+    formData.task_link.trim() !== "" &&
+    isValidUrl(formData.task_link) &&
+    isClickUpUrl(formData.task_link);
+
+  const handleAutofill = useCallback(async () => {
+    setAiError(null);
+    setAiSuggestions(null);
+    setAiLoading(true);
+    try {
+      const response = await authenticatedFetch("/api/tasks/ai-autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkOrId: formData.task_link }),
+      });
+
+      let data: { suggestions?: AISuggestions; error?: string };
+      try {
+        data = (await response.json()) as {
+          suggestions?: AISuggestions;
+          error?: string;
+        };
+      } catch {
+        setAiError("Error al autocompletar con IA");
+        return;
+      }
+
+      if (!response.ok) {
+        setAiError(data.error ?? "Error al autocompletar con IA");
+        return;
+      }
+
+      if (!data.suggestions) {
+        setAiError("No se recibieron sugerencias de la IA");
+        return;
+      }
+
+      const suggestions = data.suggestions;
+
+      // Si es modo creación y los campos están en sus valores iniciales → aplicar directo
+      // task_link se excluye del check porque siempre está tocado al habilitar el botón
+      const isCreationMode = !initialData;
+      const hasUserInput =
+        formData.name.trim() !== "" ||
+        formData.squads.length > 0 ||
+        formData.assigned_qa.length > 0 ||
+        Object.entries(touched).some(
+          ([key, val]) => val && key !== "task_link",
+        );
+
+      if (isCreationMode && !hasUserInput) {
+        // Aplicar directamente sin diff
+        setFormData((prev) => {
+          const next = { ...prev };
+          if (suggestions.name) next.name = suggestions.name;
+          if (suggestions.product_type) {
+            next.product_type = suggestions.product_type;
+            // Limpiar squads si cambia el producto
+            if (suggestions.product_type !== prev.product_type) {
+              next.squads = [];
+            }
+          }
+          if (suggestions.project_type)
+            next.project_type = suggestions.project_type;
+          if (suggestions.tshirt_size)
+            next.tshirt_size = suggestions.tshirt_size;
+          if (suggestions.status) next.status = suggestions.status;
+          if (suggestions.month) next.month = suggestions.month;
+          if (suggestions.year && suggestions.year >= new Date().getFullYear())
+            next.year = suggestions.year;
+          if (suggestions.effort_score_date)
+            next.effort_score_date = suggestions.effort_score_date;
+          // INTENTIONALLY: squads se omiten en aplicación directa — el usuario los asigna manualmente.
+          // Si la IA los sugiere, quedarán disponibles solo en el diff panel (modo edición).
+          if (suggestions.assigned_qa && suggestions.assigned_qa.length > 0)
+            next.assigned_qa = suggestions.assigned_qa;
+          return next;
+        });
+        setAiError(null);
+        // Marcar campos como tocados para mostrar validaciones
+        setTouched((prev) => ({ ...prev, name: true }));
+      } else {
+        // Modo edición o campos ya tienen valores → mostrar diff
+        setAiSuggestions(suggestions);
+      }
+    } catch (err) {
+      setAiError(
+        err instanceof Error ? err.message : "Error de red al autocompletar",
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  }, [
+    formData.task_link,
+    formData.name,
+    formData.squads,
+    formData.assigned_qa,
+    initialData,
+  ]);
+
+  const handleApplyDiff = useCallback((selected: Partial<FormDataState>) => {
+    setFormData((prev) => {
+      const next = { ...prev, ...selected };
+      // Si se cambió el producto, limpiar squads del prev (los del diff ya están incluidos)
+      // Preservar additional_notes de squads existentes para no perder notas del usuario
+      const preserveNotes = (s: NonNullable<typeof selected.squads>[0]) => {
+        const existing = prev.squads.find((p) => p.squad === s.squad);
+        return { ...s, additional_notes: existing?.additional_notes ?? "" };
+      };
+      if (
+        selected.product_type &&
+        selected.product_type !== prev.product_type
+      ) {
+        next.squads = selected.squads ? selected.squads.map(preserveNotes) : [];
+      } else if (selected.squads) {
+        next.squads = selected.squads.map(preserveNotes);
+      }
+      return next;
+    });
+    setAiSuggestions(null);
+  }, []);
+
   const isFormValid = () => {
     const hasNoErrors = !errors.name && !errors.task_link;
     return (
@@ -550,30 +689,6 @@ function TaskFormComponent(
         </legend>
 
         <div>
-          <label htmlFor="task-name" className="block text-sm font-medium mb-2">
-            Nombre *
-          </label>
-          <input
-            id="task-name"
-            type="text"
-            name="name"
-            autoComplete="off"
-            value={formData.name}
-            onChange={handleInputChange}
-            onBlur={() => handleBlur("name")}
-            className={`w-full border rounded-lg px-4 py-2 ${
-              touched.name && errors.name
-                ? "border-red-500 bg-red-950/40"
-                : "border-gray-300"
-            }`}
-            placeholder="Nombre de la tarea"
-          />
-          {touched.name && errors.name && (
-            <p className="text-red-600 text-sm mt-1">{errors.name}</p>
-          )}
-        </div>
-
-        <div>
           <label htmlFor="task-link" className="block text-sm font-medium mb-2">
             Link *
           </label>
@@ -595,6 +710,76 @@ function TaskFormComponent(
           />
           {touched.task_link && errors.task_link && (
             <p className="text-red-600 text-sm mt-1">{errors.task_link}</p>
+          )}
+
+          {/* Botón Autocompletar con IA */}
+          <div className="mt-2 flex items-center gap-2">
+            <div
+              title={
+                !isAutofillEnabled
+                  ? "Ingresa una URL de ClickUp válida para usar esta función"
+                  : undefined
+              }
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAutofill}
+                disabled={!isAutofillEnabled}
+                className="gap-1.5 text-blue-400 border-blue-500/40 hover:bg-blue-950/30 disabled:opacity-40"
+              >
+                <Sparkles size={14} />
+                {aiLoading ? "Analizando…" : "Autocompletar con IA"}
+              </Button>
+            </div>
+            {aiLoading && (
+              <span className="text-xs text-gray-400 animate-pulse">
+                Consultando ClickUp + IA…
+              </span>
+            )}
+          </div>
+
+          {/* Error del autofill */}
+          {aiError && (
+            <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+              <AlertCircle size={12} />
+              {aiError}
+            </p>
+          )}
+        </div>
+
+        {/* Panel diff de sugerencias IA (modo edición / campos ya llenos) */}
+        {aiSuggestions && (
+          <AIAutofillDiffPanel
+            current={formData}
+            suggestions={aiSuggestions}
+            onApply={handleApplyDiff}
+            onCancel={() => setAiSuggestions(null)}
+          />
+        )}
+
+        <div>
+          <label htmlFor="task-name" className="block text-sm font-medium mb-2">
+            Nombre *
+          </label>
+          <input
+            id="task-name"
+            type="text"
+            name="name"
+            autoComplete="off"
+            value={formData.name}
+            onChange={handleInputChange}
+            onBlur={() => handleBlur("name")}
+            className={`w-full border rounded-lg px-4 py-2 ${
+              touched.name && errors.name
+                ? "border-red-500 bg-red-950/40"
+                : "border-gray-300"
+            }`}
+            placeholder="Nombre de la tarea"
+          />
+          {touched.name && errors.name && (
+            <p className="text-red-600 text-sm mt-1">{errors.name}</p>
           )}
         </div>
       </fieldset>

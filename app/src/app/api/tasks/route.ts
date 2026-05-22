@@ -178,6 +178,21 @@ export async function POST(request: NextRequest) {
               },
             };
           }
+          if (rpcError.code === "23514") {
+            const isYearConstraint =
+              rpcError.message?.includes("tasks_year_check") ||
+              (rpcError as { details?: string }).details?.includes(
+                "tasks_year_check",
+              );
+            return {
+              status: 400,
+              body: {
+                error: isYearConstraint
+                  ? `El año ingresado no es válido. Solo se aceptan años desde ${new Date().getFullYear()} en adelante.`
+                  : "Los datos ingresados no cumplen con las restricciones requeridas.",
+              },
+            };
+          }
           console.error("Error calling create_task_with_squads:", rpcError);
           return { status: 500, body: { error: "Error al crear la tarea" } };
         }

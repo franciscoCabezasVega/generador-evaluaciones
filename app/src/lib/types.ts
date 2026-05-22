@@ -4,7 +4,37 @@ export type TshirtSize = string;
 export type TaskProjectType = string;
 export type UserRole = "admin" | "gestor" | "reportero" | "invitado";
 
-// ─── Interfaces de catálogos dinámicos ───────────────────────────────────────
+// ─── AI Autofill ─────────────────────────────────────────────────────────────
+
+/** Sugerencias devueltas por el endpoint /api/tasks/ai-autofill. */
+export interface AISuggestions {
+  name?: string | null;
+  product_type?: string | null;
+  project_type?: string | null;
+  tshirt_size?: string | null;
+  status?: TaskStatus | null;
+  month?: number | null;
+  year?: number | null;
+  effort_score_date?: string | null;
+  squads?: Array<{
+    squad: string;
+    low_returns: number;
+    medium_returns: number;
+    high_returns: number;
+  }> | null;
+  assigned_qa?: string[] | null;
+}
+
+/** Respuesta completa del endpoint /api/tasks/ai-autofill. */
+export interface AIAutofillResponse {
+  suggestions: AISuggestions;
+  source: {
+    clickup_task_id: string;
+    clickup_status: string;
+    raw_excerpt: string;
+  };
+}
+
 export interface CatalogProduct {
   id: string;
   name: string;
