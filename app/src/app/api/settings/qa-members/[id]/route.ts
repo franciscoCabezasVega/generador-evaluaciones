@@ -79,10 +79,12 @@ export async function PATCH(
   // ── Campos de calendario laboral ─────────────────────────────────────────
 
   if (body.country_code !== undefined) {
-    if (
-      body.country_code !== null &&
-      !COUNTRY_CODE_RE.test(String(body.country_code))
-    ) {
+    // Normalizar string vacío a null (usuario limpió el campo)
+    const cc =
+      typeof body.country_code === "string" && !body.country_code.trim()
+        ? null
+        : body.country_code;
+    if (cc !== null && !COUNTRY_CODE_RE.test(String(cc))) {
       return NextResponse.json(
         {
           error:
@@ -91,7 +93,7 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    updates.country_code = body.country_code ?? null;
+    updates.country_code = cc;
   }
 
   // city: texto libre (ej: "Cartagena", "Monterrey")
@@ -112,9 +114,15 @@ export async function PATCH(
   }
 
   if (body.work_start_time !== undefined)
-    updates.work_start_time = body.work_start_time ?? null;
+    updates.work_start_time =
+      typeof body.work_start_time === "string" && body.work_start_time.trim()
+        ? body.work_start_time.trim()
+        : null;
   if (body.work_end_time !== undefined)
-    updates.work_end_time = body.work_end_time ?? null;
+    updates.work_end_time =
+      typeof body.work_end_time === "string" && body.work_end_time.trim()
+        ? body.work_end_time.trim()
+        : null;
 
   if (body.lunch_hours !== undefined) {
     const lh = Number(body.lunch_hours);

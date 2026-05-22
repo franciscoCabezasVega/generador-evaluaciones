@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS qa_member_oo (
   date_from  DATE        NOT NULL,
   date_to    DATE        NOT NULL,
   reason     TEXT,
+  -- 'manual' = ingresado por el usuario; 'holiday' = generado automáticamente desde festivos
+  source     TEXT        NOT NULL DEFAULT 'manual',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- date_to no puede ser anterior a date_from
@@ -27,6 +29,8 @@ CREATE TABLE IF NOT EXISTS qa_member_oo (
 
 CREATE INDEX IF NOT EXISTS qa_member_oo_qa_id_idx ON qa_member_oo (qa_id);
 CREATE INDEX IF NOT EXISTS qa_member_oo_dates_idx ON qa_member_oo (date_from, date_to);
+-- Índice para filtrar rápidamente por source (ej. DELETE ... WHERE source='holiday')
+CREATE INDEX IF NOT EXISTS qa_member_oo_qa_source_idx ON qa_member_oo (qa_id, source);
 
 -- ────────────────────────────────────────────────────────────
 -- RLS: misma política que qa_members (catálogo)

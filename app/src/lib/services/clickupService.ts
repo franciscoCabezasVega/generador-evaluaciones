@@ -598,9 +598,10 @@ export async function syncTaskTimings(
             })),
           }));
 
-          // Solo escribir en BD y registrar auditoría si los valores cambiaron realmente
+          // Solo escribir en BD y registrar auditoría si los valores cambiaron realmente.
+          // Nota: rows.length > 0 NO forma parte del diff — si ClickUp deja de reportar
+          // horas QA (rows=[]) pero la BD tiene datos previos, hay que borrarlos igual.
           const hasActualChanges =
-            rows.length > 0 &&
             normalizeEntries(oldQAEntries) !== normalizeEntries(newForDiff);
 
           if (hasActualChanges) {
@@ -618,16 +619,20 @@ export async function syncTaskTimings(
               }
             }
 
-            const { error: upsertError } = await supabase
-              .from("timing_qa_category_hours")
-              .upsert(rows, {
-                onConflict: "timing_qa_entry_id,category_id",
-              });
+            // Solo hacer upsert si hay filas nuevas — si rows=[] la tarea salió de QA
+            // y el delete anterior ya limpió los datos stale.
+            if (rows.length > 0) {
+              const { error: upsertError } = await supabase
+                .from("timing_qa_category_hours")
+                .upsert(rows, {
+                  onConflict: "timing_qa_entry_id,category_id",
+                });
 
-            if (upsertError) {
-              throw new Error(
-                `Error al guardar registros en BD: ${upsertError.message}`,
-              );
+              if (upsertError) {
+                throw new Error(
+                  `Error al guardar registros en BD: ${upsertError.message}`,
+                );
+              }
             }
 
             // Step 5a: Real write happened — update sync record.

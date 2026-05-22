@@ -53,12 +53,23 @@ export async function POST(request: NextRequest) {
   }
 
   // 1. Eliminar registros existentes para este país/año (para refrescar limpio)
-  await supabase
+  const { error: deleteError } = await supabase
     .from("holidays")
     .delete()
     .eq("country_code", countryCode)
     .gte("holiday_date", `${year}-01-01`)
     .lte("holiday_date", `${year}-12-31`);
+
+  if (deleteError) {
+    console.error(
+      "[holidays/refresh] Error al limpiar feriados existentes:",
+      deleteError,
+    );
+    return NextResponse.json(
+      { error: "Error al limpiar feriados existentes" },
+      { status: 500 },
+    );
+  }
 
   // 2. Obtener datos frescos desde Nager.Date
   const nagerRes = await fetch(
