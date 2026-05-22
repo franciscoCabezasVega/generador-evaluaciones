@@ -456,11 +456,13 @@ export async function syncTaskTimings(
           const entryIds = qaEntries.map((e) => e.id as string);
           const categoryIds = Array.from(categoryMap.values());
 
-          // ── Sabor B: Factor calendario absoluto ──────────────────────────
+          // ── Sabor B: Factor calendario absoluto ──────────────────
           // Si ENABLE_WORK_CALENDAR_ADJUSTMENT=true, ajustamos las horas de
-          // cada QA proporcionalmente a sus horas laborales reales en el mes,
-          // en lugar de dividir equitativamente. El factor es:
-          //   factor = horas_laborales_QA / (días_mes × 24)
+          // cada QA proporcionalmente a sus horas laborales reales dentro de
+          // la ventana en que la tarea estuvo en QA, en lugar de dividir
+          // equitativamente. El factor es (ver getAdjustmentFactor):
+          //   factor = workHours_QA_en_ventana / horas_calendario_de_ventana
+          // donde horas_calendario_de_ventana = (window.to - window.from) en ms / 3600000.
           // Esto reduce el total registrado (no redistribuye entre QAs),
           // reflejando solo las horas que el QA estuvo efectivamente activo.
           // Si el QA no tiene country_code configurado, fallback al split legacy.
@@ -543,10 +545,17 @@ export async function syncTaskTimings(
             }
           }
 
-          // Compute desired new state first (before reading or modifying DB)
+          // Compute desired new state first (before reading or modifying DB).
+          // raw_hours/factor son opcionales: solo presentes cuando se aplicó
+          // el ajuste calendario (ENABLE_WORK_CALENDAR_ADJUSTMENT=true y QA con config).
           type AuditQAEntry = {
             qa_name: string;
-            categories: { category_name: string; hours: number }[];
+            categories: {
+              category_name: string;
+              hours: number;
+              raw_hours?: number;
+              factor?: number;
+            }[];
           };
 
           const rows = qaEntries.flatMap((entry) =>

@@ -84,8 +84,9 @@ export async function POST(request: NextRequest) {
   const calendarFields: Record<string, unknown> = {};
 
   if (body.country_code !== undefined) {
-    // En POST: string vacío = "no provisto" → omitir para que aplique DEFAULT 'CO'.
-    // (null explícito sobrescribiría el DEFAULT de BD; solo PATCH usa null para limpiar)
+    // En POST: string vacío = "no provisto" → se normaliza a `null` y más abajo
+    // se OMITE la asignación cuando `cc === null` para que aplique el DEFAULT 'CO'.
+    // Solo PATCH envía `null` explícito al UPDATE para limpiar el valor.
     const cc =
       typeof body.country_code === "string" && !body.country_code.trim()
         ? null
