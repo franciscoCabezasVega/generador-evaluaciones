@@ -67,6 +67,14 @@ export default function TimingsPage() {
     "list",
   );
 
+  // Invalidar la caché de la vista que se activa para forzar datos frescos.
+  // Evita que el usuario vea datos stale al cambiar de tab.
+  useEffect(() => {
+    if (viewMode === "metrics") invalidateCache("timings-metrics");
+    if (viewMode === "qa-metrics") invalidateCache("timings-qa-metrics");
+    if (viewMode === "list") invalidateCache("timings");
+  }, [viewMode]);
+
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
