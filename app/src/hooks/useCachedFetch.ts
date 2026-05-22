@@ -400,9 +400,8 @@ export function useCachedFetch<T>({
   useEffect(() => {
     if (!enabled) return;
 
-    const revalidate = (reason: string) => {
+    const revalidate = (_reason?: string) => {
       if (autoRetryTimerRef.current !== null) return; // ya hay retry programado
-      console.debug(`[useCachedFetch:${cacheKey}] revalidando por ${reason}`);
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;

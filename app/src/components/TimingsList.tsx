@@ -10,6 +10,7 @@ import { useCatalogData } from "@/hooks/useCatalogData";
 interface TimingsListProps {
   entries: TaskWithTiming[];
   loading?: boolean;
+  editLoading?: boolean;
   onEdit?: (timing: TaskTiming) => void;
   onDelete?: (id: string) => void;
   onRegister?: (task: Task) => void;
@@ -18,6 +19,7 @@ interface TimingsListProps {
 export default function TimingsList({
   entries,
   loading = false,
+  editLoading = false,
   onEdit,
   onDelete,
   onRegister,
@@ -263,8 +265,12 @@ export default function TimingsList({
                         variant="outline"
                         className="flex items-center gap-1"
                         title="Editar timing"
+                        disabled={editLoading}
                       >
-                        <Edit2 size={16} />
+                        <Edit2
+                          size={16}
+                          className={editLoading ? "animate-pulse" : ""}
+                        />
                       </Button>
                     )}
                     {onDelete && (

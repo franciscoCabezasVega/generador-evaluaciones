@@ -81,7 +81,7 @@ export default function TimingsPage() {
     if (viewMode === "metrics") invalidateCache("timings-metrics");
     if (viewMode === "qa-metrics") invalidateCache("timings-qa-metrics");
     if (viewMode === "list") invalidateCache("timings");
-  }, [viewMode, invalidateCache]);
+  }, [viewMode]);
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
