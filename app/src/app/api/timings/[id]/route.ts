@@ -30,14 +30,17 @@ export async function GET(
     const timing = await timingService.getTimingById(id, token);
 
     if (!timing) {
-      return NextResponse.json({ error: "Timing not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Timing no encontrado" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(timing, { status: 200 });
   } catch (error) {
     console.error("Error in GET /api/timings/[id]:", error);
     return NextResponse.json(
-      { error: "Error fetching timing" },
+      { error: "Error al obtener el timing" },
       { status: 500 },
     );
   }
@@ -80,15 +83,15 @@ export async function PUT(
 
     const validateHours = (value: number, fieldName: string) => {
       if (typeof value !== "number") {
-        throw new Error(`${fieldName} must be a number`);
+        throw new Error(`${fieldName} debe ser un número`);
       }
       if (!Number.isFinite(value)) {
-        throw new Error(`${fieldName} must be a finite number`);
+        throw new Error(`${fieldName} debe ser un número finito`);
       }
       // Allow decimals: ClickUp sync writes values like 20.88 or 9.41
       // (hours-in-status divided among QA members). The DB column is NUMERIC(10,2).
       if (value < 0) {
-        throw new Error(`${fieldName} must be a non-negative number`);
+        throw new Error(`${fieldName} debe ser un número no negativo`);
       }
     };
 
@@ -96,7 +99,7 @@ export async function PUT(
       for (let i = 0; i < body.qa_entries.length; i++) {
         const entry = body.qa_entries[i];
         if (!entry.qa_name || entry.qa_name.trim() === "") {
-          throw new Error(`QA entry ${i + 1}: qa_name is required`);
+          throw new Error(`Entrada QA ${i + 1}: qa_name es obligatorio`);
         }
 
         if (
@@ -105,25 +108,27 @@ export async function PUT(
           Array.isArray(entry.hours_by_category)
         ) {
           throw new Error(
-            `QA ${entry.qa_name}: hours_by_category must be an object`,
+            `QA ${entry.qa_name}: hours_by_category debe ser un objeto`,
           );
         }
 
         let entryTotal = 0;
         for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
           if (!catId || catId.trim() === "") {
-            throw new Error(`QA ${entry.qa_name}: category id cannot be empty`);
+            throw new Error(
+              `QA ${entry.qa_name}: el id de categoría no puede estar vacío`,
+            );
           }
           validateHours(
             hours as number,
-            `QA ${entry.qa_name}: category ${catId}`,
+            `QA ${entry.qa_name}: categoría ${catId}`,
           );
           entryTotal += hours as number;
         }
 
         if (entryTotal === 0) {
           throw new Error(
-            `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
+            `QA ${entry.qa_name}: al menos una categoría debe tener horas > 0`,
           );
         }
       }
@@ -132,7 +137,7 @@ export async function PUT(
       const qaNames = body.qa_entries.map((e) => e.qa_name);
       const uniqueNames = new Set(qaNames);
       if (uniqueNames.size !== qaNames.length) {
-        throw new Error("Duplicate QA names are not allowed");
+        throw new Error("No se permiten nombres de QA duplicados");
       }
     } catch (validationError) {
       return NextResponse.json(
@@ -175,7 +180,10 @@ export async function PUT(
     const timing = await timingService.updateTiming(id, body, token);
 
     if (!timing) {
-      return NextResponse.json({ error: "Timing not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Timing no encontrado" },
+        { status: 404 },
+      );
     }
 
     // Sync assigned_qa back to the task
@@ -216,6 +224,34 @@ export async function PUT(
               hours: hours as unknown as number,
             })),
         }));
+
+        // Solo registrar si los valores realmente cambiaron
+        const normalizeEntries = (
+          entries: {
+            qa_name: string;
+            categories: { category_name: string; hours: number }[];
+          }[],
+        ) =>
+          JSON.stringify(
+            entries
+              .map((e) => ({
+                qa_name: e.qa_name,
+                categories: [...e.categories]
+                  .sort((a, b) =>
+                    a.category_name.localeCompare(b.category_name),
+                  )
+                  .map((c) => ({
+                    category_name: c.category_name,
+                    hours: c.hours,
+                  })),
+              }))
+              .sort((a, b) => a.qa_name.localeCompare(b.qa_name)),
+          );
+
+        if (normalizeEntries(oldQAEntries) === normalizeEntries(newQAEntries)) {
+          return; // Sin cambios reales — no registrar en auditoría
+        }
+
         await supabase.from("audit_logs").insert({
           user_id: user.id,
           user_email: userEmailPut,
@@ -320,7 +356,7 @@ export async function DELETE(
   } catch (error) {
     console.error("Error in DELETE /api/timings/[id]:", error);
     return NextResponse.json(
-      { error: "Error deleting timing" },
+      { error: "Error al eliminar el timing" },
       { status: 500 },
     );
   }
