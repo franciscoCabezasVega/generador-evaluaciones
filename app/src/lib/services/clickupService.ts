@@ -482,12 +482,22 @@ export async function syncTaskTimings(
                 );
 
                 if (factorByName.size > 0) {
+                  // Solo incluir entradas para QAs con factor real configurado.
+                  // QAs sin country_code no están en factorByName → quedan fuera
+                  // del Map y conservan el comportamiento legacy (rawHours sin ajuste).
                   factorByEntryId = new Map(
-                    qaEntries.map((e) => {
-                      const name = extractQaName(e as Record<string, unknown>);
-                      const f = factorByName.get(name) ?? 1;
-                      return [e.id as string, f];
-                    }),
+                    qaEntries
+                      .filter((e) =>
+                        factorByName.has(
+                          extractQaName(e as Record<string, unknown>),
+                        ),
+                      )
+                      .map((e) => {
+                        const name = extractQaName(
+                          e as Record<string, unknown>,
+                        );
+                        return [e.id as string, factorByName.get(name)!];
+                      }),
                   );
                 }
               }
@@ -505,9 +515,14 @@ export async function syncTaskTimings(
               .filter(([slug]) => categoryMap.has(slug))
               .map(([slug, hours]) => {
                 const rawHours = hours / qaCount;
-                // Si hay factor calendario para esta entrada, aplicarlo
-                const factor = factorByEntryId?.get(entry.id as string) ?? 1;
-                const effectiveHours = rawHours * factor;
+                // calFactor = workHours / calendarHours (ver getAdjustmentFactor).
+                // rawHours ya está en escala 8h/día (mapStatusesToCategoryHours ÷3),
+                // así que rawHours × 3 recupera las horas calendario brutas, y
+                // × calFactor convierte a horas laborales reales del QA.
+                // Si calFactor es undefined (QA sin calendario) → split legacy.
+                const calFactor = factorByEntryId?.get(entry.id as string);
+                const effectiveHours =
+                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -525,14 +540,19 @@ export async function syncTaskTimings(
               .filter(([slug]) => categoryMap.has(slug))
               .map(([slug, hours]) => {
                 const rawHours = hours / qaCount;
-                const factor = factorByEntryId?.get(qe.id as string) ?? 1;
+                const calFactor = factorByEntryId?.get(qe.id as string);
+                const effectiveHours =
+                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
                     slug,
-                  hours: Math.round(rawHours * factor * 100) / 100,
-                  ...(factor !== 1
-                    ? { raw_hours: Math.round(rawHours * 100) / 100, factor }
+                  hours: Math.round(effectiveHours * 100) / 100,
+                  ...(calFactor !== undefined
+                    ? {
+                        raw_hours: Math.round(rawHours * 100) / 100,
+                        factor: calFactor,
+                      }
                     : {}),
                 };
               })
