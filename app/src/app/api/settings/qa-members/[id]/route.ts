@@ -160,7 +160,14 @@ export async function PATCH(
   }
 
   if (body.is_ooo !== undefined) {
-    updates.is_ooo = Boolean(body.is_ooo);
+    // Exigir boolean estricto — Boolean("false") = true (erróneo si llega string)
+    if (typeof body.is_ooo !== "boolean") {
+      return NextResponse.json(
+        { error: "is_ooo debe ser un boolean" },
+        { status: 400 },
+      );
+    }
+    updates.is_ooo = body.is_ooo;
   }
 
   if (Object.keys(updates).length === 0) {

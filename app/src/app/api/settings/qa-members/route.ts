@@ -164,7 +164,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.is_ooo !== undefined) {
-    calendarFields.is_ooo = Boolean(body.is_ooo);
+    // Exigir boolean estricto — Boolean("false") = true (erróneo si llega string)
+    if (typeof body.is_ooo !== "boolean") {
+      return NextResponse.json(
+        { error: "is_ooo debe ser un boolean" },
+        { status: 400 },
+      );
+    }
+    calendarFields.is_ooo = body.is_ooo;
   }
 
   const { data: existing } = await supabase

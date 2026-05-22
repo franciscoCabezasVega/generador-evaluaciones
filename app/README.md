@@ -76,7 +76,7 @@ Cuando el usuario hace clic en "Sincronizar" desde el formulario de timing (ruta
 
 ### Work Calendar Adjustment (W1)
 
-`getAdjustmentFactor(qaName, window, supabase)` en `workCalendarService.ts` calcula el ratio `workHours / calendarHours` para cada QA, descontando días OOO (Out-of-Office) y feriados colombianos. El factor (~0.33 para una jornada 8h/24h) se aplica a las horas brutas de ClickUp para obtener horas efectivas de trabajo. La feature está controlada por el flag `ENABLE_WORK_CALENDAR_ADJUSTMENT` en `vercel.json`.
+`getAdjustmentFactor(qa: QAWorkConfig, year, month, window?)` en `workCalendarService.ts` calcula el ratio `workHours / calendarHours` para cada QA, descontando días OOO (Out-of-Office) y feriados nacionales (multi-país vía `country_code`). El factor (~0.215 para un mes completo de 8h/24h) se aplica a las horas calendario de ClickUp para obtener horas efectivas de trabajo. La feature está controlada por el flag `ENABLE_WORK_CALENDAR_ADJUSTMENT` en `vercel.json`.
 
 Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local (Colombia, UTC-5). Nunca se usa `toISOString()` para evitar desfase de un día.
 

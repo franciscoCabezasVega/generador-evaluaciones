@@ -100,7 +100,11 @@ export async function POST(
       qa_id,
       date_from: body.date_from,
       date_to: body.date_to,
-      reason: body.reason ?? null,
+      // Normalizar string vacío a null para evitar guardar "" en BD
+      reason:
+        typeof body.reason === "string" && body.reason.trim()
+          ? body.reason.trim()
+          : null,
     })
     .select()
     .single();
