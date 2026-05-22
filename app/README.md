@@ -22,6 +22,22 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Decisiones de arquitectura y seguridad
 
+### Autocompletado de formulario con IA + ClickUp (AI1)
+
+El formulario de creación/edición de tareas incluye un botón **"Autocompletar con IA"** que aparece debajo del campo Link cuando se ingresa una URL de ClickUp válida. El flujo es:
+
+1. El cliente llama a `POST /api/tasks/ai-autofill` con `{ linkOrId }`.
+2. El endpoint obtiene la tarea de ClickUp vía `GET /api/v2/task/{taskId}` (requiere `clickup_settings` configurado en Ajustes).
+3. Carga los catálogos activos de la BD (`products`, `project_types`, `complexities`, `squads`, `qa_members`).
+4. Llama a **OpenAI gpt-4o-mini** (JSON mode) con el contexto sanitizado.
+5. Valida cada sugerencia contra los catálogos: cualquier valor que no exista exactamente en el catálogo se descarta (`null`) — nunca se propaga al frontend un valor inventado.
+6. En **modo creación** con campos vacíos: aplica las sugerencias directamente. En **modo edición** o con campos ya completados: muestra un panel de diff con toggles por campo.
+
+Variables de entorno requeridas: `OPENAI_API_KEY`.
+La API key de ClickUp se configura cifrada en la tabla `clickup_settings` desde la sección Ajustes de la app.
+
+Consideraciones de seguridad: todo texto proveniente de ClickUp se sanitiza con `sanitizeForPrompt()` antes de inyectarse en el prompt; el endpoint requiere sesión activa; la API key de ClickUp nunca se expone al cliente.
+
 ### Atomicidad de operaciones sobre tareas (C1)
 
 Los endpoints `POST /api/tasks` y `PATCH /api/tasks/[id]` invocan los RPCs de PostgreSQL `create_task_with_squads` y `update_task_with_squads`. Cada RPC ejecuta tarea + squads en una sola transacción, eliminando el riesgo de inconsistencia si la segunda escritura fallaba.

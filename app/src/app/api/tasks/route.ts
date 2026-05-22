@@ -178,6 +178,14 @@ export async function POST(request: NextRequest) {
               },
             };
           }
+          if (rpcError.code === "23514") {
+            return {
+              status: 400,
+              body: {
+                error: `El año ingresado no es válido. Solo se aceptan años desde ${new Date().getFullYear()} en adelante.`,
+              },
+            };
+          }
           console.error("Error calling create_task_with_squads:", rpcError);
           return { status: 500, body: { error: "Error al crear la tarea" } };
         }

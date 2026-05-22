@@ -1,21 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getUserFromRequest } from "@/lib/auth";
-
-/**
- * Sanitizar texto de usuario antes de inyectarlo en prompts de IA.
- * Previene prompt injection removiendo patrones peligrosos.
- */
-function sanitizeForPrompt(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/```/g, "") // Remover bloques de código
-    .replace(/\bignore\b.*\binstructions\b/gi, "[filtered]")
-    .replace(/\bforget\b.*\babove\b/gi, "[filtered]")
-    .replace(/\bsystem\b.*\bprompt\b/gi, "[filtered]")
-    .replace(/\brole\b.*\bassistant\b/gi, "[filtered]")
-    .slice(0, 500); // Limitar longitud
-}
+import { sanitizeForPrompt } from "@/lib/utils/sanitizePrompt";
 
 export async function POST(request: NextRequest) {
   try {
