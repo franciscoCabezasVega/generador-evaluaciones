@@ -111,18 +111,41 @@ export async function PATCH(
   const finalCity = (updates.city ?? body.city) as string | null;
   if (finalCountryCode) {
     updates.timezone = deriveTimezone(finalCountryCode, finalCity);
+  } else if (updates.country_code !== undefined) {
+    // country_code fue explícitamente limpiado → limpiar timezone también
+    updates.timezone = null;
   }
 
-  if (body.work_start_time !== undefined)
-    updates.work_start_time =
-      typeof body.work_start_time === "string" && body.work_start_time.trim()
-        ? body.work_start_time.trim()
-        : null;
-  if (body.work_end_time !== undefined)
-    updates.work_end_time =
-      typeof body.work_end_time === "string" && body.work_end_time.trim()
-        ? body.work_end_time.trim()
-        : null;
+  const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
+  if (body.work_start_time !== undefined) {
+    if (
+      typeof body.work_start_time === "string" &&
+      body.work_start_time.trim()
+    ) {
+      if (!TIME_RE.test(body.work_start_time.trim())) {
+        return NextResponse.json(
+          { error: "work_start_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      updates.work_start_time = body.work_start_time.trim();
+    } else {
+      updates.work_start_time = null;
+    }
+  }
+  if (body.work_end_time !== undefined) {
+    if (typeof body.work_end_time === "string" && body.work_end_time.trim()) {
+      if (!TIME_RE.test(body.work_end_time.trim())) {
+        return NextResponse.json(
+          { error: "work_end_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      updates.work_end_time = body.work_end_time.trim();
+    } else {
+      updates.work_end_time = null;
+    }
+  }
 
   if (body.lunch_hours !== undefined) {
     const lh = Number(body.lunch_hours);

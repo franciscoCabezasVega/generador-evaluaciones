@@ -122,19 +122,36 @@ export async function POST(request: NextRequest) {
   }
 
   // Solo asignar si hay valor real; omitir cuando vacío → BD usa DEFAULT '09:00'/'18:00'
+  const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
   if (body.work_start_time !== undefined) {
     const wst =
       typeof body.work_start_time === "string" && body.work_start_time.trim()
         ? body.work_start_time.trim()
         : null;
-    if (wst !== null) calendarFields.work_start_time = wst;
+    if (wst !== null) {
+      if (!TIME_RE.test(wst)) {
+        return NextResponse.json(
+          { error: "work_start_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      calendarFields.work_start_time = wst;
+    }
   }
   if (body.work_end_time !== undefined) {
     const wet =
       typeof body.work_end_time === "string" && body.work_end_time.trim()
         ? body.work_end_time.trim()
         : null;
-    if (wet !== null) calendarFields.work_end_time = wet;
+    if (wet !== null) {
+      if (!TIME_RE.test(wet)) {
+        return NextResponse.json(
+          { error: "work_end_time debe tener formato HH:MM o HH:MM:SS" },
+          { status: 400 },
+        );
+      }
+      calendarFields.work_end_time = wet;
+    }
   }
 
   if (body.lunch_hours !== undefined) {

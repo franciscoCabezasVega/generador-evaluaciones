@@ -228,29 +228,52 @@ function extractTaskQAWindow(
         ? monthStart
         : fromRaw;
 
-  // ── to: cierre de tarea o hoy ─────────────────────────────────────────────
-  // Preferir current_status (enviado por ClickUp como estado definitivo).
-  // Fallback: el entry con el mayor `since` ms — NO orderindex, que es la
-  // posición de columna del workflow y no el orden temporal de transiciones.
-  const latestEntry =
-    currentStatus ??
-    statusHistory.reduce(
-      (prev, curr) =>
-        Number(curr.total_time.since) > Number(prev.total_time.since)
-          ? curr
-          : prev,
-      statusHistory[0],
-    );
+  // ── to: fin del período QA ────────────────────────────────────────────────
+  // 1. Último entry QA por timestamp (no por orderindex).
+  const lastQAEntry = qaEntries.reduce(
+    (prev, curr) =>
+      Number(curr.total_time.since) > Number(prev.total_time.since)
+        ? curr
+        : prev,
+    qaEntries[0]!,
+  );
+  const lastQASinceMs = Number(lastQAEntry.total_time.since);
+
+  // 2. ¿La tarea salió de QA? — primer status no-QA posterior al último QA.
+  // Si existe, la ventana termina cuando la tarea transitó fuera de QA, no hoy.
+  const nonQAAfterLastQA = statusHistory.filter(
+    (e) =>
+      !STATUS_CATEGORY_MAP[e.status.toLowerCase()] &&
+      Number(e.total_time.since) > lastQASinceMs,
+  );
 
   let toRaw: Date;
-  if (latestEntry && isTerminalStatus(latestEntry.status)) {
-    // Tarea cerrada: usamos el since del status terminal como fecha de cierre.
-    const doneSince = Number(latestEntry.total_time.since);
-    toRaw =
-      !isNaN(doneSince) && doneSince > 0 ? new Date(doneSince) : new Date();
+  if (nonQAAfterLastQA.length > 0) {
+    // La tarea salió de QA → `to` es el momento de la primera transición fuera de QA.
+    const exitMs = Math.min(
+      ...nonQAAfterLastQA.map((e) => Number(e.total_time.since)),
+    );
+    toRaw = new Date(exitMs);
   } else {
-    // En progreso: hasta hoy (lo realizado hasta el momento del sync).
-    toRaw = new Date();
+    // La tarea sigue en QA (o es terminal): usar currentStatus o historial global.
+    const latestEntry =
+      currentStatus ??
+      statusHistory.reduce(
+        (prev, curr) =>
+          Number(curr.total_time.since) > Number(prev.total_time.since)
+            ? curr
+            : prev,
+        statusHistory[0],
+      );
+    if (latestEntry && isTerminalStatus(latestEntry.status)) {
+      // Tarea cerrada: usamos el since del status terminal como fecha de cierre.
+      const doneSince = Number(latestEntry.total_time.since);
+      toRaw =
+        !isNaN(doneSince) && doneSince > 0 ? new Date(doneSince) : new Date();
+    } else {
+      // En progreso (aún en QA): hasta ahora.
+      toRaw = new Date();
+    }
   }
 
   // Clamp to: no puede superar el fin del mes ni ser anterior a from.
@@ -465,7 +488,7 @@ export async function syncTaskTimings(
             const { data: qaConfigs } = await supabase
               .from("qa_members")
               .select(
-                "id, name, country_code, work_start_time, work_end_time, lunch_hours, work_days",
+                "id, name, country_code, timezone, work_start_time, work_end_time, lunch_hours, work_days",
               )
               .in("name", uniqueNames);
 
@@ -481,6 +504,7 @@ export async function syncTaskTimings(
                       {
                         id: qc.id as string,
                         country_code: qc.country_code as string | null,
+                        timezone: qc.timezone as string | null,
                         work_start_time: qc.work_start_time as string | null,
                         work_end_time: qc.work_end_time as string | null,
                         lunch_hours: qc.lunch_hours as number | null,
@@ -531,13 +555,15 @@ export async function syncTaskTimings(
               .map(([slug, hours]) => {
                 const rawHours = hours / qaCount;
                 // calFactor = workHours / calendarHours (ver getAdjustmentFactor).
-                // rawHours ya está en escala 8h/día (mapStatusesToCategoryHours ÷3),
-                // así que rawHours × 3 recupera las horas calendario brutas, y
-                // × calFactor convierte a horas laborales reales del QA.
-                // Si calFactor es undefined (QA sin calendario) → split legacy.
+                // rawHours ya está en escala 8h/día (mapStatusesToCategoryHours ÷3).
+                // calFactor ≈ workDays×8h / windowCalendarHours ≈ 8/24 = 1/3 sin OOO.
+                // rawHours × calFactor reduce las horas proporcionalmente a días no
+                // trabajados (OOO, feriados). Sin ajuste (undefined) → split legacy.
+                // NOTA: NO multiplicar por 3 — rawHours ya está en escala 8h/día;
+                // hacerlo deshace la conversión y produce horas ≈ raw sin ajuste.
                 const calFactor = factorByEntryId?.get(entry.id as string);
                 const effectiveHours =
-                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
+                  calFactor !== undefined ? rawHours * calFactor : rawHours;
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -557,7 +583,7 @@ export async function syncTaskTimings(
                 const rawHours = hours / qaCount;
                 const calFactor = factorByEntryId?.get(qe.id as string);
                 const effectiveHours =
-                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
+                  calFactor !== undefined ? rawHours * calFactor : rawHours;
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??

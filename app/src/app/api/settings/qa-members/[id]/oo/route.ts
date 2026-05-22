@@ -157,6 +157,15 @@ export async function DELETE(
     );
   }
 
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(ooId)) {
+    return NextResponse.json(
+      { error: "ooId debe ser un UUID válido" },
+      { status: 400 },
+    );
+  }
+
   const { error } = await supabase
     .from("qa_member_oo")
     .delete()

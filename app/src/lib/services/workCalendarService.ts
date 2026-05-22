@@ -29,6 +29,8 @@ import type { HolidayEntry, OOOPeriod } from "@/lib/types";
 export interface QAWorkConfig {
   id: string;
   country_code: string | null;
+  /** IANA timezone override (p.ej. "America/Monterrey"). Tiene precedencia sobre COUNTRY_TIMEZONE_MAP. */
+  timezone?: string | null;
   work_start_time: string | null; // "HH:MM" or "HH:MM:SS"
   work_end_time: string | null;
   lunch_hours: number | null;
@@ -96,17 +98,16 @@ const COUNTRY_TIMEZONE_MAP: Readonly<Record<string, string>> = {
 
 /**
  * Retorna la fracción decimal de hora (0–23.999) de un timestamp UTC
- * en el timezone local del QA, o null si el country_code no tiene mapeo.
+ * en el timezone dado, o null si no se provee timezone.
  */
 function getLocalHourDecimal(
   utcDate: Date,
-  countryCode: string,
+  timezone: string | null,
 ): number | null {
-  const tz = COUNTRY_TIMEZONE_MAP[countryCode];
-  if (!tz) return null;
+  if (!timezone) return null;
   try {
     const fmt = new Intl.DateTimeFormat("en", {
-      timeZone: tz,
+      timeZone: timezone,
       hour: "numeric",
       minute: "numeric",
       hour12: false,
@@ -126,15 +127,17 @@ function getLocalHourDecimal(
 
 /**
  * Retorna la fecha calendario (en noon local para evitar DST) que corresponde
- * a un timestamp UTC en el timezone del QA. Retorna null sin mapeo.
+ * a un timestamp UTC en el timezone dado. Retorna null si no se provee timezone.
  */
-function getLocalCalendarDate(utcDate: Date, countryCode: string): Date | null {
-  const tz = COUNTRY_TIMEZONE_MAP[countryCode];
-  if (!tz) return null;
+function getLocalCalendarDate(
+  utcDate: Date,
+  timezone: string | null,
+): Date | null {
+  if (!timezone) return null;
   try {
     // en-CA usa formato YYYY-MM-DD — ideal para parseo sin ambigüedad
     const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
+      timeZone: timezone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -287,6 +290,12 @@ export async function getWorkingHoursForQA(
 ): Promise<number> {
   if (!qa.country_code) return 0;
 
+  // Timezone efectiva: campo explícito guardado > mapeo por country_code.
+  // Para países multi-zona (MX, BR, US) el mapeo no aplica;
+  // se usa el timezone guardado en qa_members al asignar el país/ciudad.
+  const resolvedTz =
+    qa.timezone ?? COUNTRY_TIMEZONE_MAP[qa.country_code] ?? null;
+
   const supabase = getServiceClient();
   if (!supabase) return 0;
 
@@ -344,14 +353,14 @@ export async function getWorkingHoursForQA(
   // efectivamente transcurridas desde el inicio de jornada.
   // Esto evita contar horas futuras (o inexistentes) cuando el sync corre antes
   // de las 8 AM hora local — caso reportado por Francisco Cabezas.
-  if (window?.to && qa.country_code) {
-    const localHour = getLocalHourDecimal(window.to, qa.country_code);
+  if (window?.to && resolvedTz) {
+    const localHour = getLocalHourDecimal(window.to, resolvedTz);
     if (localHour !== null) {
       const workStart = parseTimeToHours(qa.work_start_time ?? "08:00");
       const workEnd = parseTimeToHours(qa.work_end_time ?? "17:00");
 
       // Obtener la fecha calendario del sync en el tz del QA
-      const localDate = getLocalCalendarDate(window.to, qa.country_code);
+      const localDate = getLocalCalendarDate(window.to, resolvedTz);
       if (localDate) {
         const localDateStr = toLocalDateStr(localDate);
         const isCounted =
