@@ -76,7 +76,7 @@ export async function PUT(
       body.qa_entries.length === 0
     ) {
       return NextResponse.json(
-        { error: "qa_entries array is required and cannot be empty" },
+        { error: "qa_entries es requerido y no puede estar vacío" },
         { status: 400 },
       );
     }
@@ -208,13 +208,7 @@ export async function PUT(
     const userEmailPut = user.email || "unknown";
     after(async () => {
       try {
-        const supabase = getAuthenticatedSupabase(token);
-        const { data: taskData } = await supabase
-          .from("tasks")
-          .select("name")
-          .eq("id", timing.task_id)
-          .maybeSingle();
-        const taskName = taskData?.name ?? timing.task_id;
+        // Armar newQAEntries primero (sin DB) para poder comparar temprano
         const newQAEntries: AuditQAEntry[] = body.qa_entries.map((e) => ({
           qa_name: e.qa_name,
           categories: Object.entries(e.hours_by_category ?? {})
@@ -225,7 +219,7 @@ export async function PUT(
             })),
         }));
 
-        // Solo registrar si los valores realmente cambiaron
+        // Comparar antes de hacer cualquier query a BD — saltar si no hay cambios reales
         const normalizeEntries = (
           entries: {
             qa_name: string;
@@ -251,6 +245,15 @@ export async function PUT(
         if (normalizeEntries(oldQAEntries) === normalizeEntries(newQAEntries)) {
           return; // Sin cambios reales — no registrar en auditoría
         }
+
+        // Solo llegar aquí si realmente hubo cambios — recién consultar taskName
+        const supabase = getAuthenticatedSupabase(token);
+        const { data: taskData } = await supabase
+          .from("tasks")
+          .select("name")
+          .eq("id", timing.task_id)
+          .maybeSingle();
+        const taskName = taskData?.name ?? timing.task_id;
 
         await supabase.from("audit_logs").insert({
           user_id: user.id,
