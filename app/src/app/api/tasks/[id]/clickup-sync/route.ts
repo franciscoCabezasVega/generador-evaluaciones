@@ -127,8 +127,12 @@ export async function POST(
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
-  // 2. Run the sync immediately so the user sees results right away
-  const result = await syncTaskTimings(id, cleanId);
+  // 2. Run the sync immediately so the user sees results right away.
+  // Pasar el contexto del usuario para que el audit quede en su nombre (no system@cron.local).
+  const result = await syncTaskTimings(id, cleanId, {
+    userId: authCtx.user.id,
+    userEmail: authCtx.user.email ?? "",
+  });
 
   if (!result.success) {
     return NextResponse.json(

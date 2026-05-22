@@ -1,7 +1,11 @@
 import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskTimingInput } from "@/lib/types";
-import { getUserFromRequest, getAuthenticatedSupabase } from "@/lib/auth";
+import {
+  getUserFromRequest,
+  getAuthenticatedSupabase,
+  getServiceClient,
+} from "@/lib/auth";
 import { timingService } from "@/lib/services/timingService";
 
 /**
@@ -246,16 +250,19 @@ export async function PUT(
           return; // Sin cambios reales — no registrar en auditoría
         }
 
-        // Solo llegar aquí si realmente hubo cambios — recién consultar taskName
-        const supabase = getAuthenticatedSupabase(token);
-        const { data: taskData } = await supabase
+        // Solo llegar aquí si realmente hubo cambios — recién consultar taskName.
+        // Usar service client para el audit insert: el Bearer token del usuario
+        // puede fallar silenciosamente en contexto async post-response (after()).
+        const auditClient = getServiceClient();
+        if (!auditClient) return; // Sin service key configurada — saltar
+        const { data: taskData } = await auditClient
           .from("tasks")
           .select("name")
           .eq("id", timing.task_id)
           .maybeSingle();
         const taskName = taskData?.name ?? timing.task_id;
 
-        await supabase.from("audit_logs").insert({
+        await auditClient.from("audit_logs").insert({
           user_id: user.id,
           user_email: userEmailPut,
           action: "UPDATE",

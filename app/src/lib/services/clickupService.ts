@@ -12,6 +12,11 @@
 
 import { getServiceClient } from "@/lib/auth";
 import { decryptText } from "@/lib/encryption";
+import { endOfMonth } from "date-fns";
+import {
+  getAdjustmentFactor,
+  type TaskQAWindow,
+} from "@/lib/services/workCalendarService";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +32,8 @@ interface ClickUpTimeInStatus {
 
 interface ClickUpTimeInStatusResponse {
   status_history: ClickUpTimeInStatus[];
+  /** Estado actual de la tarea (presente en la mayoría de respuestas). */
+  current_status?: ClickUpTimeInStatus;
 }
 
 /** Maps a timing_categories slug to total hours computed from ClickUp. */
@@ -81,7 +88,7 @@ async function getClickUpApiKey(): Promise<string | null> {
     .maybeSingle();
 
   if (error) {
-    throw new Error(`DB error reading clickup_settings: ${error.message}`);
+    throw new Error(`Error de BD al leer clickup_settings: ${error.message}`);
   }
   if (!data) return null;
 
@@ -91,7 +98,7 @@ async function getClickUpApiKey(): Promise<string | null> {
     // Distinguish decryption failure from "not configured" so callers can
     // surface a meaningful diagnostic instead of a generic "not configured".
     throw new Error(
-      `ClickUp API key decryption failed — the stored ciphertext may be corrupt or CLICKUP_ENCRYPTION_KEY has changed. Original error: ${
+      `Error al descifrar la API key de ClickUp — el texto cifrado puede estar corrupto o CLICKUP_ENCRYPTION_KEY ha cambiado. Error original: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -141,7 +148,7 @@ async function fetchTimeInStatus(
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(
-      `ClickUp API error ${response.status} for task ${taskId}: ${body}`,
+      `Error de la API de ClickUp ${response.status} para la tarea ${taskId}: ${body}`,
     );
   }
 
@@ -177,6 +184,70 @@ export function isTerminalStatus(status: string): boolean {
   return terminal.includes(status.toLowerCase());
 }
 
+/**
+ * Factory (Value Object pattern) — construye la ventana [from, to] del período
+ * en que la tarea estuvo activa en cualquier status QA reconocido.
+ *
+ * - from: timestamp más temprano entre todos los statuses QA del historial.
+ *         Si la tarea entró a QA antes del mes asignado, se clampea al inicio de mes.
+ * - to:   si la última transición es a un estado terminal (closed/done/…),
+ *         se usa el `since` de ese estado como fecha de cierre;
+ *         si la tarea sigue abierta, se usa la fecha de hoy.
+ *         Siempre clampeado al fin del mes asignado.
+ *
+ * Retorna undefined si no hay ningún status QA en el historial.
+ */
+function extractTaskQAWindow(
+  statusHistory: ClickUpTimeInStatus[],
+  taskMeta: { year: number; month: number },
+): TaskQAWindow | undefined {
+  const monthStart = new Date(taskMeta.year, taskMeta.month - 1, 1);
+  const monthEnd = endOfMonth(monthStart);
+
+  // ── from: entrada más temprana a QA ─────────────────────────────────────
+  const qaEntries = statusHistory.filter(
+    (e) => STATUS_CATEGORY_MAP[e.status.toLowerCase()],
+  );
+  if (qaEntries.length === 0) return undefined;
+
+  const sinceMsValues = qaEntries
+    .map((e) => Number(e.total_time.since))
+    .filter((n) => !isNaN(n) && n > 0);
+  if (sinceMsValues.length === 0) return undefined;
+
+  const fromRaw = new Date(Math.min(...sinceMsValues));
+  // Clamp from: si entró a QA antes del mes asignado, usar inicio de mes;
+  // si la fecha raw cae después del mes (edge case improbable), usar mes completo.
+  const from =
+    fromRaw > monthEnd
+      ? monthStart
+      : fromRaw < monthStart
+        ? monthStart
+        : fromRaw;
+
+  // ── to: cierre de tarea o hoy ─────────────────────────────────────────────
+  const latestEntry = statusHistory.reduce(
+    (prev, curr) => (curr.orderindex > prev.orderindex ? curr : prev),
+    statusHistory[0],
+  );
+
+  let toRaw: Date;
+  if (latestEntry && isTerminalStatus(latestEntry.status)) {
+    // Tarea cerrada: usamos el since del status terminal como fecha de cierre.
+    const doneSince = Number(latestEntry.total_time.since);
+    toRaw =
+      !isNaN(doneSince) && doneSince > 0 ? new Date(doneSince) : new Date();
+  } else {
+    // En progreso: hasta hoy (lo realizado hasta el momento del sync).
+    toRaw = new Date();
+  }
+
+  // Clamp to: no puede superar el fin del mes ni ser anterior a from.
+  const to = toRaw > monthEnd ? monthEnd : toRaw < from ? from : toRaw;
+
+  return { from, to };
+}
+
 // ── Main export ────────────────────────────────────────────────────────────
 
 export interface SyncResult {
@@ -200,6 +271,7 @@ export interface SyncResult {
 export async function syncTaskTimings(
   internalTaskId: string,
   clickupQaTaskId: string,
+  userCtx?: { userId: string; userEmail: string },
 ): Promise<SyncResult> {
   const supabase = getServiceClient();
   if (!supabase) {
@@ -271,8 +343,16 @@ export async function syncTaskTimings(
         .maybeSingle();
 
       if (taskMetaError) {
-        throw new Error(`DB error reading task: ${taskMetaError.message}`);
+        throw new Error(
+          `Error de BD al leer la tarea: ${taskMetaError.message}`,
+        );
       }
+
+      // Factory: construir la ventana [from, to] que la tarea estuvo en QA.
+      // Usada para pro-ratear el factor calendario al período real de trabajo.
+      const qaWindow = taskMeta
+        ? extractTaskQAWindow(timeData.status_history ?? [], taskMeta)
+        : undefined;
 
       let latestTiming: { id: string } | null = null;
       if (taskMeta) {
@@ -287,7 +367,9 @@ export async function syncTaskTimings(
           .maybeSingle();
 
         if (tError) {
-          throw new Error(`DB error reading task_timings: ${tError.message}`);
+          throw new Error(
+            `Error de BD al leer task_timings: ${tError.message}`,
+          );
         }
         latestTiming = tData;
       }
@@ -304,7 +386,7 @@ export async function syncTaskTimings(
 
         if (qaError) {
           throw new Error(
-            `DB error reading timing_qa_entries: ${qaError.message}`,
+            `Error de BD al leer timing_qa_entries: ${qaError.message}`,
           );
         }
 
@@ -317,7 +399,7 @@ export async function syncTaskTimings(
 
           if (catError) {
             throw new Error(
-              `DB error reading timing_categories: ${catError.message}`,
+              `Error de BD al leer timing_categories: ${catError.message}`,
             );
           }
 
@@ -336,11 +418,16 @@ export async function syncTaskTimings(
           const entryIds = qaEntries.map((e) => e.id as string);
           const categoryIds = Array.from(categoryMap.values());
 
-          // Capture old state BEFORE deleting (for audit diff)
-          type AuditQAEntry = {
-            qa_name: string;
-            categories: { category_name: string; hours: number }[];
-          };
+          // ── Sabor B: Factor calendario absoluto ──────────────────────────
+          // Si ENABLE_WORK_CALENDAR_ADJUSTMENT=true, ajustamos las horas de
+          // cada QA proporcionalmente a sus horas laborales reales en el mes,
+          // en lugar de dividir equitativamente. El factor es:
+          //   factor = horas_laborales_QA / (días_mes × 24)
+          // Esto reduce el total registrado (no redistribuye entre QAs),
+          // reflejando solo las horas que el QA estuvo efectivamente activo.
+          // Si el QA no tiene country_code configurado, fallback al split legacy.
+          // by design: el feature flag permite rollback instantáneo si hay regresiones.
+
           // Helper: extract qa_name from the nested task_qa join result
           // (same pattern as flattenQAEntries in timingService.ts)
           const extractQaName = (qe: Record<string, unknown>): string => {
@@ -351,6 +438,108 @@ export async function syncTaskTimings(
                 : (raw as { qa_name?: string } | undefined)?.qa_name) ?? ""
             );
           };
+
+          let factorByEntryId: Map<string, number> | null = null;
+          if (process.env.ENABLE_WORK_CALENDAR_ADJUSTMENT === "true") {
+            const qaNames = qaEntries.map((e) =>
+              extractQaName(e as Record<string, unknown>),
+            );
+            const uniqueNames = [...new Set(qaNames.filter(Boolean))];
+
+            // Buscar config de calendario en qa_members (join por nombre)
+            const { data: qaConfigs } = await supabase
+              .from("qa_members")
+              .select(
+                "id, name, country_code, work_start_time, work_end_time, lunch_hours, work_days",
+              )
+              .in("name", uniqueNames);
+
+            if (qaConfigs && qaConfigs.length > 0) {
+              const year = (taskMeta as { year: number })?.year ?? 0;
+              const month = (taskMeta as { month: number })?.month ?? 0;
+
+              if (year > 0 && month > 0) {
+                const factorByName = new Map<string, number>();
+                await Promise.all(
+                  qaConfigs.map(async (qc) => {
+                    const factor = await getAdjustmentFactor(
+                      {
+                        id: qc.id as string,
+                        country_code: qc.country_code as string | null,
+                        work_start_time: qc.work_start_time as string | null,
+                        work_end_time: qc.work_end_time as string | null,
+                        lunch_hours: qc.lunch_hours as number | null,
+                        work_days: qc.work_days as number[] | null,
+                      },
+                      year,
+                      month,
+                      qaWindow,
+                    );
+                    if (factor !== null) {
+                      factorByName.set(qc.name as string, factor);
+                    }
+                  }),
+                );
+
+                if (factorByName.size > 0) {
+                  factorByEntryId = new Map(
+                    qaEntries.map((e) => {
+                      const name = extractQaName(e as Record<string, unknown>);
+                      const f = factorByName.get(name) ?? 1;
+                      return [e.id as string, f];
+                    }),
+                  );
+                }
+              }
+            }
+          }
+
+          // Compute desired new state first (before reading or modifying DB)
+          type AuditQAEntry = {
+            qa_name: string;
+            categories: { category_name: string; hours: number }[];
+          };
+
+          const rows = qaEntries.flatMap((entry) =>
+            Object.entries(categoryHours)
+              .filter(([slug]) => categoryMap.has(slug))
+              .map(([slug, hours]) => {
+                const rawHours = hours / qaCount;
+                // Si hay factor calendario para esta entrada, aplicarlo
+                const factor = factorByEntryId?.get(entry.id as string) ?? 1;
+                const effectiveHours = rawHours * factor;
+                return {
+                  timing_qa_entry_id: entry.id as string,
+                  category_id: categoryMap.get(slug)!,
+                  hours: Math.round(effectiveHours * 100) / 100,
+                };
+              }),
+          );
+
+          // Build new QA entries for audit + diff (mirrors rows being inserted)
+          const newQAEntries: AuditQAEntry[] = (
+            qaEntries as Record<string, unknown>[]
+          ).map((qe) => ({
+            qa_name: extractQaName(qe),
+            categories: Object.entries(categoryHours)
+              .filter(([slug]) => categoryMap.has(slug))
+              .map(([slug, hours]) => {
+                const rawHours = hours / qaCount;
+                const factor = factorByEntryId?.get(qe.id as string) ?? 1;
+                return {
+                  category_name:
+                    (categories ?? []).find((c) => c.slug === slug)?.name ??
+                    slug,
+                  hours: Math.round(rawHours * factor * 100) / 100,
+                  ...(factor !== 1
+                    ? { raw_hours: Math.round(rawHours * 100) / 100, factor }
+                    : {}),
+                };
+              })
+              .filter((c) => c.hours > 0),
+          }));
+
+          // Capture current (old) state from DB for diff comparison + audit
           let oldQAEntries: AuditQAEntry[] = [];
           if (categoryIds.length > 0) {
             const { data: currentHours } = await supabase
@@ -378,44 +567,57 @@ export async function syncTaskTimings(
               .filter((e) => e.categories.length > 0);
           }
 
-          if (categoryIds.length > 0) {
-            const { error: deleteError } = await supabase
-              .from("timing_qa_category_hours")
-              .delete()
-              .in("timing_qa_entry_id", entryIds)
-              .in("category_id", categoryIds);
+          // Normalize entries for stable deep comparison (ignores extra fields like raw_hours/factor)
+          const normalizeEntries = (
+            entries: {
+              qa_name: string;
+              categories: { category_name: string; hours: number }[];
+            }[],
+          ) =>
+            JSON.stringify(
+              entries
+                .map((e) => ({
+                  qa_name: e.qa_name,
+                  categories: [...e.categories]
+                    .sort((a, b) =>
+                      a.category_name.localeCompare(b.category_name),
+                    )
+                    .map((c) => ({
+                      category_name: c.category_name,
+                      hours: c.hours,
+                    })),
+                }))
+                .sort((a, b) => a.qa_name.localeCompare(b.qa_name)),
+            );
 
-            if (deleteError) {
-              throw new Error(`DB delete failed: ${deleteError.message}`);
-            }
-          }
-
-          const rows = qaEntries.flatMap((entry) =>
-            Object.entries(categoryHours)
-              .filter(([slug]) => categoryMap.has(slug))
-              .map(([slug, hours]) => ({
-                timing_qa_entry_id: entry.id as string,
-                category_id: categoryMap.get(slug)!,
-                hours: Math.round((hours / qaCount) * 100) / 100,
-              })),
-          );
-
-          // Build new QA entries for audit (mirrors rows being inserted)
-          const newQAEntries: AuditQAEntry[] = (
-            qaEntries as Record<string, unknown>[]
-          ).map((qe) => ({
-            qa_name: extractQaName(qe),
-            categories: Object.entries(categoryHours)
-              .filter(([slug]) => categoryMap.has(slug))
-              .map(([slug, hours]) => ({
-                category_name:
-                  (categories ?? []).find((c) => c.slug === slug)?.name ?? slug,
-                hours: Math.round((hours / qaCount) * 100) / 100,
-              }))
-              .filter((c) => c.hours > 0),
+          const newForDiff = newQAEntries.map((e) => ({
+            qa_name: e.qa_name,
+            categories: e.categories.map((c) => ({
+              category_name: c.category_name,
+              hours: c.hours,
+            })),
           }));
 
-          if (rows.length > 0) {
+          // Solo escribir en BD y registrar auditoría si los valores cambiaron realmente
+          const hasActualChanges =
+            rows.length > 0 &&
+            normalizeEntries(oldQAEntries) !== normalizeEntries(newForDiff);
+
+          if (hasActualChanges) {
+            if (categoryIds.length > 0) {
+              const { error: deleteError } = await supabase
+                .from("timing_qa_category_hours")
+                .delete()
+                .in("timing_qa_entry_id", entryIds)
+                .in("category_id", categoryIds);
+
+              if (deleteError) {
+                throw new Error(
+                  `Error al eliminar registros en BD: ${deleteError.message}`,
+                );
+              }
+            }
+
             const { error: upsertError } = await supabase
               .from("timing_qa_category_hours")
               .upsert(rows, {
@@ -423,7 +625,9 @@ export async function syncTaskTimings(
               });
 
             if (upsertError) {
-              throw new Error(`DB upsert failed: ${upsertError.message}`);
+              throw new Error(
+                `Error al guardar registros en BD: ${upsertError.message}`,
+              );
             }
 
             // Step 5a: Real write happened — update sync record.
@@ -440,12 +644,17 @@ export async function syncTaskTimings(
 
             if (syncUpdateError) {
               throw new Error(
-                `DB error updating clickup_task_sync: ${syncUpdateError.message}`,
+                `Error de BD al actualizar clickup_task_sync: ${syncUpdateError.message}`,
               );
             }
 
-            // Step 5c: Emit audit log for the cron sync (fire-and-forget).
+            // Step 5c: Emit audit log — solo cuando los valores cambiaron realmente.
+            // Si se pasa userCtx (sync manual desde UI), se atribuye al usuario real.
+            // Si no (cron), se usa system@cron.local.
             const systemUserId = process.env.SYSTEM_USER_ID ?? "system";
+            const auditUserId = userCtx?.userId ?? systemUserId;
+            const auditUserEmail = userCtx?.userEmail ?? "system@cron.local";
+            const syncedBy = userCtx ? "clickup-ui" : "clickup-cron";
             void (async () => {
               try {
                 const { data: taskRow } = await supabase
@@ -457,8 +666,8 @@ export async function syncTaskTimings(
                 const month = taskMeta?.month ?? 0;
                 const year = taskMeta?.year ?? 0;
                 await supabase.from("audit_logs").insert({
-                  user_id: systemUserId,
-                  user_email: "system@cron.local",
+                  user_id: auditUserId,
+                  user_email: auditUserEmail,
                   action: "UPDATE",
                   entity_type: "TIMING",
                   entity_id: latestTiming.id,
@@ -466,7 +675,7 @@ export async function syncTaskTimings(
                   old_values: { qa_entries: oldQAEntries },
                   new_values: {
                     qa_entries: newQAEntries,
-                    synced_by: "clickup-cron",
+                    synced_by: syncedBy,
                   },
                   timestamp: new Date().toISOString(),
                 });
@@ -495,7 +704,7 @@ export async function syncTaskTimings(
 
     if (skipUpdateError) {
       throw new Error(
-        `DB error updating clickup_task_sync (skipped path): ${skipUpdateError.message}`,
+        `Error de BD al actualizar clickup_task_sync (ruta omitida): ${skipUpdateError.message}`,
       );
     }
 
@@ -532,7 +741,7 @@ export async function syncTaskTimings(
  */
 export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
   const supabase = getServiceClient();
-  if (!supabase) throw new Error("Service client unavailable");
+  if (!supabase) throw new Error("Cliente de servicio no disponible");
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // getMonth() is 0-indexed
@@ -549,13 +758,15 @@ export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
     .eq("tasks.year", currentYear);
 
   if (error) {
-    throw new Error(`Failed to fetch sync rows: ${error.message}`);
+    throw new Error(
+      `Error al obtener filas de sincronización: ${error.message}`,
+    );
   }
 
   if (syncRows && syncRows.length > 0) {
     console.warn(
-      `[syncAllEnabledTasks] Found ${syncRows.length} Pendiente task(s) ` +
-        `for ${currentMonth}/${currentYear} with sync enabled.`,
+      `[syncAllEnabledTasks] Se encontraron ${syncRows.length} tarea(s) Pendiente ` +
+        `para ${currentMonth}/${currentYear} con sincronización habilitada.`,
     );
   }
 
@@ -571,8 +782,8 @@ export async function syncAllEnabledTasks(): Promise<SyncResult[]> {
   for (const row of syncRows) {
     if (Date.now() >= deadline) {
       console.warn(
-        "[syncAllEnabledTasks] Time budget exceeded — stopping early. " +
-          `Processed ${results.length}/${syncRows.length} tasks.`,
+        "[syncAllEnabledTasks] Presupuesto de tiempo agotado — deteniendo antes de completar. " +
+          `Procesadas ${results.length}/${syncRows.length} tareas.`,
       );
       break;
     }
