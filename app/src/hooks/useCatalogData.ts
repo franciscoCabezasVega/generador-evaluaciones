@@ -195,7 +195,8 @@ export function useCatalogData(): CatalogData {
       // ya no reintentamos aquí para no crear loops; simplemente no mostramos error
       // porque warmSession ya loggeó el problema.
       if (err instanceof Error && err.name === "SessionLockError") return;
-      // SessionUnavailableError: sesión limpiada por logout — ignorar silenciosamente
+      // SessionUnavailableError: estado transitorio (auto-refresh en curso, sesión aún no disponible).
+      // No es un error del usuario — ignorar silenciosamente para no mostrar error en UI.
       if (err instanceof SessionUnavailableError) return;
       console.error("Error loading catalog data:", err);
       setError("Error al cargar los catálogos. Intenta recargar la página.");
