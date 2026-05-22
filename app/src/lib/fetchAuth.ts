@@ -1,5 +1,19 @@
 import { supabase } from "./supabase";
 
+/**
+ * Error tipado para el estado transitorio donde la sesión aún no está
+ * disponible (el auto-refresh no terminó). Usar `instanceof` en lugar de
+ * `message.includes(...)` para que el idioma del mensaje no afecte la lógica.
+ */
+export class SessionUnavailableError extends Error {
+  constructor(
+    message = "Sesión no disponible — el token puede estar renovándose",
+  ) {
+    super(message);
+    this.name = "SessionUnavailableError";
+  }
+}
+
 type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
 type RefreshSessionResult = Awaited<
   ReturnType<typeof supabase.auth.refreshSession>
@@ -368,12 +382,12 @@ export async function authenticatedFetch(
   const result = await SessionManager.getInstance().getSession(signal);
 
   if (result.error) {
-    throw new Error(`Session error: ${result.error.message}`);
+    throw new Error(`Error de sesión: ${result.error.message}`);
   }
 
   if (!result.data.session) {
     // Estado transitorio: el auto-refresh aún no terminó. El caller reintentará.
-    throw new Error("Session not available — token may be refreshing");
+    throw new SessionUnavailableError();
   }
 
   const headers = new Headers(options.headers || {});
@@ -382,8 +396,8 @@ export async function authenticatedFetch(
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    console.warn("Got 401 Unauthorized, session may be expired");
-    throw new Error("Unauthorized - token may be expired");
+    console.warn("Recibido 401 No autorizado — la sesión puede haber expirado");
+    throw new Error("No autorizado — el token puede haber expirado");
   }
 
   return response;

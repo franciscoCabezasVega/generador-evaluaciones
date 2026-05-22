@@ -33,7 +33,9 @@ export function useAuthError() {
           try {
             const data = await clonedResponse.json();
             if (data.error?.message?.includes("Refresh Token")) {
-              console.warn("Refresh token error detected, clearing session");
+              console.warn(
+                "Error de refresh token detectado, limpiando sesión",
+              );
               setHasError(true);
               await supabase.auth.signOut();
             }

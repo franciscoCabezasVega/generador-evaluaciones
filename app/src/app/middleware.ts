@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get("sb-access-token")?.value;
 
   if (!token) {
-    console.warn(`Unauthorized access attempt to ${pathname}, no token found`);
+    console.warn(`Intento de acceso no autorizado a ${pathname}, sin token`);
 
     // Redirigir a login
     const loginUrl = new URL("/auth/login", request.url);

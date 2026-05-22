@@ -8,7 +8,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase URL or anon key");
+  throw new Error("URL de Supabase o clave anon no configuradas");
 }
 
 // Wrapper de processLock que siempre pasa acquireTimeout=-1.

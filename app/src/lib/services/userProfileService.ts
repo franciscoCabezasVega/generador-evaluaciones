@@ -76,7 +76,7 @@ export const userProfileService = {
         error: authError,
       } = await getCurrentUserViaManager();
 
-      if (authError || !user) throw new Error("Not authenticated");
+      if (authError || !user) throw new Error("No autenticado");
 
       // Verificar que sea admin
       const { data: adminCheck, error: adminError } = await supabase
@@ -86,7 +86,7 @@ export const userProfileService = {
         .single();
 
       if (adminError || adminCheck?.role_id !== 1) {
-        throw new Error("Not authorized - admin only");
+        throw new Error("No autorizado — solo administradores");
       }
 
       const { data, error } = await supabase

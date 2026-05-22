@@ -28,13 +28,13 @@ export function AuthErrorBoundary({ children }: AuthErrorBoundaryProps) {
       // Esto evita falsos positivos por eventos transitorios durante
       // el refresh de token o al restaurar la pestaña del navegador.
       if (event === "SIGNED_OUT" && session === null) {
-        console.warn("Session cleared - user was signed out");
+        console.warn("Sesión limpiada — el usuario cerró sesión");
         router.push("/auth/login");
       }
 
       // TOKEN_REFRESHED sin sesión indica un fallo real de refresh
       if (event === "TOKEN_REFRESHED" && !session) {
-        console.warn("Token refresh failed");
+        console.warn("Fallo al renovar el token");
         router.push("/auth/login");
       }
     });
@@ -42,7 +42,7 @@ export function AuthErrorBoundary({ children }: AuthErrorBoundaryProps) {
     // Manejar posibles errores de refresh token de forma global
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key?.includes("auth") && e.newValue === null) {
-        console.warn("Auth tokens cleared from storage");
+        console.warn("Tokens de autenticación eliminados del almacenamiento");
         router.push("/auth/login");
       }
     };

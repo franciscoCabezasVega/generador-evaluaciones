@@ -114,7 +114,7 @@ export function useEntityAuditHistory(
         );
 
         if (!response.ok) {
-          throw new Error("Failed to load audit history");
+          throw new Error("Error al cargar historial de auditoría");
         }
 
         const data = await response.json();

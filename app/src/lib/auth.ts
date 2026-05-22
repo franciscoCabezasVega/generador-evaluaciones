@@ -22,7 +22,7 @@ export function getServiceClient(): SupabaseClient | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("Missing Supabase configuration");
+    console.error("Configuración de Supabase incompleta");
     return null;
   }
   _serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
@@ -85,13 +85,13 @@ export async function getUserFromRequest(request: NextRequest) {
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error("Token verification failed:", error);
+      console.error("Fallo en la verificación del token:", error);
       return null;
     }
 
     return user;
   } catch (error) {
-    console.error("Error verifying token:", error);
+    console.error("Error al verificar token:", error);
     return null;
   }
 }
@@ -241,7 +241,7 @@ export function getAuthenticatedSupabase(token: string) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase configuration");
+    throw new Error("Configuración de Supabase incompleta");
   }
 
   return createClient(supabaseUrl, supabaseAnonKey, {

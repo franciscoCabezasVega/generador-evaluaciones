@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { SessionUnavailableError } from "@/lib/fetchAuth";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -12,7 +13,7 @@ export function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof Error) {
     // Errores transitorios de lock/timeout NO son sesión expirada
     if (error.name === "SessionLockError") return false;
-    if (error.message.includes("Session not available")) return false;
+    if (error instanceof SessionUnavailableError) return false;
     if (error.message.includes("getSession timeout")) return false;
 
     const message = error.message.toLowerCase();

@@ -92,15 +92,15 @@ export async function POST(request: NextRequest) {
     // Validate each QA entry
     const validateHours = (value: number, fieldName: string) => {
       if (typeof value !== "number") {
-        throw new Error(`${fieldName} must be a number`);
+        throw new Error(`${fieldName} debe ser un número`);
       }
       if (!Number.isFinite(value)) {
-        throw new Error(`${fieldName} must be a finite number`);
+        throw new Error(`${fieldName} debe ser un número finito`);
       }
       // Allow decimals: ClickUp sync writes values like 20.88 or 9.41
       // (hours-in-status divided among QA members). The DB column is NUMERIC(10,2).
       if (value < 0) {
-        throw new Error(`${fieldName} must be a non-negative number`);
+        throw new Error(`${fieldName} debe ser un número no negativo`);
       }
     };
 
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < body.qa_entries.length; i++) {
         const entry = body.qa_entries[i];
         if (!entry.qa_name || entry.qa_name.trim() === "") {
-          throw new Error(`QA entry ${i + 1}: qa_name is required`);
+          throw new Error(`Entrada QA ${i + 1}: qa_name es obligatorio`);
         }
 
         if (
@@ -117,18 +117,20 @@ export async function POST(request: NextRequest) {
           Array.isArray(entry.hours_by_category)
         ) {
           throw new Error(
-            `QA ${entry.qa_name}: hours_by_category must be an object`,
+            `QA ${entry.qa_name}: hours_by_category debe ser un objeto`,
           );
         }
 
         let entryTotal = 0;
         for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
           if (!catId || catId.trim() === "") {
-            throw new Error(`QA ${entry.qa_name}: category id cannot be empty`);
+            throw new Error(
+              `QA ${entry.qa_name}: el id de categoría no puede estar vacío`,
+            );
           }
           validateHours(
             hours as number,
-            `QA ${entry.qa_name}: category ${catId}`,
+            `QA ${entry.qa_name}: categoría ${catId}`,
           );
           entryTotal += hours as number;
         }
@@ -137,7 +139,7 @@ export async function POST(request: NextRequest) {
           // body.for_sync must be strictly boolean true; a string "true" or any
           // other truthy value does NOT bypass the zero-hours validation.
           throw new Error(
-            `QA ${entry.qa_name}: at least one timing category must have hours > 0`,
+            `QA ${entry.qa_name}: al menos una categoría debe tener horas > 0`,
           );
         }
       }
@@ -146,7 +148,7 @@ export async function POST(request: NextRequest) {
       const qaNames = body.qa_entries.map((e) => e.qa_name);
       const uniqueNames = new Set(qaNames);
       if (uniqueNames.size !== qaNames.length) {
-        throw new Error("Duplicate QA names are not allowed");
+        throw new Error("No se permiten nombres de QA duplicados");
       }
     } catch (validationError) {
       return NextResponse.json(

@@ -74,7 +74,7 @@ export const reportService = {
       error: authError,
     } = await getCurrentUserViaManager();
 
-    if (authError || !user) throw new Error("User not authenticated");
+    if (authError || !user) throw new Error("Usuario no autenticado");
 
     // Obtener la última versión
     const lastReport = await this.getLatestReportVersion(

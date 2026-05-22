@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { authenticatedFetch, warmSession } from "@/lib/fetchAuth";
+import {
+  authenticatedFetch,
+  warmSession,
+  SessionUnavailableError,
+} from "@/lib/fetchAuth";
 import {
   CatalogProduct,
   CatalogProjectType,
@@ -191,9 +195,9 @@ export function useCatalogData(): CatalogData {
       // ya no reintentamos aquí para no crear loops; simplemente no mostramos error
       // porque warmSession ya loggeó el problema.
       if (err instanceof Error && err.name === "SessionLockError") return;
-      // "Session not available": sesión limpiada por logout — ignorar silenciosamente
-      if (err instanceof Error && err.message.includes("Session not available"))
-        return;
+      // SessionUnavailableError: estado transitorio (auto-refresh en curso, sesión aún no disponible).
+      // No es un error del usuario — ignorar silenciosamente para no mostrar error en UI.
+      if (err instanceof SessionUnavailableError) return;
       console.error("Error loading catalog data:", err);
       setError("Error al cargar los catálogos. Intenta recargar la página.");
     } finally {

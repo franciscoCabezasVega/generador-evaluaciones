@@ -263,7 +263,7 @@ function TimingFormComponent(
         const response = await safeFetch(url);
 
         if (!response.ok) {
-          throw new Error("Error loading tasks");
+          throw new Error("Error al cargar tareas");
         }
 
         const data = await response.json();

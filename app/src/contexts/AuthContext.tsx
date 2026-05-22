@@ -241,7 +241,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         e.key?.includes("auth") ||
         e.key === null // null key significa que se limpió todo localStorage
       ) {
-        console.warn("AuthContext: Storage was cleared or changed externally");
+        console.warn(
+          "AuthContext: El almacenamiento fue limpiado o modificado externamente",
+        );
 
         // Detectamos que el storage fue modificado externamente
         // Validar inmediatamente con Supabase si aún hay sesión válida
@@ -249,7 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .getSession()
           .then((session) => {
             if (!session?.user && isMounted) {
-              console.warn("AuthContext: No session found after storage clear");
+              console.warn(
+                "AuthContext: No se encontró sesión tras limpiar el almacenamiento",
+              );
               setUser(null);
               setProfile(null);
               clearLocalStorage();
@@ -450,7 +454,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
+    throw new Error("useAuth debe usarse dentro de AuthProvider");
   }
   return context;
 }

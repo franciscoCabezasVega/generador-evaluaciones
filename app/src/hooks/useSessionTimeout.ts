@@ -30,7 +30,7 @@ export function useSessionTimeout(
 
     // Establecer nuevo timeout
     timeoutRef.current = setTimeout(async () => {
-      console.warn("Session timeout due to inactivity");
+      console.warn("Tiempo de sesión agotado por inactividad");
       await authService.clearSession("timeout");
     }, timeout);
   }, [timeout]);
@@ -43,7 +43,7 @@ export function useSessionTimeout(
       const isValid = await authService.isTokenValid();
 
       if (!isValid) {
-        console.warn("Token validation failed, clearing session");
+        console.warn("Validación del token fallida, limpiando sesión");
         await authService.clearSession("error");
       }
     }, checkInterval);

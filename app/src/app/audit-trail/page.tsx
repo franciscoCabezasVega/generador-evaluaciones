@@ -65,7 +65,7 @@ export default function AuditTrailPage() {
         );
 
         if (!response.ok) {
-          throw new Error("Failed to load audit logs");
+          throw new Error("Error al cargar registros de auditoría");
         }
 
         return await response.json();
