@@ -247,3 +247,188 @@ describe("useCachedFetch – visibilitychange integration", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Auto-retry con jitter (MAX_AUTO_RETRIES = 2) ──────────────────────────────
+// Verifica que el hook reintenta exactamente 2 veces tras fallos transitorios
+// y muestra error duro en el tercer fallo. Usa Math.random mock para delays
+// predecibles y fake timers para controlar el avance del tiempo.
+
+describe("useCachedFetch – auto-retry with jitter", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // Math.random = 0 → intento 0: 0ms, intento 1: 200ms
+    jest.spyOn(Math, "random").mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it("retries exactly 2 times then sets error on the 3rd failure", async () => {
+    const cacheKey = `retry-count-${Math.random()}`;
+    const retryableError = new Error("Network error");
+    const fetchFn = jest.fn().mockRejectedValue(retryableError);
+
+    const { result } = renderHook(() =>
+      useCachedFetch<string[]>({
+        cacheKey,
+        fetchFn,
+        filters: {},
+      }),
+    );
+
+    // Intento inicial (0): falla → scheduleretry 1
+    await act(async () => {
+      jest.runAllTimers(); // jitter inicial
+    });
+    await act(async () => {}); // flush promises
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.current.isReconnecting).toBe(true);
+    expect(result.current.error).toBeNull(); // aún no muestra error
+
+    // Retry 1: timer dispara (0ms con Math.random=0) → falla → schedule retry 2
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(result.current.isReconnecting).toBe(true);
+    expect(result.current.error).toBeNull();
+
+    // Retry 2: timer dispara (200ms con Math.random=0) → falla → presupuesto agotado
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+    expect(result.current.isReconnecting).toBe(false);
+    expect(result.current.error).toBe("Network error");
+  });
+
+  it("does NOT retry on 4xx errors (deterministic failures)", async () => {
+    const cacheKey = `retry-4xx-${Math.random()}`;
+    const fetchFn = jest
+      .fn()
+      .mockRejectedValue(new Error("Request failed: 401 Unauthorized"));
+
+    const { result } = renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {} }),
+    );
+
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+
+    // Solo 1 intento: 4xx no es retriable
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toContain("401");
+  });
+});
+
+// ── Revalidación por focus / online + guard de retry activo ───────────────────
+// Verifica que window "focus" y "online" disparan refetch, y que el guard
+// previene fetches paralelos cuando hay un auto-retry programado.
+
+describe("useCachedFetch – focus/online revalidation", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.spyOn(Math, "random").mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it("triggers a refetch on window focus event", async () => {
+    const cacheKey = `focus-refetch-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["data"]);
+
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {} }),
+    );
+
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Disparar evento focus → debe refetchear
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("triggers a refetch on window online event", async () => {
+    const cacheKey = `online-refetch-${Math.random()}`;
+    const fetchFn = jest.fn().mockResolvedValue(["data"]);
+
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {} }),
+    );
+
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Disparar evento online → debe refetchear
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores focus event while auto-retry timer is pending (guard)", async () => {
+    const cacheKey = `focus-guard-${Math.random()}`;
+    const retryableError = new Error("Network error");
+    // Primera llamada falla → schedules retry; segunda resuelve
+    const fetchFn = jest
+      .fn()
+      .mockRejectedValueOnce(retryableError)
+      .mockResolvedValue(["recovered"]);
+
+    renderHook(() =>
+      useCachedFetch<string[]>({ cacheKey, fetchFn, filters: {} }),
+    );
+
+    // Intento inicial falla → timer de retry programado
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Antes de que dispare el retry, llega un evento focus → el guard lo ignora
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await act(async () => {});
+
+    // fetchFn sigue siendo 1 — el guard bloqueó el fetch por focus
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // El retry programado dispara normalmente
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await act(async () => {});
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+});
