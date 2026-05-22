@@ -79,15 +79,24 @@ const FIELD_LABELS: Record<DiffKey, string> = {
   assigned_qa: "QA Asignados",
 };
 
+function isSameValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b))
+    return JSON.stringify(a) === JSON.stringify(b);
+  return a === b;
+}
+
 export function AIAutofillDiffPanel({
   current,
   suggestions,
   onApply,
   onCancel,
 }: AIAutofillDiffPanelProps) {
-  // Determinar qué campos tienen sugerencia distinta al valor actual
+  // Solo mostrar campos donde la sugerencia es distinta al valor actual
   const diffKeys = (Object.keys(suggestions) as DiffKey[]).filter(
-    (key) => suggestions[key] !== null && suggestions[key] !== undefined,
+    (key) =>
+      suggestions[key] !== null &&
+      suggestions[key] !== undefined &&
+      !isSameValue(suggestions[key], current[key as keyof FormDataState]),
   );
 
   // Por defecto, activar toggle si el campo está vacío/en valor inicial
@@ -187,7 +196,7 @@ export function AIAutofillDiffPanel({
                         ? "bg-blue-600 text-white"
                         : "bg-white/10 text-gray-500"
                     }`}
-                    aria-label={toggles[key] ? "Desactivar" : "Activar"}
+                    aria-label={`${toggles[key] ? "Desactivar" : "Activar"} sugerencia para ${FIELD_LABELS[key] ?? key}`}
                   >
                     {toggles[key] && <Check size={12} />}
                   </button>

@@ -1,7 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { getUserFromRequest, getServiceClient } from "@/lib/auth";
+import { getAuthContext, getServiceClient } from "@/lib/auth";
 import {
   extractClickUpTaskId,
   getClickUpApiKey,
@@ -117,12 +117,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 2. Verificar autenticación
-    const user = await getUserFromRequest(request);
-    if (!user) {
+    // 2. Verificar autenticación y rol
+    const authCtx = await getAuthContext(request);
+    if (!authCtx) {
       return NextResponse.json(
         { error: "No autorizado — debes iniciar sesión" },
         { status: 401 },
+      );
+    }
+    if (!authCtx.role || !["admin", "gestor"].includes(authCtx.role)) {
+      return NextResponse.json(
+        { error: "No tienes permisos para usar esta funcionalidad" },
+        { status: 403 },
       );
     }
 
@@ -231,7 +237,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
 
     // 9. Llamar a OpenAI con response_format json_object
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: 25_000,
+    });
 
     const systemPrompt = `Eres un asistente que mapea información de tareas de ClickUp a campos de un formulario de evaluación QA.
 Devuelve un único objeto JSON con las siguientes claves (todas opcionales — usa null si no puedes inferir con confianza):
