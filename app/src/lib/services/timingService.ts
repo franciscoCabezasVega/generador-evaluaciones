@@ -150,7 +150,7 @@ function buildDateRangeFilter(
   if (filters.startDate && filters.endDate) {
     const parseISO = (s: string) => {
       const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (!m) throw new Error(`Invalid date: ${s}`);
+      if (!m) throw new Error(`Fecha inválida: ${s}`);
       return { year: +m[1], month: +m[2] };
     };
     const s = parseISO(filters.startDate);
@@ -349,9 +349,9 @@ export const timingService = {
 
   async createTiming(input: CreateTaskTimingInput, token?: string) {
     try {
-      if (!input.user_id) throw new Error("User ID is required");
+      if (!input.user_id) throw new Error("El ID de usuario es obligatorio");
       if (!input.qa_entries || input.qa_entries.length === 0)
-        throw new Error("At least one QA entry is required");
+        throw new Error("Se requiere al menos una entrada de QA");
 
       const client = await getClient(token);
       const { data, error } = await client
@@ -379,7 +379,7 @@ export const timingService = {
         .select("id, qa_name");
       if (tqaErr) {
         await client.from("task_timings").delete().eq("id", parentId);
-        throw new Error(`Error upserting task_qa: ${tqaErr.message}`);
+        throw new Error(`Error al guardar task_qa: ${tqaErr.message}`);
       }
 
       const idByName = new Map(
@@ -399,7 +399,9 @@ export const timingService = {
         .select("id, task_qa_id");
       if (qaInsertError) {
         await client.from("task_timings").delete().eq("id", parentId);
-        throw new Error(`Error creating QA entries: ${qaInsertError.message}`);
+        throw new Error(
+          `Error al crear entradas de QA: ${qaInsertError.message}`,
+        );
       }
 
       const entryIdByQaId = new Map(
@@ -434,7 +436,9 @@ export const timingService = {
           .insert(categoryHourInserts);
         if (chError) {
           await client.from("task_timings").delete().eq("id", parentId);
-          throw new Error(`Error creating category hours: ${chError.message}`);
+          throw new Error(
+            `Error al crear horas por categoría: ${chError.message}`,
+          );
         }
       }
 
@@ -448,7 +452,7 @@ export const timingService = {
   async updateTiming(id: string, input: UpdateTaskTimingInput, token?: string) {
     try {
       if (!input.qa_entries || input.qa_entries.length === 0)
-        throw new Error("At least one QA entry is required");
+        throw new Error("Se requiere al menos una entrada de QA");
 
       const client = await getClient(token);
       const { data: timingData, error: timingError } = await client
@@ -456,7 +460,8 @@ export const timingService = {
         .select("task_id")
         .eq("id", id)
         .single();
-      if (timingError || !timingData) throw new Error("Timing not found");
+      if (timingError || !timingData)
+        throw new Error("Registro de timing no encontrado");
 
       const { error: touchError } = await client
         .from("task_timings")
@@ -480,7 +485,7 @@ export const timingService = {
           .eq("timing_id", id);
       if (existingEntriesError)
         throw new Error(
-          `Error reading existing QA entries: ${existingEntriesError.message}`,
+          `Error al leer entradas de QA existentes: ${existingEntriesError.message}`,
         );
 
       const savedEntries: ExistingEntry[] =
@@ -494,7 +499,7 @@ export const timingService = {
           .in("timing_qa_entry_id", savedEntryIds);
         if (savedChError)
           throw new Error(
-            `Error reading existing category hours: ${savedChError.message}`,
+            `Error al leer horas por categoría existentes: ${savedChError.message}`,
           );
         savedCategoryHours = (savedCh as ExistingCatHour[] | null) ?? [];
       }
@@ -505,7 +510,7 @@ export const timingService = {
         .eq("timing_id", id);
       if (deleteQaEntriesError)
         throw new Error(
-          `Error deleting QA entries: ${deleteQaEntriesError.message}`,
+          `Error al eliminar entradas de QA: ${deleteQaEntriesError.message}`,
         );
 
       const { data: taskQAsUpdate, error: tqaUpdateErr } = await client
@@ -519,7 +524,7 @@ export const timingService = {
         )
         .select("id, qa_name");
       if (tqaUpdateErr)
-        throw new Error(`Error upserting task_qa: ${tqaUpdateErr.message}`);
+        throw new Error(`Error al guardar task_qa: ${tqaUpdateErr.message}`);
 
       const idByNameUpdate = new Map(
         (taskQAsUpdate as { id: string; qa_name: string }[]).map((t) => [
@@ -557,7 +562,9 @@ export const timingService = {
             );
           }
         }
-        throw new Error(`Error updating QA entries: ${qaInsertErr.message}`);
+        throw new Error(
+          `Error al actualizar entradas de QA: ${qaInsertErr.message}`,
+        );
       }
 
       const entryIdByQaIdUpdate = new Map(
@@ -620,7 +627,9 @@ export const timingService = {
               );
             }
           }
-          throw new Error(`Error updating category hours: ${chErr.message}`);
+          throw new Error(
+            `Error al actualizar horas por categoría: ${chErr.message}`,
+          );
         }
       }
 
@@ -639,7 +648,8 @@ export const timingService = {
         .select("task_id")
         .eq("id", id)
         .single();
-      if (timingError || !timingData) throw new Error("Timing not found");
+      if (timingError || !timingData)
+        throw new Error("Registro de timing no encontrado");
       const { error } = await client.from("task_timings").delete().eq("id", id);
       if (error) throw error;
       return { success: true };

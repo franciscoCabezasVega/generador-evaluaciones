@@ -111,11 +111,11 @@ export function SessionChecker() {
             }
           } else if (refreshed && isMountedRef.current) {
             consecutiveFailuresRef.current = 0;
-            console.warn("SessionChecker: Token refreshed successfully");
+            console.warn("SessionChecker: Token renovado exitosamente");
           }
         } else if (isMountedRef.current) {
           consecutiveFailuresRef.current = 0;
-          console.warn("SessionChecker: Token validation passed");
+          console.warn("SessionChecker: Validación del token exitosa");
         }
       } catch (error) {
         if (isMountedRef.current) {

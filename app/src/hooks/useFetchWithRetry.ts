@@ -103,7 +103,7 @@ export function useFetchWithRetry(
       } catch (err) {
         // Ignorar AbortError (componente se desmontó)
         if (err instanceof DOMException && err.name === "AbortError") {
-          console.warn("Fetch aborted - component unmounted");
+          console.warn("Fetch cancelado — componente desmontado");
           abortControllersRef.current.delete(abortController);
           return null;
         }

@@ -125,7 +125,7 @@ export function useSessionTimeoutManager(
     clearAllTimers();
     clearStoredLastActivity();
 
-    console.warn("Session expired due to inactivity");
+    console.warn("Sesión expirada por inactividad");
     await authService.clearSession("inactive");
   }, [clearAllTimers]);
 

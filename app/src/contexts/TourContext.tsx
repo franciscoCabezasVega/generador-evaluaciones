@@ -95,7 +95,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 export function useTour() {
   const context = useContext(TourContext);
   if (context === undefined) {
-    throw new Error("useTour must be used within a TourProvider");
+    throw new Error("useTour debe usarse dentro de un TourProvider");
   }
   return context;
 }

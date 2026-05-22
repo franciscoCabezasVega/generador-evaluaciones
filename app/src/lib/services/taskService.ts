@@ -100,7 +100,7 @@ export const taskService = {
       error: authError,
     } = await getCurrentUserViaManager();
 
-    if (authError || !user) throw new Error("User not authenticated");
+    if (authError || !user) throw new Error("Usuario no autenticado");
 
     const { data, error } = await supabase
       .from("tasks")

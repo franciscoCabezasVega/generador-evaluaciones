@@ -135,7 +135,7 @@ export function useSafeAuthFetch() {
             console.debug("Token refreshed, retrying request");
             return safeFetch(url, options, 1, effectiveTimeout, onRetry);
           } else {
-            console.warn("Token refresh failed, session lost");
+            console.warn("Fallo al renovar token, sesión perdida");
             if (isMountedRef.current) {
               await authService.clearSession("error");
               router.push("/auth/login");
@@ -296,7 +296,9 @@ export function useSafeAuthFetch() {
           error instanceof Error &&
           error.message.includes("Session not available")
         ) {
-          console.warn("Session not available, attempting silent refresh...");
+          console.warn(
+            "Sesión no disponible, intentando renovar silenciosamente...",
+          );
           const newSession = await authService.silentRefreshToken();
           if (newSession && retryCount === 0) {
             return safeFetch(url, options, 1, effectiveTimeout, onRetry);
@@ -311,7 +313,7 @@ export function useSafeAuthFetch() {
 
         // Error de sesión expirada (errores reales de auth, no transitorios)
         if (isSessionExpiredError(error)) {
-          console.warn("Session expired error detected");
+          console.warn("Error de sesión expirada detectado");
           const newSession = await authService.silentRefreshToken();
           if (newSession && retryCount === 0) {
             return safeFetch(url, options, 1, effectiveTimeout, onRetry);

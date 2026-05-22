@@ -9,8 +9,8 @@ function getJWTSecret(): Uint8Array {
   const secret = process.env.SUPABASE_JWT_SECRET;
 
   if (!secret) {
-    console.warn("SUPABASE_JWT_SECRET not set in environment");
-    throw new Error("JWT secret not configured");
+    console.warn("SUPABASE_JWT_SECRET no configurado en el entorno");
+    throw new Error("Secreto JWT no configurado");
   }
 
   // Convertir string a Uint8Array
@@ -56,14 +56,14 @@ export async function validateJWT(
     const authHeader = request.headers.get("Authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.warn("Missing or invalid Authorization header");
+      console.warn("Header Authorization ausente o inválido");
       return null;
     }
 
     const token = authHeader.substring(7); // Remover "Bearer "
 
     if (!token) {
-      console.warn("Empty token");
+      console.warn("Token vacío");
       return null;
     }
 
