@@ -247,6 +247,9 @@ export function downloadQAReportPDF(
   );
 
   // ─── Footer página 1 ─────────────────────────────────────────────────────
+  // doc.setPage(1) es necesario porque drawTable() puede haber llamado addPage(),
+  // desplazando el cursor a la última página; sin esto el footer se imprimiría allí.
+  doc.setPage(1);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(160, 160, 160);

@@ -98,7 +98,7 @@ Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YY
 
 ### Módulo de Evaluaciones de QA (QA1)
 
-`/app/src/app/api/qa-evaluations/` expone un CRUD completo para evaluar a los miembros de QA por período bimestral. Cada evaluación almacena `excelencia`, `soft_skills` y `comentarios`. Las métricas `tasa_aceptacion` y `cumplimiento` se calculan en tiempo real desde las tareas y timings del período; cuando se guardan valores históricos cerrados, la API los devuelve directamente sin recalcular.
+`/app/src/app/api/qa-evaluations/` expone un CRUD completo para evaluar a los miembros de QA por rango de fechas configurable. Cada evaluación almacena `excelencia`, `soft_skills` y `comentarios`. Las métricas `tasa_aceptacion` y `cumplimiento` se calculan en tiempo real desde las tareas y timings del período; cuando se guardan valores históricos cerrados, la API los devuelve directamente sin recalcular.
 
 ### Métricas almacenadas vs. calculadas (QA2)
 
@@ -106,7 +106,7 @@ Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YY
 
 ### `get_user_is_lead` — SECURITY INVOKER (QA3)
 
-La función `public.get_user_is_lead` fue migrada de `SECURITY DEFINER` a `SECURITY INVOKER` con `SET search_path TO 'public', 'pg_catalog'` y `REVOKE EXECUTE FROM anon`. Elimina el riesgo de escalación de privilegios y el vector de search_path hijacking. Migración: `fix_get_user_is_lead_security`.
+La función `public.get_user_is_lead` se creó directamente como `SECURITY INVOKER` con `SET search_path TO 'public', 'pg_catalog'`, `REVOKE EXECUTE FROM PUBLIC` y `GRANT EXECUTE TO authenticated`. Elimina el riesgo de escalación de privilegios y el vector de search_path hijacking. Migración: `20260526000001_add_is_lead_to_user_profiles.sql`.
 
 ### PDF — word-wrap en columna Comentarios (QA4)
 

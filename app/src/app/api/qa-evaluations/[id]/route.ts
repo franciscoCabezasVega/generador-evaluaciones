@@ -127,11 +127,18 @@ export async function DELETE(
     const { id } = await params;
 
     // Obtener datos antes de borrar para el audit log
-    const { data: existing } = await supabase
+    const { data: existing, error: fetchError } = await supabase
       .from("qa_evaluations")
       .select("*")
       .eq("id", id)
       .maybeSingle();
+
+    if (fetchError) {
+      return NextResponse.json(
+        { error: "Error al obtener evaluación" },
+        { status: 500 },
+      );
+    }
 
     if (!existing) {
       return NextResponse.json(

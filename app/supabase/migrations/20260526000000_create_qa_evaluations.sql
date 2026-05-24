@@ -13,19 +13,14 @@ CREATE TABLE qa_evaluations (
   CONSTRAINT qa_evaluations_unique_qa_range UNIQUE (qa_id, start_date, end_date)
 );
 
-CREATE INDEX qa_evaluations_qa_id_idx ON qa_evaluations(qa_id);
+-- qa_evaluations_qa_id_idx omitido aquí: está cubierto por
+-- qa_evaluations_unique_qa_range (qa_id, start_date, end_date)
 CREATE INDEX qa_evaluations_dates_idx ON qa_evaluations(start_date, end_date);
 
 ALTER TABLE qa_evaluations ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY qa_evaluations_select ON qa_evaluations
-  FOR SELECT TO authenticated USING (true);
-
--- Sólo admin puede crear/editar/borrar evaluaciones
-CREATE POLICY qa_evaluations_admin_write ON qa_evaluations
-  FOR ALL TO authenticated
-  USING (get_user_role(( SELECT auth.uid() AS uid)) = 'admin')
-  WITH CHECK (get_user_role(( SELECT auth.uid() AS uid)) = 'admin');
+-- Las políticas de acceso se crean en la migración siguiente (000001)
+-- donde existe get_user_is_lead. Con RLS habilitado sin policies = DENY por defecto,
+-- lo que evita una ventana de exposición amplia entre migraciones.
 
 CREATE TRIGGER qa_evaluations_set_updated_at
   BEFORE UPDATE ON qa_evaluations

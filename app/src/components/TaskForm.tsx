@@ -563,6 +563,7 @@ function TaskFormComponent(
     formData.squads,
     formData.assigned_qa,
     initialData,
+    touched,
   ]);
 
   const handleApplyDiff = useCallback((selected: Partial<FormDataState>) => {

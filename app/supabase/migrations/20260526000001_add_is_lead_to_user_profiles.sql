@@ -12,6 +12,9 @@ AS $$
   SELECT COALESCE(is_lead, false) FROM user_profiles WHERE id = user_id;
 $$;
 
+-- REVOKE FROM PUBLIC primero: Postgres otorga EXECUTE a PUBLIC por defecto al crear funciones;
+-- revocar solo de anon no elimina el grant de PUBLIC.
+REVOKE EXECUTE ON FUNCTION get_user_is_lead(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION get_user_is_lead(UUID) FROM anon;
 GRANT  EXECUTE ON FUNCTION get_user_is_lead(UUID) TO authenticated;
 
@@ -33,8 +36,6 @@ CREATE INDEX IF NOT EXISTS qa_evaluations_created_by_idx
   ON qa_evaluations (created_by);
 
 -- Eliminar índices redundantes:
--- qa_evaluations_qa_id_idx está cubierto por qa_evaluations_unique_qa_range(qa_id, start_date, end_date)
-DROP INDEX IF EXISTS qa_evaluations_qa_id_idx;
 
 -- qa_member_oo_qa_id_idx está cubierto por qa_member_oo_qa_id_daterange_excl (GiST con qa_id como primera columna)
 DROP INDEX IF EXISTS qa_member_oo_qa_id_idx;
