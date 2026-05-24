@@ -1,5 +1,5 @@
 -- Agrega la bandera is_lead a user_profiles para controlar acceso a QA evaluations
-ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_lead BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_lead BOOLEAN NOT NULL DEFAULT false;
 
 -- Función helper para usar en políticas RLS
 -- SECURITY INVOKER: se ejecuta con los permisos del llamante (más seguro que DEFINER).

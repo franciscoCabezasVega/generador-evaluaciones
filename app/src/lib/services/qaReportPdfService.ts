@@ -65,6 +65,27 @@ function drawTable(
     // Nueva página si no hay espacio
     if (y + dynamicRowH > pageHeight - marginBottom) {
       y = addPage();
+      // Redibujar cabecera de la tabla en la nueva página
+      doc.setFillColor(30, 30, 30);
+      doc.rect(
+        marginLeft,
+        y,
+        colWidths.reduce((a: number, b: number) => a + b, 0),
+        headerH,
+        "F",
+      );
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      let xH = marginLeft;
+      headers.forEach((h, i) => {
+        doc.text(h, xH + cellPad, y + headerH - 2);
+        xH += colWidths[i];
+      });
+      y += headerH;
+      // Restaurar estilos para las celdas
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
     }
 
     // Fondo alternado

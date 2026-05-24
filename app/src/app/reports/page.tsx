@@ -116,7 +116,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {activeTab === "fabrica" ? (
+        {activeTab === "fabrica" || !isLead ? (
           <FactoryReportsSection />
         ) : activeTab === "qa" ? (
           <QAEvaluationsSection />
