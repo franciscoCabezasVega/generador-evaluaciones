@@ -1219,6 +1219,14 @@ function ClickUpSyncInline({
     }
   }, [clickupIdFromLink, syncInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // previewOnly=true en modo edición (timingId ya existe):
+  //   Sincronizar solo carga las horas en el form sin escribir en BD.
+  //   El guardado real ocurre al hacer clic en "Actualizar" (submit normal del form).
+  // previewOnly=false en modo creación (sin timingId):
+  //   Se guarda el timing primero (onSaveFirst) y luego sync escribe en BD.
+  // by design: no se usa localTimingId aquí — solo el prop original.
+  const previewOnly = !!timingId;
+
   const handleSync = async () => {
     const id = clickupId.trim();
     if (!id) {
@@ -1226,7 +1234,7 @@ function ClickUpSyncInline({
       return;
     }
     // Si el timing aún no fue guardado y hay onSaveFirst, guardar automáticamente
-    // antes de sincronizar (flujo de un solo clic).
+    // antes de sincronizar (flujo de un solo clic — solo aplica en modo creación).
     let effectiveTimingId = localTimingId;
     if (!effectiveTimingId) {
       if (!onSaveFirst) {
@@ -1275,7 +1283,10 @@ function ClickUpSyncInline({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clickup_qa_task_id: id }),
+          body: JSON.stringify({
+            clickup_qa_task_id: id,
+            preview_only: previewOnly,
+          }),
         },
         0,
         60_000,
@@ -1285,6 +1296,10 @@ function ClickUpSyncInline({
         skipped?: boolean;
         error?: string;
         clickup_qa_task_id?: string;
+        preview_qa_entries?: Array<{
+          qa_name: string;
+          hours_by_category: Record<string, number>;
+        }>;
       };
       if (!res.ok) {
         setMsg({ type: "error", text: data.error ?? "Error al sincronizar" });
@@ -1295,27 +1310,40 @@ function ClickUpSyncInline({
         registered: true,
         sync_enabled: true,
         clickup_qa_task_id: data.clickup_qa_task_id ?? id,
-        last_synced_at: new Date().toISOString(),
+        // previewOnly: el backend no persiste last_synced_at (Step 5a se omite),
+        // conservar el valor actual para evitar inconsistencia UI ↔ DB al recargar.
+        last_synced_at: previewOnly
+          ? (prev?.last_synced_at ?? null)
+          : new Date().toISOString(),
         last_clickup_status: prev?.last_clickup_status ?? null,
       }));
 
-      // Re-hidratar el form con las horas frescas del sync
-      if (!data.skipped && effectiveTimingId && onSyncSuccess) {
-        try {
-          const freshRes = await safeFetch(`/api/timings/${effectiveTimingId}`);
-          if (freshRes.ok) {
-            const freshTiming = (await freshRes.json()) as {
-              qa_entries?: Array<{
-                qa_name: string;
-                hours_by_category: Record<string, number>;
-              }>;
-            };
-            if (freshTiming.qa_entries) {
-              onSyncSuccess(freshTiming.qa_entries);
+      // Hidratar el form con las horas de ClickUp.
+      // previewOnly=true (modo edición): las horas vienen en la respuesta (no se escribieron en BD).
+      //   → onSyncSuccess carga los valores en el form; el guardado real es el submit normal.
+      // previewOnly=false (modo creación): se re-fetcha el timing desde BD (ya fue escrito).
+      if (!data.skipped && onSyncSuccess) {
+        if (previewOnly && data.preview_qa_entries) {
+          onSyncSuccess(data.preview_qa_entries);
+        } else if (!previewOnly && effectiveTimingId) {
+          try {
+            const freshRes = await safeFetch(
+              `/api/timings/${effectiveTimingId}`,
+            );
+            if (freshRes.ok) {
+              const freshTiming = (await freshRes.json()) as {
+                qa_entries?: Array<{
+                  qa_name: string;
+                  hours_by_category: Record<string, number>;
+                }>;
+              };
+              if (freshTiming.qa_entries) {
+                onSyncSuccess(freshTiming.qa_entries);
+              }
             }
+          } catch {
+            // silencioso — el form ya mostrará el mensaje de éxito del sync
           }
-        } catch {
-          // silencioso — el form ya mostrará el mensaje de éxito del sync
         }
       }
 
@@ -1323,7 +1351,9 @@ function ClickUpSyncInline({
         type: "success",
         text: data.skipped
           ? "Sincronizado. No había registros de timing todavía — los tiempos se cargarán cuando existan entradas QA."
-          : "¡Tiempos sincronizados correctamente desde ClickUp!",
+          : previewOnly
+            ? "Vista previa cargada desde ClickUp. Revisa las horas y haz clic en Actualizar para guardar."
+            : "¡Tiempos sincronizados correctamente desde ClickUp!",
       });
     } catch (err) {
       console.error("[ClickUp sync error]", err);

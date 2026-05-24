@@ -38,6 +38,27 @@ export async function GET(request: NextRequest) {
 
   const startTime = Date.now();
   const now = new Date();
+
+  // Ejecutar solo en días laborales (lunes–viernes) en zona horaria Colombia.
+  // cron-job.org dispara el endpoint diariamente; la guarda aquí evita que el
+  // sync corra en fines de semana y genere horas infladas por tiempo no laboral.
+  const dayInBogota = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Bogota",
+    weekday: "short",
+  }).format(now); // 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
+
+  if (dayInBogota === "Sat" || dayInBogota === "Sun") {
+    console.warn(
+      `[cron/sync-clickup-timings] Skipped — non-working day (${dayInBogota}, ${now.toISOString()})`,
+    );
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "non-working day",
+      day: dayInBogota,
+    });
+  }
+
   console.warn(
     `[cron/sync-clickup-timings] Triggered at ${now.toISOString()} ` +
       `(month=${now.getMonth() + 1}, year=${now.getFullYear()}) — ` +

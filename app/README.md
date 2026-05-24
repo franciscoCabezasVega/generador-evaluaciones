@@ -92,9 +92,17 @@ Cuando el usuario hace clic en "Sincronizar" desde el formulario de timing (ruta
 
 ### Work Calendar Adjustment (W1)
 
-`getAdjustmentFactor(qa: QAWorkConfig, year, month, window?)` en `workCalendarService.ts` calcula el ratio `workHours / calendarHours` para cada QA, descontando días OOO (Out-of-Office) y feriados nacionales (multi-país vía `country_code`). El factor (~0.215 para un mes completo de 8h/24h) se aplica a las horas calendario de ClickUp para obtener horas efectivas de trabajo. La feature está controlada por el flag `ENABLE_WORK_CALENDAR_ADJUSTMENT` en `vercel.json`.
+`getAdjustmentFactor(qa, year, month, window?, isOngoing?, rawCalendarHoursOverride?)` en `workCalendarService.ts` calcula el ratio `workHours / calendarHours` para cada QA, descontando días OOO y feriados nacionales (multi-país vía `country_code`). El factor (~0.1935 para un mes de 18 días hábiles × 8h / 744h) se aplica a las horas calendario de ClickUp para obtener horas efectivas de trabajo. La feature está controlada por el flag `ENABLE_WORK_CALENDAR_ADJUSTMENT` en `vercel.json`.
 
-Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local (Colombia, UTC-5). Nunca se usa `toISOString()` para evitar desfase de un día.
+Cuando `rawCalendarHoursOverride` está presente (= `current_status.by_minute / 60` de ClickUp), se usa como denominador en lugar del ancho de ventana calendario calculado. Esto corrige el desbordamiento de fin de semana: si ClickUp mide tiempo a través del fin de semana pero la ventana activa se recorta al viernes EOD mediante `findLastWorkingMoment`, el factor resultante compensa exactamente la diferencia.
+
+Split cumulative/current-session: `status_history[i].total_time.by_minute` en ClickUp es acumulado (todas las sesiones pasadas). El campo `current_status.total_time.by_minute` refleja solo la sesión activa en curso. `syncTaskTimings` los trata por separado: las horas congeladas usan el factor mensual completo y las horas activas usan `rawCalendarHoursOverride` para precisión dentro de la ventana real.
+
+Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local. Nunca se usa `toISOString()` para evitar desfase de un día.
+
+### ClickUp Sync — modo preview (W2)
+
+`POST /api/tasks/[id]/clickup-sync` acepta `{ preview_only: true }` en el body. Cuando está activo, `syncTaskTimings` calcula las horas desde ClickUp y las devuelve en `preview_qa_entries` sin escribir en `timing_qa_category_hours` ni en `audit_logs`. `TimingForm` usa este modo automáticamente en edición (cuando el timing ya existe) para cargar las horas calculadas en el formulario; el guardado real ocurre al hacer submit del form. El cron job y el modo creación siempre llaman con `previewOnly=false`.
 
 ### Módulo de Evaluaciones de QA (QA1)
 
@@ -111,6 +119,22 @@ La función `public.get_user_is_lead` se creó directamente como `SECURITY INVOK
 ### PDF — word-wrap en columna Comentarios (QA4)
 
 `drawTable` en `qaReportPdfService.ts` usa `doc.splitTextToSize(cell, maxWidth)` para dividir el texto en líneas que caben en el ancho de columna. El alto de cada fila se calcula dinámicamente (`2 + maxLines × 3.2 + 2 mm`) en lugar de usar un alto fijo, evitando truncamiento de comentarios largos en el PDF exportado.
+
+### Auth loading watchdog (I5)
+
+`ClientProviders` arranca un timer de 15 s cuando `authLoading` es `true`. Si la carga de sesión no resuelve antes de ese límite (lock de Supabase atascado, red cortada, etc.) ejecuta `window.location.reload()` automáticamente. El timer se cancela si `authLoading` resuelve normalmente. En consola aparece `[auth] Watchdog: carga de sesión bloqueada >15s, recargando página...` para facilitar el diagnóstico.
+
+### SessionManager — `_inflight` preservado entre timeouts de caller (I6)
+
+`SessionManager.getSession()` apuntaba `_inflight` al resultado de `Promise.race([realCall, timeout])`. Cuando el timeout de un caller vencía, `_inflight` se ponía a `null` y el siguiente reintento creaba una **nueva** llamada a `supabase.auth.getSession()`, que competía por el mismo `navigator.lock` → cascada de timeouts en todos los `useCachedFetch` simultáneos.
+
+Ahora `_inflight` apunta a la promesa **real** (mismo patrón que `_refreshInflight`). El timeout es por caller exclusivamente: si vence, solo rechaza para ese caller, pero `_inflight` sigue vivo. Los reintentos de `useSafeAuthFetch` y la llamada de `SessionChecker` se coalescen en la misma promesa sin añadir presión al lock. Cuando Supabase libera el lock, la promesa resuelve una sola vez y todos los callers reciben el resultado.
+
+`SessionChecker` también retrasa su primera validación 8 s para evitar competir con los fetches de carga inicial de página.
+
+### Cron ClickUp — guarda de día laboral (W3)
+
+`GET /api/cron/sync-clickup-timings` verifica el día de la semana en zona horaria `America/Bogota` antes de ejecutar el sync. Los sábados y domingos retorna `{ ok: true, skipped: true, reason: "non-working day" }` sin llamar a `syncAllEnabledTasks`. Esto evita que el sync corra en fin de semana y genere horas infladas por tiempo no laboral medido por ClickUp fuera de la ventana activa. El cron-job.org recibe un 200 normal (no genera alertas falsas).
 
 ## Learn More
 
