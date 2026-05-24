@@ -179,6 +179,10 @@ describe("dailyHours", () => {
 // ── getAdjustmentFactor con isOngoing=true ────────────────────────────────
 
 describe("getAdjustmentFactor — isOngoing=true estabiliza el factor en días no laborables", () => {
+  // Guardar fetch original para restaurarlo después: en Node 18+ fetch es nativo y
+  // no-configurable, delete lanzaría error o rompería otros suites del mismo run.
+  let originalFetch: typeof global.fetch;
+
   beforeEach(() => {
     // Supabase mock: sin OOO, sin festivos
     getServiceClient.mockReturnValue(buildMockSupabase([], []));
@@ -186,6 +190,7 @@ describe("getAdjustmentFactor — isOngoing=true estabiliza el factor en días n
     // En jsdom, global.fetch y global.Response no existen; se asigna directamente.
     // Intercepta llamadas a Nager.Date y devuelve array vacío (sin festivos).
     // Se usa un objeto plain en lugar de `new Response` para evitar warnings en jsdom.
+    originalFetch = global.fetch;
     global.fetch = jest.fn().mockImplementation((url: string | URL) => {
       const isNager = String(url).includes("nager.at");
       return Promise.resolve({
@@ -197,8 +202,8 @@ describe("getAdjustmentFactor — isOngoing=true estabiliza el factor en días n
 
   afterEach(() => {
     jest.resetAllMocks();
-    // Limpiar fetch mock para no contaminar otros suites
-    delete (global as Record<string, unknown>)["fetch"];
+    // Restaurar fetch original en lugar de delete para no corromper el entorno en Node 18+.
+    global.fetch = originalFetch;
   });
 
   /**

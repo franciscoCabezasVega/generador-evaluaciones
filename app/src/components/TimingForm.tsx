@@ -1310,7 +1310,11 @@ function ClickUpSyncInline({
         registered: true,
         sync_enabled: true,
         clickup_qa_task_id: data.clickup_qa_task_id ?? id,
-        last_synced_at: new Date().toISOString(),
+        // previewOnly: el backend no persiste last_synced_at (Step 5a se omite),
+        // conservar el valor actual para evitar inconsistencia UI ↔ DB al recargar.
+        last_synced_at: previewOnly
+          ? (prev?.last_synced_at ?? null)
+          : new Date().toISOString(),
         last_clickup_status: prev?.last_clickup_status ?? null,
       }));
 

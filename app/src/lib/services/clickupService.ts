@@ -763,7 +763,18 @@ export async function syncTaskTimings(
                     ? {
                         raw_hours:
                           Math.round((frozenRaw + activeRaw) * 100) / 100,
-                        factor: activeCalFactor ?? frozenCalFactor,
+                        // Factor combinado coherente: effectiveHours / (rawTotal * 3),
+                        // garantiza raw_hours * 3 * factor = hours en todos los casos.
+                        // Cuando solo existe un factor coincide con ese factor exacto.
+                        // Cuando existen ambos es el promedio ponderado real.
+                        factor:
+                          frozenRaw + activeRaw > 0
+                            ? Math.round(
+                                (effectiveHours /
+                                  ((frozenRaw + activeRaw) * 3)) *
+                                  10000,
+                              ) / 10000
+                            : (activeCalFactor ?? frozenCalFactor),
                       }
                     : {}),
                 };
