@@ -101,6 +101,9 @@ export async function POST(
   }
 
   const cleanId = clickupQaTaskId.trim();
+  // preview_only=true: registra el ID en clickup_task_sync pero NO escribe
+  // timing_qa_category_hours — solo devuelve la vista previa de horas al cliente.
+  const previewOnly = (body as Record<string, unknown>)?.preview_only === true;
 
   const supabase = getServiceClient();
   if (!supabase) {
@@ -127,12 +130,16 @@ export async function POST(
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
-  // 2. Run the sync immediately so the user sees results right away.
+  // 2. Run the sync.
+  // previewOnly=true: solo computa las horas desde ClickUp y las devuelve en la respuesta,
+  // sin escribir en timing_qa_category_hours ni en audit_logs.
   // Pasar el contexto del usuario para que el audit quede en su nombre (no system@cron.local).
-  const result = await syncTaskTimings(id, cleanId, {
-    userId: authCtx.user.id,
-    userEmail: authCtx.user.email ?? "",
-  });
+  const result = await syncTaskTimings(
+    id,
+    cleanId,
+    { userId: authCtx.user.id, userEmail: authCtx.user.email ?? "" },
+    { previewOnly },
+  );
 
   if (!result.success) {
     return NextResponse.json(
@@ -145,5 +152,8 @@ export async function POST(
     ok: true,
     skipped: result.skipped ?? false,
     clickup_qa_task_id: cleanId,
+    ...(result.preview_qa_entries
+      ? { preview_qa_entries: result.preview_qa_entries }
+      : {}),
   });
 }

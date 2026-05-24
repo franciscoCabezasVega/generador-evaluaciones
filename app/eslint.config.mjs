@@ -28,6 +28,7 @@ export default [
         JSX: "readonly",
         NodeJS: "readonly",
         RequestInit: "readonly",
+        RequestInfo: "readonly",
       },
       parser: tsParser,
       parserOptions: {

@@ -294,6 +294,15 @@ export interface SyncResult {
   success: boolean;
   skipped?: boolean;
   error?: string;
+  /**
+   * Solo presente cuando se invoca con previewOnly=true.
+   * Contiene las horas computadas desde ClickUp sin que se hayan escrito en BD.
+   * hours_by_category usa category_id (UUID) — misma clave que usa el form.
+   */
+  preview_qa_entries?: Array<{
+    qa_name: string;
+    hours_by_category: Record<string, number>;
+  }>;
 }
 
 /**
@@ -310,6 +319,7 @@ export async function syncTaskTimings(
   internalTaskId: string,
   clickupQaTaskId: string,
   userCtx?: { userId: string; userEmail: string },
+  options?: { previewOnly?: boolean },
 ): Promise<SyncResult> {
   const supabase = getServiceClient();
   if (!supabase) {
@@ -362,19 +372,61 @@ export async function syncTaskTimings(
             e.status.toLowerCase() ===
               timeData.current_status!.status.toLowerCase() &&
             e.total_time.since === timeData.current_status!.total_time.since,
-        ) ?? null)
+        ) ??
+        // Fallback: solo por nombre de status, por si ClickUp devuelve `since`
+        // en distinto tipo/formato entre current_status y status_history.
+        (timeData.status_history ?? []).find(
+          (e) =>
+            e.status.toLowerCase() ===
+            timeData.current_status!.status.toLowerCase(),
+        ) ??
+        null)
       : null;
 
     // Step 3: Separar horas congeladas (históricas) de las activas (en curso).
-    // frozenHours: rawHours ÷ 180 sin factor adicional → valores inmutables.
-    // activeHoursMap: rawHours ÷ 180 con factor calendario para la sesión vigente.
+    //
+    // IMPORTANTE: ClickUp's status_history.by_minute es ACUMULADO (suma de todas las
+    // sesiones pasadas + la sesión actual en curso). current_status.by_minute es solo
+    // la sesión actual.
+    //
+    // Para el entry activo hay que separar:
+    //   - Parte frozen: (acumulado - sesión actual) → factor mensual, como los demás.
+    //   - Parte activa: solo current_status.by_minute → factor de ventana (isOngoing).
+    //
+    // Ejemplo: "review client" acumulado=9953 min, sesión actual=923 min
+    //   → frozen=9030 min (sesiones previas), active=923 min (sesión en curso).
     const frozenHistory = (timeData.status_history ?? []).filter(
       (e) => e !== activeHistoryEntry,
     );
     const frozenHours = mapStatusesToCategoryHours(frozenHistory);
-    const activeHoursMap = activeHistoryEntry
-      ? mapStatusesToCategoryHours([activeHistoryEntry])
-      : {};
+
+    // Sesión actual (solo present en current_status).
+    const currentSessionByMinute =
+      activeHistoryEntry && timeData.current_status
+        ? (timeData.current_status.total_time.by_minute ?? 0)
+        : 0;
+
+    // Sumar la parte frozen del entry activo (sesiones previas del mismo status).
+    if (activeHistoryEntry) {
+      const slug = STATUS_CATEGORY_MAP[activeHistoryEntry.status.toLowerCase()];
+      if (slug) {
+        const pastSessionsMin = Math.max(
+          0,
+          activeHistoryEntry.total_time.by_minute - currentSessionByMinute,
+        );
+        if (pastSessionsMin > 0) {
+          frozenHours[slug] = (frozenHours[slug] ?? 0) + pastSessionsMin / 180;
+        }
+      }
+    }
+
+    // activeHoursMap: solo la sesión en curso (current_status.by_minute).
+    const activeHoursMap: CategoryHours = (() => {
+      if (!activeHistoryEntry || currentSessionByMinute <= 0) return {};
+      const slug = STATUS_CATEGORY_MAP[activeHistoryEntry.status.toLowerCase()];
+      if (!slug) return {};
+      return { [slug]: currentSessionByMinute / 180 };
+    })();
 
     // Totales combinados — solo usado para resolver slugs y category_ids en BD.
     const categoryHours: CategoryHours = { ...frozenHours };
@@ -527,9 +579,12 @@ export async function syncTaskTimings(
             );
           };
 
-          // activeFactorByEntryId: factor calendario solo para el entry activo.
-          // Los entries históricos no usan factor — sus rawHours son inmutables.
+          // activeFactorByEntryId: factor calendario para el entry activo (ventana [since, ahora]).
+          // frozenFactorByEntryId: factor mensual para entries históricos (ventana = mes completo).
+          // Ambos usan la fórmula correcta: calendarHours × calFactor = workHours.
+          // QAs sin country_code no están en los maps → comportamiento legacy (rawHours sin ajuste).
           let activeFactorByEntryId: Map<string, number> | null = null;
+          let frozenFactorByEntryId: Map<string, number> | null = null;
           if (process.env.ENABLE_WORK_CALENDAR_ADJUSTMENT === "true") {
             const qaNames = qaEntries.map((e) =>
               extractQaName(e as Record<string, unknown>),
@@ -549,34 +604,59 @@ export async function syncTaskTimings(
               const month = (taskMeta as { month: number })?.month ?? 0;
 
               if (year > 0 && month > 0) {
-                const factorByName = new Map<string, number>();
+                const activeFactorByName = new Map<string, number>();
+                const frozenFactorByName = new Map<string, number>();
+
+                // Calcular ambos factores en paralelo para minimizar latencia:
+                // - active: ventana [since_current, ahora], isOngoing=true
+                // - frozen: mes completo (sin ventana), isOngoing=false
                 await Promise.all(
-                  qaConfigs.map(async (qc) => {
-                    const factor = await getAdjustmentFactor(
-                      {
-                        id: qc.id as string,
-                        country_code: qc.country_code as string | null,
-                        timezone: qc.timezone as string | null,
-                        work_start_time: qc.work_start_time as string | null,
-                        work_end_time: qc.work_end_time as string | null,
-                        lunch_hours: qc.lunch_hours as number | null,
-                        work_days: qc.work_days as number[] | null,
-                      },
-                      year,
-                      month,
-                      activeQAWindow,
-                    );
-                    if (factor !== null) {
-                      factorByName.set(qc.name as string, factor);
-                    }
+                  qaConfigs.flatMap((qc) => {
+                    const qaConfig = {
+                      id: qc.id as string,
+                      country_code: qc.country_code as string | null,
+                      timezone: qc.timezone as string | null,
+                      work_start_time: qc.work_start_time as string | null,
+                      work_end_time: qc.work_end_time as string | null,
+                      lunch_hours: qc.lunch_hours as number | null,
+                      work_days: qc.work_days as number[] | null,
+                    };
+                    return [
+                      getAdjustmentFactor(
+                        qaConfig,
+                        year,
+                        month,
+                        activeQAWindow,
+                        true, // isOngoing: clampea effectiveEnd al último momento laboral
+                        // rawCalendarHoursOverride: ClickUp midió exactamente estos minutos
+                        // de calendario para la sesión activa. Usarlo como denominador
+                        // evita sobreestimar cuando la tarea cruzó fin de semana/feriado.
+                        currentSessionByMinute > 0
+                          ? currentSessionByMinute / 60
+                          : undefined,
+                      ).then((f) => {
+                        if (f !== null)
+                          activeFactorByName.set(qc.name as string, f);
+                      }),
+                      getAdjustmentFactor(
+                        qaConfig,
+                        year,
+                        month,
+                        undefined, // ventana = mes completo para entries históricos
+                        false,
+                      ).then((f) => {
+                        if (f !== null)
+                          frozenFactorByName.set(qc.name as string, f);
+                      }),
+                    ];
                   }),
                 );
 
-                if (factorByName.size > 0) {
-                  // Solo incluir entradas para QAs con factor real configurado.
-                  // QAs sin country_code no están en factorByName → quedan fuera
-                  // del Map y conservan el comportamiento legacy (rawHours sin ajuste).
-                  activeFactorByEntryId = new Map(
+                const buildFactorMap = (
+                  factorByName: Map<string, number>,
+                ): Map<string, number> | null => {
+                  if (factorByName.size === 0) return null;
+                  return new Map(
                     qaEntries
                       .filter((e) =>
                         factorByName.has(
@@ -590,7 +670,10 @@ export async function syncTaskTimings(
                         return [e.id as string, factorByName.get(name)!];
                       }),
                   );
-                }
+                };
+
+                activeFactorByEntryId = buildFactorMap(activeFactorByName);
+                frozenFactorByEntryId = buildFactorMap(frozenFactorByName);
               }
             }
           }
@@ -608,21 +691,31 @@ export async function syncTaskTimings(
             }[];
           };
 
-          // frozenRaw: horas de statuses cerrados — sin factor, inmutables.
-          // activeRaw: horas del status vigente — con factor calendario (isOngoing).
-          // effectiveHours = frozenRaw + activeRaw × calFactor (si disponible).
+          // rawHours = by_minute / 180 = calendarHours / 3 (estimación 8h/24h por día).
+          // Fórmula correcta: calendarHours × calFactor = (rawHours × 3) × calFactor = workHours.
+          // Sin calFactor (legacy): rawHours (estimación rough que incluye fines de semana).
+          // frozen usa factor mensual (sin ventana); active usa factor de la ventana vigente.
           const rows = qaEntries.flatMap((entry) =>
             Object.keys(categoryHours)
               .filter((slug) => categoryMap.has(slug))
               .map((slug) => {
                 const frozenRaw = (frozenHours[slug] ?? 0) / qaCount;
                 const activeRaw = (activeHoursMap[slug] ?? 0) / qaCount;
-                const calFactor = activeFactorByEntryId?.get(
+                const frozenCalFactor = frozenFactorByEntryId?.get(
                   entry.id as string,
                 );
+                const activeCalFactor = activeFactorByEntryId?.get(
+                  entry.id as string,
+                );
+                const effectiveFrozen =
+                  frozenCalFactor !== undefined
+                    ? frozenRaw * 3 * frozenCalFactor
+                    : frozenRaw;
                 const effectiveActive =
-                  calFactor !== undefined ? activeRaw * calFactor : activeRaw;
-                const effectiveHours = frozenRaw + effectiveActive;
+                  activeCalFactor !== undefined
+                    ? activeRaw * 3 * activeCalFactor
+                    : activeRaw;
+                const effectiveHours = effectiveFrozen + effectiveActive;
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -641,26 +734,66 @@ export async function syncTaskTimings(
               .map((slug) => {
                 const frozenRaw = (frozenHours[slug] ?? 0) / qaCount;
                 const activeRaw = (activeHoursMap[slug] ?? 0) / qaCount;
-                const calFactor = activeFactorByEntryId?.get(qe.id as string);
+                const frozenCalFactor = frozenFactorByEntryId?.get(
+                  qe.id as string,
+                );
+                const activeCalFactor = activeFactorByEntryId?.get(
+                  qe.id as string,
+                );
+                const effectiveFrozen =
+                  frozenCalFactor !== undefined
+                    ? frozenRaw * 3 * frozenCalFactor
+                    : frozenRaw;
                 const effectiveActive =
-                  calFactor !== undefined ? activeRaw * calFactor : activeRaw;
-                const effectiveHours = frozenRaw + effectiveActive;
+                  activeCalFactor !== undefined
+                    ? activeRaw * 3 * activeCalFactor
+                    : activeRaw;
+                const effectiveHours = effectiveFrozen + effectiveActive;
+                const hasCalFactor =
+                  frozenCalFactor !== undefined ||
+                  activeCalFactor !== undefined;
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
                     slug,
                   hours: Math.round(effectiveHours * 100) / 100,
-                  ...(calFactor !== undefined
+                  ...(hasCalFactor
                     ? {
                         raw_hours:
                           Math.round((frozenRaw + activeRaw) * 100) / 100,
-                        factor: calFactor,
+                        factor: activeCalFactor ?? frozenCalFactor,
                       }
                     : {}),
                 };
               })
               .filter((c) => c.hours > 0),
           }));
+
+          // previewOnly: retornar horas computadas sin escribir en BD.
+          // hours_by_category usa category_id (UUID) — misma clave que usa el form
+          // (entry.hours_by_category[cat.id] donde cat.id es UUID).
+          // El upsert de clickup_task_sync ya fue hecho en la ruta antes de llegar aquí.
+          if (options?.previewOnly) {
+            const previewQaEntries = (
+              qaEntries as Record<string, unknown>[]
+            ).map((qe) => {
+              const entryId = qe.id as string;
+              const qa_name = extractQaName(qe);
+              const hours_by_category: Record<string, number> = {};
+              rows
+                .filter((r) => r.timing_qa_entry_id === entryId && r.hours > 0)
+                .forEach((r) => {
+                  hours_by_category[r.category_id] = r.hours;
+                });
+              return { qa_name, hours_by_category };
+            });
+            return {
+              taskId: internalTaskId,
+              clickupTaskId: clickupQaTaskId,
+              success: true,
+              preview_qa_entries: previewQaEntries,
+            };
+          }
 
           // Capture current (old) state from DB for diff comparison + audit
           let oldQAEntries: AuditQAEntry[] = [];

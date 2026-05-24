@@ -454,6 +454,108 @@ export async function syncHolidaysAsOOO(
   return { inserted, skipped };
 }
 
+// ── Internal helpers for stable-cutoff computation ────────────────────────
+
+/**
+ * Converts a local calendar date + local decimal hour (e.g. 17.0 = 5 PM) to UTC.
+ * Uses Intl to estimate the UTC offset for that timezone on that date.
+ * Accuracy: within ±1 minute — sufficient for working-hour clamping.
+ */
+function localTimeToUTC(
+  localDate: Date,
+  localHour: number,
+  timezone: string,
+): Date {
+  const h = Math.floor(localHour);
+  const m = Math.round((localHour - h) * 60);
+  // First pass: treat local time as UTC, then measure the actual offset.
+  const approxUTC = new Date(
+    Date.UTC(
+      localDate.getFullYear(),
+      localDate.getMonth(),
+      localDate.getDate(),
+      h,
+      m,
+      0,
+    ),
+  );
+  const localHourAtApprox = getLocalHourDecimal(approxUTC, timezone);
+  if (localHourAtApprox === null) return approxUTC;
+  const offsetHours = localHourAtApprox - (h + m / 60);
+  return new Date(approxUTC.getTime() - offsetHours * 3_600_000);
+}
+
+/**
+ * Returns the last UTC timestamp at which the QA was "at work" on or before
+ * proposedEnd. Used to freeze the calendar-factor denominator during
+ * non-working periods so the factor never decreases on weekends/holidays/OOO.
+ *
+ * Rules (evaluated in the QA's resolved timezone):
+ * - During working hours         → return proposedEnd as-is.
+ * - After EOD on a working day   → return work_end of that day.
+ * - Non-working time (weekend,
+ *   holiday, OOO, before start)  → return work_end of the nearest prior
+ *                                   working day (looks back up to 14 days).
+ * - Fallback (no day found)      → return proposedEnd unchanged.
+ */
+function findLastWorkingMoment(
+  proposedEnd: Date,
+  qa: QAWorkConfig,
+  holidays: HolidayEntry[],
+  oooDateSet: Set<string>,
+  resolvedTz: string,
+): Date {
+  const localHour = getLocalHourDecimal(proposedEnd, resolvedTz);
+  const localDate = getLocalCalendarDate(proposedEnd, resolvedTz);
+  if (localHour === null || localDate === null) return proposedEnd;
+
+  const workStart = parseTimeToHours(qa.work_start_time ?? "08:00");
+  const workEnd = parseTimeToHours(qa.work_end_time ?? "17:00");
+
+  const localDateStr = toLocalDateStr(localDate);
+  const isTodayWorking =
+    !oooDateSet.has(localDateStr) && isWorkingDay(localDate, qa, holidays);
+
+  // Currently in the middle of a working day → stable, use proposedEnd.
+  // getWorkingHoursForQA's partial-day logic handles the numerator correctly.
+  if (isTodayWorking && localHour >= workStart && localHour < workEnd) {
+    return proposedEnd;
+  }
+
+  // After EOD on a working day → clamp denominator to work_end of today.
+  if (isTodayWorking && localHour >= workEnd) {
+    return localTimeToUTC(localDate, workEnd, resolvedTz);
+  }
+
+  // Non-working time (weekend, holiday, OOO, or before workStart):
+  // walk back to the last working day and use its work_end.
+  let checkDate = new Date(
+    localDate.getFullYear(),
+    localDate.getMonth(),
+    localDate.getDate() - 1,
+    12,
+    0,
+    0,
+  );
+  for (let i = 0; i < 14; i++) {
+    const dateStr = toLocalDateStr(checkDate);
+    if (!oooDateSet.has(dateStr) && isWorkingDay(checkDate, qa, holidays)) {
+      return localTimeToUTC(checkDate, workEnd, resolvedTz);
+    }
+    checkDate = new Date(
+      checkDate.getFullYear(),
+      checkDate.getMonth(),
+      checkDate.getDate() - 1,
+      12,
+      0,
+      0,
+    );
+  }
+
+  // Fallback: no working day found in 14 days → return proposedEnd unchanged.
+  return proposedEnd;
+}
+
 /**
  * Factor de ajuste calendario para un QA en la ventana en que trabajó la tarea:
  *   factor = horas_laborales_QA_en_ventana / (días_ventana × 24)
@@ -469,14 +571,26 @@ export async function syncHolidaysAsOOO(
  *   Del 15 al 31  :  88 h laborales / 408 h calendario ≈ 0.216
  *   Del 1  al 20  : 128 h laborales / 480 h calendario ≈ 0.267
  *
- * @param window  Ventana [from, to] extraída del historial de ClickUp.
- *                Si no se provee, se usa el mes completo.
+ * @param window     Ventana [from, to] extraída del historial de ClickUp.
+ *                   Si no se provee, se usa el mes completo.
+ * @param isOngoing  true cuando la ventana corresponde al entry activo (aún
+ *                   acumulando tiempo). Clampea effectiveEnd al último momento
+ *                   laboral del QA para que el factor no decrezca durante
+ *                   fines de semana, feriados u OOO.
+ * @param rawCalendarHoursOverride  Horas calendario medidas directamente por ClickUp
+ *                   (= current_status.by_minute / 60). Cuando se provee, se usa como
+ *                   denominador en lugar de (effectiveEnd - effectiveStart) / 3600000.
+ *                   Garantiza que rawHours × 3 × factor = workHours incluso cuando
+ *                   la ventana clampeada es menor que el tiempo real de ClickUp (ej.:
+ *                   tarea activa durante un fin de semana o feriado).
  */
 export async function getAdjustmentFactor(
   qa: QAWorkConfig,
   year: number,
   month: number,
   window?: TaskQAWindow,
+  isOngoing?: boolean,
+  rawCalendarHoursOverride?: number,
 ): Promise<number | null> {
   if (!qa.country_code) return null; // fallback legacy: caller divide equitativamente
 
@@ -488,11 +602,57 @@ export async function getAdjustmentFactor(
   const effectiveStart = window?.from
     ? dateMax([monthStart, window.from])
     : monthStart;
-  const effectiveEnd = window?.to
+  // let (no const) para permitir el clamp posterior cuando isOngoing=true.
+  let effectiveEnd = window?.to
     ? window.to <= monthEnd
       ? window.to
       : monthEnd
     : monthEnd;
+
+  // Si la ventana está en curso (entry activo), clampear effectiveEnd al último
+  // momento laboral del QA. Así el denominador no crece durante períodos no
+  // laborables y el factor permanece estable hasta que el QA retome trabajo.
+  if (isOngoing && qa.country_code) {
+    const resolvedTz =
+      qa.timezone ?? COUNTRY_TIMEZONE_MAP[qa.country_code] ?? null;
+    if (resolvedTz) {
+      const holidays = await fetchHolidays(qa.country_code, year);
+      const supabase = getServiceClient();
+      if (supabase) {
+        const monthStartStr = `${year}-${String(month).padStart(2, "0")}-01`;
+        const lastDay = getDaysInMonth(monthRef);
+        const monthEndStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        const { data: oooPeriods } = await supabase
+          .from("qa_member_oo")
+          .select("date_from, date_to")
+          .eq("qa_id", qa.id)
+          .lte("date_from", monthEndStr)
+          .gte("date_to", monthStartStr);
+        const oooDateSet = new Set<string>();
+        for (const ooo of (oooPeriods as Pick<
+          OOOPeriod,
+          "date_from" | "date_to"
+        >[]) ?? []) {
+          const from = new Date(ooo.date_from + "T12:00:00");
+          const to = new Date(ooo.date_to + "T12:00:00");
+          const days = eachDayOfInterval({ start: from, end: to });
+          for (const day of days) {
+            oooDateSet.add(toLocalDateStr(day));
+          }
+        }
+        const stableCutoff = findLastWorkingMoment(
+          effectiveEnd,
+          qa,
+          holidays,
+          oooDateSet,
+          resolvedTz,
+        );
+        if (stableCutoff < effectiveEnd) {
+          effectiveEnd = stableCutoff;
+        }
+      }
+    }
+  }
 
   // Construir ventana clampada solo si difiere del mes completo
   const clampedWindow: TaskQAWindow | undefined =
@@ -505,11 +665,23 @@ export async function getAdjustmentFactor(
   // Denominador: horas calendario exactas de la ventana efectiva (de ms a horas).
   // Se usa la diferencia real en lugar de `días × 24` para no sobreestimar
   // cuando la ventana no empieza/termina a medianoche (ej.: sync a las 6 AM).
-  const totalCalendarHours =
+  const windowCalendarHours =
     (effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60);
 
-  // Evitar división por cero en ventanas degeneradas (from === to)
-  if (totalCalendarHours <= 0) return workHours > 0 ? 1 : 0;
+  // Para entries activos (isOngoing=true) que cruzaron un fin de semana u OOO,
+  // ClickUp sigue midiendo tiempo aunque el QA no haya trabajado. En ese caso,
+  // rawCalendarHoursOverride (= current_status.by_minute / 60) será mayor que
+  // windowCalendarHours. Usar rawCalendarHoursOverride como denominador garantiza
+  // que el caller obtenga workHours al aplicar rawHours × 3 × factor:
+  //   factor = workHours / rawCalHours
+  //   rawHours × 3 × factor = rawCalHours × (workHours / rawCalHours) = workHours ✓
+  const denominator =
+    rawCalendarHoursOverride != null && rawCalendarHoursOverride > 0
+      ? rawCalendarHoursOverride
+      : windowCalendarHours;
 
-  return workHours / totalCalendarHours;
+  // Evitar división por cero en ventanas degeneradas (from === to)
+  if (denominator <= 0) return workHours > 0 ? 1 : 0;
+
+  return workHours / denominator;
 }
