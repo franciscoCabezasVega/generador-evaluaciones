@@ -127,8 +127,14 @@ export function SessionChecker() {
       }
     };
 
-    // Ejecutar validación inmediata
-    performValidation();
+    // Primer run retrasado: evita competir con los fetches de carga de página
+    // por navigator.lock (Supabase puede tener el lock ocupado con auto-refresh).
+    // 8s da tiempo a que los fetches iniciales completen y el caché de sesión
+    // esté caliente antes de que SessionChecker intente validar.
+    const INITIAL_DELAY = 8_000;
+    const initialTimerId = setTimeout(() => {
+      if (isMountedRef.current) performValidation();
+    }, INITIAL_DELAY);
 
     // Ejecutar periódicamente
     checkIntervalRef.current = setInterval(() => {
@@ -138,6 +144,7 @@ export function SessionChecker() {
     }, VALIDATION_INTERVAL);
 
     return () => {
+      clearTimeout(initialTimerId);
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
         checkIntervalRef.current = null;

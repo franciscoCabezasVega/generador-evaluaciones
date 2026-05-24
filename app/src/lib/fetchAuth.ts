@@ -205,40 +205,27 @@ class SessionManager {
 
     // Nivel 2 + 3: una sola llamada en vuelo
     if (!this._inflight) {
-      // Timeout de seguridad: si supabase.auth.getSession() se bloquea
-      // esperando navigator.lock (auto-refresh de Supabase tras inactividad),
-      // la promesa nunca resuelve. Sin este timeout, todos los reintentos de
-      // safeFetch comparten la misma _inflight colgada y el spinner dura ~51s.
-      // Con 8s, _inflight se cancela, se pone a null, y el siguiente reintento
-      // inicia un getSession() fresco (con el lock probablemente ya libre).
-      let inflightTimeoutId: ReturnType<typeof setTimeout> | undefined;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        inflightTimeoutId = setTimeout(
-          () =>
-            reject(
-              new DOMException(
-                "getSession timed out waiting for lock",
-                "AbortError",
-              ),
-            ),
-          12_000,
-        );
-      });
-
-      this._inflight = Promise.race([
-        supabase.auth.getSession(),
-        timeoutPromise,
-      ])
+      // _inflight apunta a la promesa REAL de supabase.auth.getSession() —
+      // NO al resultado del race con timeout. Mismo patrón que _refreshInflight.
+      //
+      // Motivación: si el timeout del caller vence y _inflight apuntara al race,
+      // se pondría a null → el siguiente reintento crearía una NUEVA llamada a
+      // getSession() → nueva competición por navigator.lock → timeouts en cascada.
+      //
+      // Con _inflight apuntando a la llamada real, un timeout de un caller no la
+      // anula: los callers siguientes se coalescen sobre la misma promesa sin
+      // añadir presión al lock. Cuando Supabase libera el lock y TOKEN_REFRESHED
+      // dispara, la promesa resuelve, el caché se actualiza y todo se desbloquea.
+      this._inflight = supabase.auth
+        .getSession()
         .then(
           (result) => {
-            clearTimeout(inflightTimeoutId);
             if (!result.error && result.data.session) {
               this._cache = { session: result.data.session, at: Date.now() };
             }
             return result;
           },
           (err) => {
-            clearTimeout(inflightTimeoutId);
             throw err;
           },
         )
@@ -247,15 +234,35 @@ class SessionManager {
         });
     }
 
-    // Permitir al caller abortar su espera sin afectar a los demás
+    // Timeout POR CALLER — no limpia _inflight para que otros callers sigan
+    // coalesciendo en la misma promesa real sin iniciar nuevas llamadas al lock.
+    let callerTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    const callerTimeoutPromise = new Promise<never>((_, reject) => {
+      callerTimeoutId = setTimeout(
+        () =>
+          reject(
+            new DOMException(
+              "getSession timed out waiting for lock",
+              "AbortError",
+            ),
+          ),
+        12_000,
+      );
+    });
+
+    const raceCandidates: Promise<GetSessionResult | never>[] = [
+      this._inflight,
+      callerTimeoutPromise,
+    ];
+
     if (signal) {
       if (signal.aborted) {
+        clearTimeout(callerTimeoutId);
         return Promise.reject(
           new DOMException("The operation was aborted.", "AbortError"),
         );
       }
-      return Promise.race([
-        this._inflight,
+      raceCandidates.push(
         new Promise<never>((_, reject) => {
           signal.addEventListener(
             "abort",
@@ -266,10 +273,12 @@ class SessionManager {
             { once: true },
           );
         }),
-      ]);
+      );
     }
 
-    return this._inflight;
+    return Promise.race(raceCandidates).finally(() =>
+      clearTimeout(callerTimeoutId),
+    );
   }
 }
 
