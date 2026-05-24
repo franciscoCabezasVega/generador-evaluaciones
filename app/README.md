@@ -96,6 +96,22 @@ Cuando el usuario hace clic en "Sincronizar" desde el formulario de timing (ruta
 
 Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local (Colombia, UTC-5). Nunca se usa `toISOString()` para evitar desfase de un día.
 
+### Módulo de Evaluaciones de QA (QA1)
+
+`/app/src/app/api/qa-evaluations/` expone un CRUD completo para evaluar a los miembros de QA por rango de fechas configurable. Cada evaluación almacena `excelencia`, `soft_skills` y `comentarios`. Las métricas `tasa_aceptacion` y `cumplimiento` se calculan en tiempo real desde las tareas y timings del período; cuando se guardan valores históricos cerrados, la API los devuelve directamente sin recalcular.
+
+### Métricas almacenadas vs. calculadas (QA2)
+
+`qa_evaluations` tiene columnas `tasa_aceptacion numeric` y `cumplimiento numeric` nullable. `qaEvaluationService.listQAEvaluationsForRange` prioriza el valor almacenado cuando no es `NULL` (`ev.tasa_aceptacion != null`); si es `NULL` calcula en tiempo real. Esto permite registrar períodos históricos cerrados con los valores exactos de los reportes PDF sin alterar las tareas o timings subyacentes.
+
+### `get_user_is_lead` — SECURITY INVOKER (QA3)
+
+La función `public.get_user_is_lead` se creó directamente como `SECURITY INVOKER` con `SET search_path TO 'public', 'pg_catalog'`, `REVOKE EXECUTE FROM PUBLIC` y `GRANT EXECUTE TO authenticated`. Elimina el riesgo de escalación de privilegios y el vector de search_path hijacking. Migración: `20260526000001_add_is_lead_to_user_profiles.sql`.
+
+### PDF — word-wrap en columna Comentarios (QA4)
+
+`drawTable` en `qaReportPdfService.ts` usa `doc.splitTextToSize(cell, maxWidth)` para dividir el texto en líneas que caben en el ancho de columna. El alto de cada fila se calcula dinámicamente (`2 + maxLines × 3.2 + 2 mm`) en lugar de usar un alto fijo, evitando truncamiento de comentarios largos en el PDF exportado.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

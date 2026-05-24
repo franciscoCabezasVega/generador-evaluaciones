@@ -239,6 +239,7 @@ export interface UserProfile {
   lastname: string | null;
   role: UserRole;
   role_id: number;
+  is_lead: boolean;
   created_at: string;
   updated_at: string;
   theme_preference: "light" | "dark" | "system" | null;
@@ -252,7 +253,7 @@ export interface Role {
 
 // Audit Trail Types
 export type AuditAction = "CREATE" | "UPDATE" | "DELETE";
-export type AuditEntityType = "TASK" | "REPORT" | "TIMING";
+export type AuditEntityType = "TASK" | "REPORT" | "TIMING" | "QA_EVALUATION";
 
 // Audit log values with known fields typed
 export interface AuditLogValues {
@@ -293,6 +294,38 @@ export interface EvidenceItem {
   type: EvidenceType;
   value: string | File;
   description?: string;
+}
+
+// QA Evaluation Types
+export interface QAEvaluation {
+  id: string;
+  qa_id: string;
+  qa_name?: string; // poblado por join al hacer GET
+  start_date: string; // ISO YYYY-MM-DD
+  end_date: string; // ISO YYYY-MM-DD
+  excelencia: number | null;
+  soft_skills: number | null;
+  comentarios: string | null;
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Métricas: tomadas del valor guardado en BD si existe, calculadas en tiempo real si son null
+  tasa_aceptacion?: number; // escala 1-5: (completadas / planificadas) * 5
+  cumplimiento?: number; // promedio de scores 1-5 por tarea
+}
+
+export interface QAEvaluationRow extends QAEvaluation {
+  // Fila completa lista para render, con flag de persistencia
+  has_persisted_evaluation: boolean;
+}
+
+export interface UpsertQAEvaluationInput {
+  qa_id: string;
+  start_date: string;
+  end_date: string;
+  excelencia?: number | null;
+  soft_skills?: number | null;
+  comentarios?: string | null;
 }
 
 // Feedback Types
