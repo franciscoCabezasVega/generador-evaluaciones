@@ -375,7 +375,9 @@ export async function syncTaskTimings(
         ) ??
         // Fallback: solo por nombre de status, por si ClickUp devuelve `since`
         // en distinto tipo/formato entre current_status y status_history.
-        (timeData.status_history ?? []).find(
+        // findLast garantiza tomar la entrada más reciente cuando el status
+        // aparece múltiples veces (tarea que volvió a un status previo).
+        (timeData.status_history ?? []).findLast(
           (e) =>
             e.status.toLowerCase() ===
             timeData.current_status!.status.toLowerCase(),

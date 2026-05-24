@@ -481,7 +481,11 @@ function localTimeToUTC(
   );
   const localHourAtApprox = getLocalHourDecimal(approxUTC, timezone);
   if (localHourAtApprox === null) return approxUTC;
-  const offsetHours = localHourAtApprox - (h + m / 60);
+  // Normalizar cruce de medianoche: el offset UTC real está en [-12, +14].
+  // Sin esta corrección, target = 00:00 en UTC-5 produce delta = 19h (incorrecto).
+  let offsetHours = localHourAtApprox - (h + m / 60);
+  if (offsetHours > 14) offsetHours -= 24;
+  if (offsetHours < -12) offsetHours += 24;
   return new Date(approxUTC.getTime() - offsetHours * 3_600_000);
 }
 
