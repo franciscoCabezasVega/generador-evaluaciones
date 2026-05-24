@@ -39,6 +39,6 @@ DROP INDEX IF EXISTS qa_evaluations_qa_id_idx;
 -- qa_member_oo_qa_id_idx está cubierto por qa_member_oo_qa_id_daterange_excl (GiST con qa_id como primera columna)
 DROP INDEX IF EXISTS qa_member_oo_qa_id_idx;
 
--- idx_reports_created_at / idx_reports_created_by: 0 scans, no hay queries que filtren por estos campos
-DROP INDEX IF EXISTS idx_reports_created_at;
+-- idx_reports_created_by: 0 scans, no hay queries que filtren solo por created_by
 DROP INDEX IF EXISTS idx_reports_created_by;
+-- NOTA: idx_reports_created_at se conserva; la ruta /api/reports hace ORDER BY created_at DESC

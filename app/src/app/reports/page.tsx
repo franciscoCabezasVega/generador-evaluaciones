@@ -35,6 +35,14 @@ export default function ReportsPage() {
     return "fabrica";
   });
 
+  // Sincronizar activeTab con cambios externos de URL (back/forward)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "qa") setActiveTab("qa");
+    else if (tab === "qa-report") setActiveTab("qa-report");
+    else setActiveTab("fabrica");
+  }, [searchParams]);
+
   // Redirigir a login si no hay sesión
   useEffect(() => {
     if (!authLoading && !user) {

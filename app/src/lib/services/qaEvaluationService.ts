@@ -264,13 +264,19 @@ export async function upsertQAEvaluation(
   if (input.comentarios !== undefined) payload.comentarios = input.comentarios;
 
   // Verificar si ya existe para decidir si agregar created_by
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("qa_evaluations")
     .select("id")
     .eq("qa_id", input.qa_id)
     .eq("start_date", input.start_date)
     .eq("end_date", input.end_date)
     .maybeSingle();
+
+  if (existingError) {
+    throw new Error(
+      `Error al verificar evaluación existente: ${existingError.message}`,
+    );
+  }
 
   if (!existing) {
     payload.created_by = userId;

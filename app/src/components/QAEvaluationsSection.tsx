@@ -125,7 +125,8 @@ export default function QAEvaluationsSection() {
 
   const { profile } = useAuth();
   const { safeFetch } = useSafeAuthFetch();
-  const isAdmin = profile?.role === "admin";
+  // Permiso de edición: lead (alineado con la RLS del backend)
+  const canEdit = profile?.is_lead === true;
 
   const fetchEvaluations = useCallback(async () => {
     setLoading(true);
@@ -358,7 +359,7 @@ export default function QAEvaluationsSection() {
         </div>
       </div>
 
-      {!isAdmin && (
+      {!canEdit && (
         <div className="bg-amber-950/40 border border-amber-500/25 rounded-lg p-4 mb-6">
           <p className="text-sm text-amber-400">
             Tienes acceso de solo lectura a las evaluaciones de QA.
@@ -483,7 +484,7 @@ export default function QAEvaluationsSection() {
                             e.target.value,
                           )
                         }
-                        disabled={!isAdmin}
+                        disabled={!canEdit}
                         className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                         placeholder="—"
                       />
@@ -504,7 +505,7 @@ export default function QAEvaluationsSection() {
                             e.target.value,
                           )
                         }
-                        disabled={!isAdmin}
+                        disabled={!canEdit}
                         className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                         placeholder="—"
                       />
@@ -526,7 +527,7 @@ export default function QAEvaluationsSection() {
                           t.style.height = "auto";
                           t.style.height = `${t.scrollHeight}px`;
                         }}
-                        disabled={!isAdmin}
+                        disabled={!canEdit}
                         rows={1}
                         style={{ overflow: "hidden" }}
                         className="w-full min-w-[200px] border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed resize-none"
@@ -560,8 +561,8 @@ export default function QAEvaluationsSection() {
                           <Eye size={15} />
                         </button>
 
-                        {/* Guardar — solo para admin */}
-                        {isAdmin && (
+                        {/* Guardar — solo para leads */}
+                        {canEdit && (
                           <button
                             onClick={() => handleSaveRow(row.qa_id)}
                             disabled={!state.isDirty || state.isSaving}
@@ -576,8 +577,8 @@ export default function QAEvaluationsSection() {
                           </button>
                         )}
 
-                        {/* Eliminar — solo para admin */}
-                        {isAdmin && (
+                        {/* Eliminar — solo para leads */}
+                        {canEdit && (
                           <button
                             onClick={() => setDeleteConfirmId(row.qa_id)}
                             disabled={
