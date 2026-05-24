@@ -42,6 +42,7 @@ export const userProfileService = {
         lastname: data.lastname ?? null,
         role: roleName as UserRole,
         role_id: data.role_id,
+        is_lead: (data.is_lead as boolean) ?? false,
         created_at: data.created_at,
         updated_at: data.updated_at,
         theme_preference:
