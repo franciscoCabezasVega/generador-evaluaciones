@@ -121,6 +121,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verificar si la evaluación ya existe para determinar CREATE vs UPDATE
+    const { data: existing } = await supabase
+      .from("qa_evaluations")
+      .select("id")
+      .eq("qa_id", body.qa_id)
+      .eq("start_date", body.start_date)
+      .eq("end_date", body.end_date)
+      .maybeSingle();
+
+    const isCreate = !existing;
+
     const input: UpsertQAEvaluationInput = {
       qa_id: body.qa_id,
       start_date: body.start_date,
@@ -137,7 +148,7 @@ export async function POST(request: NextRequest) {
       await supabase.from("audit_logs").insert({
         user_id: user.id,
         user_email: user.email ?? "unknown",
-        action: "CREATE",
+        action: isCreate ? "CREATE" : "UPDATE",
         entity_type: "QA_EVALUATION",
         entity_id: saved.id,
         entity_name: `QA Evaluation ${body.start_date} - ${body.end_date}`,
@@ -148,7 +159,7 @@ export async function POST(request: NextRequest) {
       console.error("Error en audit log de QA evaluation:", auditErr);
     }
 
-    return NextResponse.json(saved, { status: 201 });
+    return NextResponse.json(saved, { status: isCreate ? 201 : 200 });
   } catch (error) {
     console.error("Error en POST /api/qa-evaluations:", error);
     return NextResponse.json(

@@ -250,12 +250,18 @@ export default function QAEvaluationsSection() {
         );
       }
 
+      // Leer el ID persistido para que la eliminación funcione sin recargar
+      const savedEval = (await response.json().catch(() => ({}))) as {
+        id?: string;
+      };
+
       // Actualizar la fila en el estado local
       setRows((prev) =>
         prev.map((r) => {
           if (r.qa_id !== qaId) return r;
           return {
             ...r,
+            id: savedEval.id ?? r.id,
             excelencia: excelencia,
             soft_skills: softSkills,
             comentarios: state.comentarios || null,

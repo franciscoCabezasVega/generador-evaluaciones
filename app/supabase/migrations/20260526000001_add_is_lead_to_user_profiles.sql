@@ -2,12 +2,18 @@
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_lead BOOLEAN NOT NULL DEFAULT false;
 
 -- Función helper para usar en políticas RLS
+-- SECURITY INVOKER: se ejecuta con los permisos del llamante (más seguro que DEFINER).
+-- search_path fijo para evitar search_path hijacking.
 CREATE OR REPLACE FUNCTION get_user_is_lead(user_id UUID)
 RETURNS BOOLEAN
-LANGUAGE sql STABLE SECURITY DEFINER
+LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path TO 'public', 'pg_catalog'
 AS $$
   SELECT COALESCE(is_lead, false) FROM user_profiles WHERE id = user_id;
 $$;
+
+REVOKE EXECUTE ON FUNCTION get_user_is_lead(UUID) FROM anon;
+GRANT  EXECUTE ON FUNCTION get_user_is_lead(UUID) TO authenticated;
 
 -- Reemplazar políticas múltiples en qa_evaluations por una sola (evita múltiples
 -- políticas permisivas para SELECT que penalizan el rendimiento)

@@ -28,6 +28,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return NextResponse.json(
+        { error: "Formato de fecha inválido. Use YYYY-MM-DD" },
+        { status: 400 },
+      );
+    }
+
+    if (startDate > endDate) {
+      return NextResponse.json(
+        { error: "start_date no puede ser posterior a end_date" },
+        { status: 400 },
+      );
+    }
+
     // Obtener task_ids asignados al QA en el rango de fechas
     const { data: taskQaRows, error: tqErr } = await supabase
       .from("task_qa")
@@ -64,11 +79,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener task_qa.id para este QA en estas tareas (para buscar horas)
-    const { data: taskQaForQA } = await supabase
+    const { data: taskQaForQA, error: tqForQAErr } = await supabase
       .from("task_qa")
       .select("id, task_id")
       .eq("qa_name", qaName)
       .in("task_id", taskIds);
+
+    if (tqForQAErr) {
+      return NextResponse.json({ error: tqForQAErr.message }, { status: 500 });
+    }
 
     const taskQaIdByTaskId: Record<string, string> = {};
     for (const tq of (taskQaForQA ?? []) as { id: string; task_id: string }[]) {
@@ -80,10 +99,17 @@ export async function GET(request: NextRequest) {
     const hoursMap: Record<string, number> = {};
 
     if (taskQaIds2.length > 0) {
-      const { data: entries } = await supabase
+      const { data: entries, error: entriesErr } = await supabase
         .from("timing_qa_entries")
         .select("task_qa_id, timing_qa_category_hours(hours)")
         .in("task_qa_id", taskQaIds2);
+
+      if (entriesErr) {
+        return NextResponse.json(
+          { error: entriesErr.message },
+          { status: 500 },
+        );
+      }
 
       for (const entry of (entries ?? []) as Record<string, unknown>[]) {
         const tqId = entry.task_qa_id as string;
@@ -95,10 +121,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Complejidades para horas esperadas
-    const { data: complexitiesRaw } = await supabase
+    const { data: complexitiesRaw, error: complexitiesErr } = await supabase
       .from("complexities")
       .select("name, min_hours, max_hours")
       .eq("is_active", true);
+
+    if (complexitiesErr) {
+      return NextResponse.json(
+        { error: complexitiesErr.message },
+        { status: 500 },
+      );
+    }
 
     const complexityMap: Record<string, { min: number; max: number }> = {};
     for (const c of (complexitiesRaw ?? []) as {
