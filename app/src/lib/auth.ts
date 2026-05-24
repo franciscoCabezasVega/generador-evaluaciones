@@ -38,7 +38,7 @@ export function getServiceClient(): SupabaseClient | null {
 // even a cold start shares cache across requests in the same warm instance.
 
 interface AuthCacheEntry {
-  ctx: { user: User; role: string | null }; // token NOT stored — always use token from current request
+  ctx: { user: User; role: string | null; isLead: boolean }; // token NOT stored — always use token from current request
   expiresAt: number;
 }
 
@@ -132,6 +132,7 @@ export async function getUserRole(userId: string) {
 export async function getAuthContext(request: NextRequest): Promise<{
   user: User;
   role: string | null;
+  isLead: boolean;
   supabase: SupabaseClient;
   token: string;
 } | null> {
@@ -152,6 +153,7 @@ export async function getAuthContext(request: NextRequest): Promise<{
         return {
           user: cached.ctx.user,
           role: cached.ctx.role,
+          isLead: cached.ctx.isLead,
           supabase,
           token,
         };
@@ -166,7 +168,13 @@ export async function getAuthContext(request: NextRequest): Promise<{
       if (!entry) return null;
       const supabase = getAuthenticatedSupabase(token);
       // Return token from current request, not from cache
-      return { user: entry.ctx.user, role: entry.ctx.role, supabase, token };
+      return {
+        user: entry.ctx.user,
+        role: entry.ctx.role,
+        isLead: entry.ctx.isLead,
+        supabase,
+        token,
+      };
     }
 
     const pendingPromise = (async (): Promise<AuthCacheEntry | null> => {
@@ -184,7 +192,7 @@ export async function getAuthContext(request: NextRequest): Promise<{
         let role: string | null = null;
         const { data: profileData } = await serviceClient
           .from("user_profiles")
-          .select("role_id")
+          .select("role_id, is_lead")
           .eq("id", user.id)
           .single();
 
@@ -192,8 +200,11 @@ export async function getAuthContext(request: NextRequest): Promise<{
           role = await getRoleNameById(profileData.role_id, serviceClient);
         }
 
+        const isLead: boolean =
+          (profileData as { is_lead?: boolean } | null)?.is_lead ?? false;
+
         const entry: AuthCacheEntry = {
-          ctx: { user, role }, // token omitted intentionally — always source from request
+          ctx: { user, role, isLead }, // token omitted intentionally — always source from request
           expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
         };
         // Opportunistic cleanup: evict expired entries when approaching the cap
