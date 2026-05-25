@@ -237,23 +237,40 @@ export function downloadQAReportPDF(
     "Cumplimiento",
     "Excelencia",
     "Soft Skills",
+    "Calif. Final",
     "Comentarios",
   ];
-  const colWidths = [10, 52, 30, 28, 26, 26, 83]; // suma = 255
+  const colWidths = [10, 48, 28, 26, 24, 24, 24, 71]; // suma = 255
 
-  const tableRows = rows.map((row, idx) => [
-    String(idx + 1),
-    row.qa_name ?? "—",
-    row.tasa_aceptacion != null
-      ? row.tasa_aceptacion % 1 === 0
-        ? String(Math.round(row.tasa_aceptacion))
-        : String(row.tasa_aceptacion)
-      : "0",
-    String(row.cumplimiento ?? 0),
-    fmtScore(row.excelencia),
-    fmtScore(row.soft_skills),
-    row.comentarios ?? "—",
-  ]);
+  const tableRows = rows.map((row, idx) => {
+    const vals = [
+      row.tasa_aceptacion,
+      row.cumplimiento,
+      row.excelencia,
+      row.soft_skills,
+    ].filter((v): v is number => v !== null && v !== undefined);
+    const califFinal =
+      vals.length > 0
+        ? (() => {
+            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+            return avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(2);
+          })()
+        : "—";
+    return [
+      String(idx + 1),
+      row.qa_name ?? "—",
+      row.tasa_aceptacion != null
+        ? row.tasa_aceptacion % 1 === 0
+          ? String(Math.round(row.tasa_aceptacion))
+          : String(row.tasa_aceptacion)
+        : "0",
+      String(row.cumplimiento ?? 0),
+      fmtScore(row.excelencia),
+      fmtScore(row.soft_skills),
+      califFinal,
+      row.comentarios ?? "—",
+    ];
+  });
 
   drawTable(
     doc,

@@ -246,6 +246,12 @@ export default function QAReportSection() {
                       (0 – 5)
                     </span>
                   </th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-700 whitespace-nowrap">
+                    Calificación final
+                    <span className="block text-xs font-normal text-gray-400">
+                      (4 métricas)
+                    </span>
+                  </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-gray-700">
                     Comentarios
                   </th>
@@ -300,6 +306,30 @@ export default function QAReportSection() {
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
                       )}
+                    </td>
+                    {/* Calificación final (calculado automáticamente) */}
+                    <td className="px-3 py-3 text-center">
+                      {(() => {
+                        const vals = [
+                          row.tasa_aceptacion,
+                          row.cumplimiento,
+                          row.excelencia,
+                          row.soft_skills,
+                        ].filter(
+                          (v): v is number => v !== null && v !== undefined,
+                        );
+                        if (vals.length === 0)
+                          return (
+                            <span className="text-gray-400 text-xs">—</span>
+                          );
+                        const avg =
+                          vals.reduce((a, b) => a + b, 0) / vals.length;
+                        return (
+                          <span className="inline-block bg-emerald-950/40 text-emerald-400 border border-emerald-500/25 rounded px-2.5 py-0.5 text-sm font-bold num">
+                            {avg % 1 === 0 ? avg.toFixed(0) : avg.toFixed(2)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-3 py-3 text-xs text-gray-600 max-w-xs">
                       {row.comentarios ? (

@@ -618,7 +618,12 @@ export default function TimingsPage() {
           /* QA Metrics view */
           <div className="space-y-8">
             {/* Bar chart de horas por QA */}
-            <QAHoursBarChart qaMetrics={qaMetrics} loading={qaMetricsLoading} />
+            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
+              <QAHoursBarChart
+                qaMetrics={qaMetrics}
+                loading={qaMetricsLoading}
+              />
+            </div>
 
             {/* Tabla de eficiencia por QA */}
             <QAEfficiencyChart
