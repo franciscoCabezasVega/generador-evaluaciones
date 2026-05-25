@@ -219,7 +219,7 @@ export function TimingMetricsDistributionChart({
       </div>
 
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
-      <div>
+      <div className="rounded-lg border border-gray-200 bg-card p-4">
         <p className="text-sm font-semibold text-gray-800 mb-3">
           Comparación Visual
         </p>
@@ -915,7 +915,7 @@ export function QAHoursBarChart({
       </div>
 
       {/* ② Comparación Visual — grid de barras verticales por categoría */}
-      <div>
+      <div className="rounded-lg border border-gray-200 bg-card p-4">
         <p className="text-sm font-semibold text-gray-800 mb-3">
           Comparación Visual
         </p>
@@ -1332,59 +1332,59 @@ export function QAEfficiencyChart({
   const hasExpandableData = timings.length > 0 && tasks.length > 0;
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
-      <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-gray-100">
+    <div className="rounded-lg border border-gray-200 bg-card p-6">
+      <h3 className="mb-6 text-lg font-semibold text-gray-900">
         Eficiencia y Retest por QA
       </h3>
 
       {hasExpandableData && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        <p className="text-xs text-gray-500 mb-3">
           Haz clic en una fila para ver el detalle de tareas por QA
         </p>
       )}
 
-      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+      <div className="overflow-x-auto border border-gray-200 rounded-lg">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-gray-300 dark:border-gray-600">
+            <tr className="border-b-2 border-gray-200 bg-gray-50">
               <th
-                className="text-left py-3 px-3 font-semibold text-gray-800 dark:text-gray-200"
+                className="text-left py-3 px-3 font-semibold text-gray-800"
                 title="Nombre del QA"
               >
                 QA
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Cantidad de tareas asignadas"
               >
                 Tareas
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Horas totales en estado QA - Testing (pruebas activas)"
               >
                 QA Testing
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Horas totales en estado QA - Ready for Testing (re-encoladas para test)"
               >
                 QA Ready
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Porcentaje de horas en testing efectivo vs horas totales. Mayor % = mejor aprovechamiento del tiempo"
               >
                 Eficiencia
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Porcentaje de horas de retest respecto al testing efectivo. Menor % = mejor calidad del desarrollo"
               >
                 Tasa Retest
               </th>
               <th
-                className="text-center py-3 px-3 font-semibold text-gray-700 dark:text-gray-300"
+                className="text-center py-3 px-3 font-semibold text-gray-700"
                 title="Horas promedio invertidas por tarea"
               >
                 Promedio/Tarea
@@ -1410,7 +1410,7 @@ export function QAEfficiencyChart({
                           : undefined
                       }
                     >
-                      <td className="py-3 px-3 font-medium text-gray-900 dark:text-gray-100">
+                      <td className="py-3 px-3 font-medium text-gray-900">
                         <div className="flex items-center gap-2">
                           {hasExpandableData && (
                             <span
@@ -1449,10 +1449,10 @@ export function QAEfficiencyChart({
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             qa.efficiency_rate > 70
-                              ? "bg-green-100 text-green-700"
+                              ? "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400"
                               : qa.efficiency_rate > 50
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
+                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/60 dark:text-yellow-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
                           }`}
                         >
                           {qa.efficiency_rate.toFixed(1)}%
@@ -1462,10 +1462,10 @@ export function QAEfficiencyChart({
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             qa.retest_rate < 10
-                              ? "bg-green-100 text-green-700"
+                              ? "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400"
                               : qa.retest_rate < 20
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
+                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/60 dark:text-yellow-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
                           }`}
                         >
                           {qa.retest_rate.toFixed(1)}%
