@@ -48,7 +48,7 @@ function initRowEditState(row: QAEvaluationRow): RowEditState {
 }
 
 function SkeletonTable() {
-  const cols = 8;
+  const cols = 9;
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full text-sm">
@@ -416,6 +416,12 @@ export default function QAEvaluationsSection() {
                     (0 – 5)
                   </span>
                 </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
+                  Calificación final
+                  <span className="block text-xs font-normal text-gray-500">
+                    (4 métricas)
+                  </span>
+                </th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">
                   Comentarios
                 </th>
@@ -509,6 +515,35 @@ export default function QAEvaluationsSection() {
                         className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                         placeholder="—"
                       />
+                    </td>
+
+                    {/* Calificación final (calculado automáticamente) */}
+                    <td className="px-4 py-3 text-center">
+                      {(() => {
+                        const vals = [
+                          row.tasa_aceptacion,
+                          row.cumplimiento,
+                          parseScore(state.excelencia),
+                          parseScore(state.soft_skills),
+                        ].filter(
+                          (v): v is number => v !== null && v !== undefined,
+                        );
+                        if (vals.length === 0)
+                          return (
+                            <span className="text-gray-400 text-xs">—</span>
+                          );
+                        const avg =
+                          vals.reduce((a, b) => a + b, 0) / vals.length;
+                        return (
+                          <span className="inline-block bg-emerald-950/40 text-emerald-400 border border-emerald-500/25 rounded px-2.5 py-0.5 text-sm font-bold num">
+                            {Number.isInteger(avg * 100)
+                              ? avg % 1 === 0
+                                ? avg.toFixed(0)
+                                : avg.toFixed(2)
+                              : avg.toFixed(2)}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Comentarios */}

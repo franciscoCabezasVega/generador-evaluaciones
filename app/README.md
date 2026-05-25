@@ -106,7 +106,7 @@ Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YY
 
 ### Módulo de Evaluaciones de QA (QA1)
 
-`/app/src/app/api/qa-evaluations/` expone un CRUD completo para evaluar a los miembros de QA por rango de fechas configurable. Cada evaluación almacena `excelencia`, `soft_skills` y `comentarios`. Las métricas `tasa_aceptacion` y `cumplimiento` se calculan en tiempo real desde las tareas y timings del período; cuando se guardan valores históricos cerrados, la API los devuelve directamente sin recalcular.
+`/app/src/app/api/qa-evaluations/` expone un CRUD completo para evaluar a los miembros de QA por rango de fechas configurable. Cada evaluación almacena `excelencia`, `soft_skills` y `comentarios`. Las métricas `tasa_aceptacion` y `cumplimiento` se calculan en tiempo real desde las tareas y timings del período; cuando se guardan valores históricos cerrados, la API los devuelve directamente sin recalcular. La columna **Calificación final** se muestra en la tabla de Evaluaciones de QA, en Reportes de QA y en el PDF exportado; es un promedio calculado en el frontend de las cuatro métricas disponibles (`tasa_aceptacion`, `cumplimiento`, `excelencia`, `soft_skills`), excluyendo valores nulos.
 
 ### Métricas almacenadas vs. calculadas (QA2)
 
