@@ -278,12 +278,36 @@ export async function GET(request: NextRequest) {
       if (status) {
         tasksQuery = tasksQuery.eq("status", status);
       }
-      // Filtrar por rango de effort_score_date (usado en la vista virtual de Tiempos)
-      if (startDate) {
-        tasksQuery = tasksQuery.gte("effort_score_date", startDate);
-      }
-      if (endDate) {
-        tasksQuery = tasksQuery.lte("effort_score_date", endDate);
+      // Filtrar por mes/año de evaluación del task (month/year and effort_score_date are independent)
+      if (startDate && endDate) {
+        const s = {
+          year: parseInt(startDate.substring(0, 4)),
+          month: parseInt(startDate.substring(5, 7)),
+        };
+        const e = {
+          year: parseInt(endDate.substring(0, 4)),
+          month: parseInt(endDate.substring(5, 7)),
+        };
+        if (s.year === e.year && s.month === e.month) {
+          tasksQuery = tasksQuery.eq("year", s.year).eq("month", s.month);
+        } else if (s.year === e.year) {
+          tasksQuery = tasksQuery
+            .eq("year", s.year)
+            .gte("month", s.month)
+            .lte("month", e.month);
+        } else {
+          const conds: string[] = [];
+          for (let y = s.year; y <= e.year; y++) {
+            const mn = y === s.year ? s.month : 1;
+            const mx = y === e.year ? e.month : 12;
+            conds.push(
+              mn === mx
+                ? `and(year.eq.${y},month.eq.${mn})`
+                : `and(year.eq.${y},month.gte.${mn},month.lte.${mx})`,
+            );
+          }
+          tasksQuery = tasksQuery.or(conds.join(","));
+        }
       }
 
       // El filtro de squad requiere una subconsulta en task_squad,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Clock } from "lucide-react";
 import Modal from "@/components/Modal";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 
@@ -216,27 +216,57 @@ export default function QATasksDetailModal({
                   return (
                     <tr
                       key={task.id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className={`transition-colors ${
+                        !hasRealHours
+                          ? "bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/30"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                      }`}
                     >
-                      <td className="px-3 py-2.5 text-gray-500">{idx + 1}</td>
+                      <td
+                        className={`px-3 py-2.5 ${
+                          !hasRealHours
+                            ? "text-gray-400 dark:text-gray-500"
+                            : "text-gray-400 dark:text-gray-500"
+                        }`}
+                      >
+                        {idx + 1}
+                      </td>
                       <td className="px-3 py-2.5">
-                        <a
-                          href={task.task_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium"
-                        >
-                          {task.name}
-                          <ExternalLink
-                            size={12}
-                            className="shrink-0 opacity-60"
-                          />
-                        </a>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <a
+                            href={task.task_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`hover:underline inline-flex items-center gap-1 font-medium ${
+                              !hasRealHours
+                                ? "text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+                                : "text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                            }`}
+                          >
+                            {task.name}
+                            <ExternalLink
+                              size={12}
+                              className="shrink-0 opacity-60"
+                            />
+                          </a>
+                          {!hasRealHours && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-700/40 whitespace-nowrap">
+                              <Clock size={10} />
+                              Sin tiempos
+                            </span>
+                          )}
+                        </div>
                       </td>
                       {/* Talla */}
                       <td className="px-3 py-2.5 text-center">
                         {task.tshirt_size ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-gray-100 text-gray-600 border border-gray-200">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-mono border ${
+                              !hasRealHours
+                                ? "bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700"
+                                : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+                            }`}
+                          >
                             {task.tshirt_size}
                           </span>
                         ) : (
@@ -244,29 +274,41 @@ export default function QATasksDetailModal({
                         )}
                       </td>
                       {/* Tiempo esperado */}
-                      <td className="px-3 py-2.5 text-center text-xs text-gray-500 whitespace-nowrap">
+                      <td
+                        className={`px-3 py-2.5 text-center text-xs whitespace-nowrap ${
+                          !hasRealHours
+                            ? "text-gray-400 dark:text-gray-600"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
                         {task.expected_min_hours !== null &&
                         task.expected_max_hours !== null ? (
                           `${fmtHours(task.expected_min_hours)} – ${fmtHours(task.expected_max_hours)}`
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-300 dark:text-gray-600">
+                            —
+                          </span>
                         )}
                       </td>
                       {/* Tiempo real QA */}
                       <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                        <span
-                          className={`text-xs font-semibold ${
-                            !hasRealHours
-                              ? "text-gray-400"
-                              : withinOrBelow
-                                ? "text-emerald-500"
+                        {!hasRealHours ? (
+                          <span className="text-xs text-amber-600 dark:text-amber-500/70 italic">
+                            No registrado
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-xs font-semibold ${
+                              withinOrBelow
+                                ? "text-emerald-600 dark:text-emerald-400"
                                 : overRange
-                                  ? "text-red-500"
-                                  : "text-gray-400"
-                          }`}
-                        >
-                          {hasRealHours ? fmtHours(task.real_qa_hours) : "—"}
-                        </span>
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-gray-500 dark:text-gray-400"
+                            }`}
+                          >
+                            {fmtHours(task.real_qa_hours)}
+                          </span>
+                        )}
                       </td>
                       {/* Estado */}
                       <td className="px-3 py-2.5">
@@ -285,6 +327,8 @@ export default function QATasksDetailModal({
           tasks.length > 0 &&
           (() => {
             const total = tasks.length;
+            const withTimings = tasks.filter((t) => t.real_qa_hours > 0).length;
+            const withoutTimings = total - withTimings;
             const completed = tasks.filter(
               (t) => t.status === "Completada",
             ).length;
@@ -295,21 +339,35 @@ export default function QATasksDetailModal({
                 t.real_qa_hours <= t.expected_max_hours,
             ).length;
             return (
-              <div className="space-y-1 text-xs text-gray-500 text-right">
-                <p>
-                  <span className="font-semibold text-gray-700">
-                    {completed} de {total}
-                  </span>{" "}
-                  tarea{total !== 1 ? "s" : ""} {total !== 1 ? "fueron" : "fue"}{" "}
-                  completada{total !== 1 ? "s" : ""} en el periodo.
-                </p>
-                <p>
-                  <span className="font-semibold text-gray-700">
-                    {withinEstimate} de {total}
-                  </span>{" "}
-                  tarea{total !== 1 ? "s" : ""} cumplen con la estimación de
-                  talla de camisa dentro del periodo.
-                </p>
+              <div className="space-y-1.5 text-xs">
+                {withoutTimings > 0 && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-700/30 dark:text-amber-400">
+                    <Clock size={12} className="shrink-0" />
+                    <span>
+                      <span className="font-semibold">{withoutTimings}</span>{" "}
+                      tarea{withoutTimings !== 1 ? "s" : ""} sin tiempos
+                      registrados — no se incluyen en el cálculo de
+                      cumplimiento.
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-1 text-gray-500 text-right">
+                  <p>
+                    <span className="font-semibold text-gray-700">
+                      {completed} de {total}
+                    </span>{" "}
+                    tarea{total !== 1 ? "s" : ""}{" "}
+                    {total !== 1 ? "fueron" : "fue"} completada
+                    {total !== 1 ? "s" : ""} en el periodo.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-gray-700">
+                      {withinEstimate} de {withTimings}
+                    </span>{" "}
+                    tarea{withTimings !== 1 ? "s" : ""} con tiempos cumplen con
+                    la estimación de talla.
+                  </p>
+                </div>
               </div>
             );
           })()}
