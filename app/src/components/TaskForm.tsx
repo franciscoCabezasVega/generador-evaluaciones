@@ -532,13 +532,11 @@ function TaskFormComponent(
           if (suggestions.tshirt_size)
             next.tshirt_size = suggestions.tshirt_size;
           if (suggestions.status) next.status = suggestions.status;
-          if (suggestions.month) next.month = suggestions.month;
-          if (suggestions.year && suggestions.year >= new Date().getFullYear())
-            next.year = suggestions.year;
-          if (suggestions.effort_score_date)
-            next.effort_score_date = suggestions.effort_score_date;
-          // INTENTIONALLY: squads se omiten en aplicación directa — el usuario los asigna manualmente.
-          // Si la IA los sugiere, quedarán disponibles solo en el diff panel (modo edición).
+          // month, year y effort_score_date NO se infieren — quedan con sus valores por defecto
+          // Aplicar squads cuando la IA los resolvió desde ClickUp (campo "Equipo")
+          if (suggestions.squads && suggestions.squads.length > 0) {
+            next.squads = suggestions.squads;
+          }
           if (suggestions.assigned_qa && suggestions.assigned_qa.length > 0)
             next.assigned_qa = suggestions.assigned_qa;
           return next;
