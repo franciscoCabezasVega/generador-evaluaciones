@@ -62,15 +62,20 @@ export async function listQAEvaluationsForRange(
 
   const qaNames = members.map((m) => m.name);
 
-  // 2. Tasa de aceptación: tasks asignadas al QA con effort_score_date en el rango
+  // month/year and effort_score_date are independent — tasks are filtered by
+  // their evaluation period (month/year), not by the effort scoring date.
+  const evalYear = parseInt(startDate.substring(0, 4));
+  const evalMonth = parseInt(startDate.substring(5, 7));
+
+  // 2. Tasa de aceptación: tasks asignadas al QA en el mes/año de evaluación
   //    Una tarea puede tener el mismo QA name varias veces en task_qa (poco probable
   //    pero usamos DISTINCT task_id para evitar doble conteo).
   const { data: tasaRaw, error: tasaErr } = await supabase
     .from("task_qa")
-    .select("qa_name, tasks!inner(id, effort_score_date)")
+    .select("qa_name, tasks!inner(id, month, year)")
     .in("qa_name", qaNames)
-    .gte("tasks.effort_score_date", startDate)
-    .lte("tasks.effort_score_date", endDate);
+    .eq("tasks.month", evalMonth)
+    .eq("tasks.year", evalYear);
 
   if (tasaErr) throw new Error(`Error al calcular tasa: ${tasaErr.message}`);
 
@@ -84,16 +89,14 @@ export async function listQAEvaluationsForRange(
     tasaMap[qaName].add(task.id);
   }
 
-  // 3. Cumplimiento: tasks completadas con effort_score_date en el rango
+  // 3. Cumplimiento: tasks completadas en el mes/año de evaluación
   const { data: completedRaw, error: compErr } = await supabase
     .from("task_qa")
-    .select(
-      "id, qa_name, tasks!inner(id, tshirt_size, effort_score_date, status)",
-    )
+    .select("id, qa_name, tasks!inner(id, tshirt_size, status, month, year)")
     .in("qa_name", qaNames)
     .eq("tasks.status", "Completada")
-    .gte("tasks.effort_score_date", startDate)
-    .lte("tasks.effort_score_date", endDate);
+    .eq("tasks.month", evalMonth)
+    .eq("tasks.year", evalYear);
 
   if (compErr)
     throw new Error(`Error al obtener tareas completadas: ${compErr.message}`);
@@ -161,6 +164,16 @@ export async function listQAEvaluationsForRange(
     completadasByQA[task.qa_name].add(task.task_id);
   }
 
+  // QA names que tienen al menos una tarea completada con horas registradas.
+  // Tanto tasa_aceptacion como cumplimiento requieren timing para ser calculados:
+  // sin datos de tiempo no se puede evaluar el desempeño real del QA.
+  const qaWithTimingData = new Set<string>();
+  for (const task of completedTasks) {
+    if ((hoursMap[task.task_qa_id] ?? 0) > 0) {
+      qaWithTimingData.add(task.qa_name);
+    }
+  }
+
   // Calcular cumplimiento por QA
   // Score por tarea: 5 si ≤ max, 4 si ≤ 2×max, 3 si ≤ 3×max, 2 si ≤ 4×max, 1 si > 4×max
   // Cumplimiento final = promedio de scores de tareas con horas registradas
@@ -224,20 +237,26 @@ export async function listQAEvaluationsForRange(
       created_by: ev?.created_by ?? null,
       created_at: ev?.created_at,
       updated_at: ev?.updated_at,
-      // Usar valor guardado si existe; calcular en tiempo real si es null
+      // Usar valor guardado si existe; calcular en tiempo real si es null.
+      // tasa_aceptacion y cumplimiento requieren timing: si el QA no tiene
+      // ninguna tarea con horas registradas, ambas métricas son null y quedan
+      // excluidas de la calificación final.
       tasa_aceptacion:
         ev?.tasa_aceptacion != null
           ? ev.tasa_aceptacion
-          : (() => {
-              const planificadas = tasaMap[qaName]?.size ?? 0;
-              const completadas = completadasByQA[qaName]?.size ?? 0;
-              if (planificadas === 0) return 0;
-              return Math.round((completadas / planificadas) * 5 * 100) / 100;
-            })(),
+          : !qaWithTimingData.has(qaName)
+            ? null
+            : (() => {
+                const planificadas = tasaMap[qaName]?.size ?? 0;
+                const completadas = completadasByQA[qaName]?.size ?? 0;
+                if (planificadas === 0) return null;
+                return Math.round((completadas / planificadas) * 5 * 100) / 100;
+              })(),
+      // cumplimiento es null cuando ningún task del QA tiene horas registradas.
       cumplimiento:
         ev?.cumplimiento != null
           ? ev.cumplimiento
-          : (cumplimientoMap[qaName] ?? 0),
+          : (cumplimientoMap[qaName] ?? null),
       has_persisted_evaluation: !!ev,
     };
   });

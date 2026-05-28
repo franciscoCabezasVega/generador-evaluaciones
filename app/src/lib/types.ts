@@ -309,9 +309,10 @@ export interface QAEvaluation {
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
-  // Métricas: tomadas del valor guardado en BD si existe, calculadas en tiempo real si son null
-  tasa_aceptacion?: number; // escala 1-5: (completadas / planificadas) * 5
-  cumplimiento?: number; // promedio de scores 1-5 por tarea
+  // Métricas: tomadas del valor guardado en BD si existe, calculadas en tiempo real si son null.
+  // null = QA no tiene tareas con horas registradas → excluido del promedio final.
+  tasa_aceptacion?: number | null; // escala 1-5: (completadas / planificadas) * 5
+  cumplimiento?: number | null; // promedio de scores 1-5 por tarea
 }
 
 export interface QAEvaluationRow extends QAEvaluation {

@@ -43,13 +43,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Obtener task_ids asignados al QA en el rango de fechas
+    // Obtener task_ids asignados al QA en el mes/año de evaluación.
+    // month/year and effort_score_date are independent — se filtra por período
+    // de evaluación, no por la fecha de esfuerzo.
+    const evalYear = parseInt(startDate.substring(0, 4));
+    const evalMonth = parseInt(startDate.substring(5, 7));
+
     const { data: taskQaRows, error: tqErr } = await supabase
       .from("task_qa")
-      .select("task_id, tasks!inner(id, effort_score_date)")
+      .select("task_id, tasks!inner(id, month, year)")
       .eq("qa_name", qaName)
-      .gte("tasks.effort_score_date", startDate)
-      .lte("tasks.effort_score_date", endDate);
+      .eq("tasks.month", evalMonth)
+      .eq("tasks.year", evalYear);
 
     if (tqErr) {
       return NextResponse.json({ error: tqErr.message }, { status: 500 });

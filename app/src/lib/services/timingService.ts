@@ -179,17 +179,43 @@ function buildDateRangeFilter(
   return query;
 }
 
-async function getTaskIdsByEffortDate(
+// month/year and effort_score_date are independent — tasks are filtered by
+// their evaluation period (tasks.month / tasks.year), not by effort_score_date.
+async function getTaskIdsByTaskMonth(
   client: SupabaseClient,
   startDate: string,
   endDate: string,
   extraFilters?: { product_type?: string },
 ): Promise<string[]> {
-  let q = client
-    .from("tasks")
-    .select("id")
-    .gte("effort_score_date", startDate)
-    .lte("effort_score_date", endDate);
+  const s = {
+    year: parseInt(startDate.substring(0, 4)),
+    month: parseInt(startDate.substring(5, 7)),
+  };
+  const e = {
+    year: parseInt(endDate.substring(0, 4)),
+    month: parseInt(endDate.substring(5, 7)),
+  };
+
+  let q = client.from("tasks").select("id");
+
+  if (s.year === e.year && s.month === e.month) {
+    q = q.eq("year", s.year).eq("month", s.month);
+  } else if (s.year === e.year) {
+    q = q.eq("year", s.year).gte("month", s.month).lte("month", e.month);
+  } else {
+    const conds: string[] = [];
+    for (let y = s.year; y <= e.year; y++) {
+      const mn = y === s.year ? s.month : 1;
+      const mx = y === e.year ? e.month : 12;
+      conds.push(
+        mn === mx
+          ? `and(year.eq.${y},month.eq.${mn})`
+          : `and(year.eq.${y},month.gte.${mn},month.lte.${mx})`,
+      );
+    }
+    q = q.or(conds.join(","));
+  }
+
   if (extraFilters?.product_type)
     q = q.eq("product_type", extraFilters.product_type);
   const { data, error } = await q;
@@ -214,7 +240,7 @@ export const timingService = {
       let query = client.from("task_timings").select("*");
 
       if (filters.startDate && filters.endDate) {
-        const taskIds = await getTaskIdsByEffortDate(
+        const taskIds = await getTaskIdsByTaskMonth(
           client,
           filters.startDate,
           filters.endDate,
@@ -682,7 +708,7 @@ export const timingService = {
 
       let timingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
-        const taskIds = await getTaskIdsByEffortDate(
+        const taskIds = await getTaskIdsByTaskMonth(
           client,
           filters.startDate,
           filters.endDate,
@@ -922,7 +948,7 @@ export const timingService = {
 
       let qaTimingsQuery = client.from("task_timings").select("id, task_id");
       if (filters.startDate && filters.endDate) {
-        const effortTaskIds = await getTaskIdsByEffortDate(
+        const effortTaskIds = await getTaskIdsByTaskMonth(
           client,
           filters.startDate,
           filters.endDate,
