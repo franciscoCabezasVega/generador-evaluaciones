@@ -120,6 +120,26 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (
+      body.tasa_aceptacion !== null &&
+      body.tasa_aceptacion !== undefined &&
+      (body.tasa_aceptacion < 0 || body.tasa_aceptacion > 5)
+    ) {
+      return NextResponse.json(
+        { error: "tasa_aceptacion debe estar entre 0 y 5" },
+        { status: 400 },
+      );
+    }
+    if (
+      body.cumplimiento !== null &&
+      body.cumplimiento !== undefined &&
+      (body.cumplimiento < 0 || body.cumplimiento > 5)
+    ) {
+      return NextResponse.json(
+        { error: "cumplimiento debe estar entre 0 y 5" },
+        { status: 400 },
+      );
+    }
 
     // Verificar si la evaluación ya existe para determinar CREATE vs UPDATE
     const { data: existing } = await supabase
@@ -139,6 +159,8 @@ export async function POST(request: NextRequest) {
       excelencia: body.excelencia ?? null,
       soft_skills: body.soft_skills ?? null,
       comentarios: body.comentarios ?? null,
+      tasa_aceptacion: body.tasa_aceptacion ?? null,
+      cumplimiento: body.cumplimiento ?? null,
     };
 
     const saved = await upsertQAEvaluation(supabase, user.id, input);

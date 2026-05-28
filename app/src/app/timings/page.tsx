@@ -318,41 +318,6 @@ export default function TimingsPage() {
     }
   };
 
-  /**
-   * Crea el timing en background sin cerrar el modal — usado por el flujo
-   * de "Sincronizar en un clic" desde ClickUpSyncInline.
-   * Retorna el nuevo timing ID, o null si falla.
-   */
-  const handleCreateForSync = async (
-    data: import("@/lib/types").CreateTaskTimingInput,
-  ): Promise<string | null> => {
-    const response = await safeFetch("/api/timings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      let errorMsg = "Error al guardar el timing";
-      try {
-        const errBody = (await response.json()) as { error?: string };
-        if (errBody?.error) errorMsg = errBody.error;
-      } catch {
-        /* ignore parse error */
-      }
-      throw new Error(errorMsg);
-    }
-    const newTiming =
-      (await response.json()) as import("@/lib/types").TaskTiming;
-    setTimings((prev) => [newTiming, ...prev]);
-    // Pasar a modo edición sin cerrar el modal para que el sync pueda continuar
-    setRegisteringTask(null);
-    setEditingTiming(newTiming);
-    invalidateCache("timings-metrics");
-    invalidateCache("timings-qa-metrics");
-    invalidateCache("timings-all-comparison");
-    return newTiming.id;
-  };
-
   // Handle eliminar timing
   const handleDelete = async (id: string) => {
     // Optimistic update: quitar de la lista inmediatamente
@@ -701,7 +666,6 @@ export default function TimingsPage() {
               throw new Error(errorMessage);
             }
           }}
-          onCreateForSync={!editingTiming ? handleCreateForSync : undefined}
         />
       </Modal>
 

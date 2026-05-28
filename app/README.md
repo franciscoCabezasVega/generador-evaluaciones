@@ -98,8 +98,6 @@ Cuando el usuario hace clic en "Sincronizar" desde el formulario de timing (ruta
 
 Cuando `rawCalendarHoursOverride` está presente (= `current_status.by_minute / 60` de ClickUp), se usa como denominador en lugar del ancho de ventana calendario calculado. Esto corrige el desbordamiento de fin de semana: si ClickUp mide tiempo a través del fin de semana pero la ventana activa se recorta al viernes EOD mediante `findLastWorkingMoment`, el factor resultante compensa exactamente la diferencia.
 
-Split cumulative/current-session: `status_history[i].total_time.by_minute` en ClickUp es acumulado (todas las sesiones pasadas). El campo `current_status.total_time.by_minute` refleja solo la sesión activa en curso. `syncTaskTimings` los trata por separado: las horas congeladas usan el factor mensual completo y las horas activas usan `rawCalendarHoursOverride` para precisión dentro de la ventana real.
-
 Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YYYY-MM-DD` en hora local. Nunca se usa `toISOString()` para evitar desfase de un día.
 
 ### ClickUp Sync — modo preview (W2)
@@ -113,6 +111,12 @@ Restricciones de timezone: las fechas OOO y feriados se manejan como strings `YY
 ### Métricas almacenadas vs. calculadas (QA2)
 
 `qa_evaluations` tiene columnas `tasa_aceptacion numeric` y `cumplimiento numeric` nullable. `qaEvaluationService.listQAEvaluationsForRange` prioriza el valor almacenado cuando no es `NULL` (`ev.tasa_aceptacion != null`); si es `NULL` calcula en tiempo real. Esto permite registrar períodos históricos cerrados con los valores exactos de los reportes PDF sin alterar las tareas o timings subyacentes.
+
+Además de calcularse automáticamente, ambos campos son editables directamente desde la tabla de Evaluaciones de QA (igual que `excelencia` y `soft_skills`). El rango válido es 0–5; la validación existe tanto en frontend (`QAEvaluationsSection`) como en backend (`POST /api/qa-evaluations`). Al guardar, los valores se persisten y en adelante se devuelven almacenados en lugar de recalcularse.
+
+### `task_count` en `QAEvaluationRow` (QA5)
+
+`listQAEvaluationsForRange` expone `task_count: number` en cada fila, contando el total de tareas únicas asignadas al QA en el período. Este valor se usa en la UI para mostrar contexto de carga de trabajo junto a las métricas de evaluación.
 
 ### `get_user_is_lead` — SECURITY INVOKER (QA3)
 
@@ -133,6 +137,10 @@ La función `public.get_user_is_lead` se creó directamente como `SECURITY INVOK
 Ahora `_inflight` apunta a la promesa **real** (mismo patrón que `_refreshInflight`). El timeout es por caller exclusivamente: si vence, solo rechaza para ese caller, pero `_inflight` sigue vivo. Los reintentos de `useSafeAuthFetch` y la llamada de `SessionChecker` se coalescen en la misma promesa sin añadir presión al lock. Cuando Supabase libera el lock, la promesa resuelve una sola vez y todos los callers reciben el resultado.
 
 `SessionChecker` también retrasa su primera validación 8 s para evitar competir con los fetches de carga inicial de página.
+
+### ClickUp Sync — uso directo de `status_history.by_minute` (W4)
+
+`syncTaskTimings` usa `status_history[i].total_time.by_minute` directamente para mapear horas por categoría, sin separar la sesión activa (`current_status`) del histórico acumulado. La lógica anterior de split cumulative/sesión activa introducía doble conteo cuando `status_history.by_minute` y `current_status.by_minute` representaban la misma sesión activa. El enfoque simplificado evita este desbordamiento sin pérdida de precisión para el caso de uso actual. El prop `onSaveFirst` del componente `TimingForm` fue eliminado ya que el preview mode cubre el flujo completo en edición.
 
 ### Cron ClickUp — guarda de día laboral (W3)
 

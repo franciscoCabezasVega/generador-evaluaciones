@@ -362,79 +362,13 @@ export async function syncTaskTimings(
     // Step 2: Fetch from ClickUp
     const timeData = await fetchTimeInStatus(taskId, apiKey);
 
-    // Identificar la entrada activa: la que coincide con current_status
-    // (mismo status name + mismo since timestamp). Solo este entry usa el
-    // factor calendario (su ventana termina en "ahora"). Los demás son
-    // históricos — sus rawHours son inmutables y no deben fluctuar entre syncs.
-    const activeHistoryEntry = timeData.current_status
-      ? ((timeData.status_history ?? []).find(
-          (e) =>
-            e.status.toLowerCase() ===
-              timeData.current_status!.status.toLowerCase() &&
-            e.total_time.since === timeData.current_status!.total_time.since,
-        ) ??
-        // Fallback: solo por nombre de status, por si ClickUp devuelve `since`
-        // en distinto tipo/formato entre current_status y status_history.
-        // findLast garantiza tomar la entrada más reciente cuando el status
-        // aparece múltiples veces (tarea que volvió a un status previo).
-        (timeData.status_history ?? []).findLast(
-          (e) =>
-            e.status.toLowerCase() ===
-            timeData.current_status!.status.toLowerCase(),
-        ) ??
-        null)
-      : null;
-
-    // Step 3: Separar horas congeladas (históricas) de las activas (en curso).
-    //
-    // IMPORTANTE: ClickUp's status_history.by_minute es ACUMULADO (suma de todas las
-    // sesiones pasadas + la sesión actual en curso). current_status.by_minute es solo
-    // la sesión actual.
-    //
-    // Para el entry activo hay que separar:
-    //   - Parte frozen: (acumulado - sesión actual) → factor mensual, como los demás.
-    //   - Parte activa: solo current_status.by_minute → factor de ventana (isOngoing).
-    //
-    // Ejemplo: "review client" acumulado=9953 min, sesión actual=923 min
-    //   → frozen=9030 min (sesiones previas), active=923 min (sesión en curso).
-    const frozenHistory = (timeData.status_history ?? []).filter(
-      (e) => e !== activeHistoryEntry,
+    // Step 3: Mapear status_history a horas por categoría.
+    // Se usa status_history.by_minute directamente (tiempo acumulado total por status).
+    // current_status no se procesa por separado para evitar doble conteo cuando
+    // status_history.by_minute y current_status.by_minute representan la misma sesión.
+    const categoryHours = mapStatusesToCategoryHours(
+      timeData.status_history ?? [],
     );
-    const frozenHours = mapStatusesToCategoryHours(frozenHistory);
-
-    // Sesión actual (solo present en current_status).
-    const currentSessionByMinute =
-      activeHistoryEntry && timeData.current_status
-        ? (timeData.current_status.total_time.by_minute ?? 0)
-        : 0;
-
-    // Sumar la parte frozen del entry activo (sesiones previas del mismo status).
-    if (activeHistoryEntry) {
-      const slug = STATUS_CATEGORY_MAP[activeHistoryEntry.status.toLowerCase()];
-      if (slug) {
-        const pastSessionsMin = Math.max(
-          0,
-          activeHistoryEntry.total_time.by_minute - currentSessionByMinute,
-        );
-        if (pastSessionsMin > 0) {
-          frozenHours[slug] = (frozenHours[slug] ?? 0) + pastSessionsMin / 180;
-        }
-      }
-    }
-
-    // activeHoursMap: solo la sesión en curso (current_status.by_minute).
-    const activeHoursMap: CategoryHours = (() => {
-      if (!activeHistoryEntry || currentSessionByMinute <= 0) return {};
-      const slug = STATUS_CATEGORY_MAP[activeHistoryEntry.status.toLowerCase()];
-      if (!slug) return {};
-      return { [slug]: currentSessionByMinute / 180 };
-    })();
-
-    // Totales combinados — solo usado para resolver slugs y category_ids en BD.
-    const categoryHours: CategoryHours = { ...frozenHours };
-    for (const [slug, h] of Object.entries(activeHoursMap)) {
-      categoryHours[slug] = (categoryHours[slug] ?? 0) + h;
-    }
 
     // Determine the latest status (highest orderindex = most recent)
     const latestStatus =
@@ -464,35 +398,6 @@ export async function syncTaskTimings(
           `Error de BD al leer la tarea: ${taskMetaError.message}`,
         );
       }
-
-      // Ventana del entry activo: [since_current, ahora], clampeada al mes.
-      // Solo se usa para el factor del status vigente; los históricos no la
-      // necesitan ya que sus rawHours son inmutables (ClickUp los congela).
-      const activeQAWindow: TaskQAWindow | undefined =
-        activeHistoryEntry && taskMeta
-          ? (() => {
-              const monthStartDate = new Date(
-                taskMeta.year,
-                taskMeta.month - 1,
-                1,
-              );
-              const monthEndDate = endOfMonth(monthStartDate);
-              const sinceMs = Number(activeHistoryEntry.total_time.since);
-              const fromRaw =
-                !isNaN(sinceMs) && sinceMs > 0
-                  ? new Date(sinceMs)
-                  : monthStartDate;
-              const from =
-                fromRaw < monthStartDate
-                  ? monthStartDate
-                  : fromRaw > monthEndDate
-                    ? monthStartDate
-                    : fromRaw;
-              const nowClamped = new Date();
-              const to = nowClamped > monthEndDate ? monthEndDate : nowClamped;
-              return { from, to };
-            })()
-          : undefined;
 
       let latestTiming: { id: string } | null = null;
       if (taskMeta) {
@@ -581,11 +486,12 @@ export async function syncTaskTimings(
             );
           };
 
-          // activeFactorByEntryId: factor calendario para el entry activo (ventana [since, ahora]).
-          // frozenFactorByEntryId: factor mensual para entries históricos (ventana = mes completo).
-          // Ambos usan la fórmula correcta: calendarHours × calFactor = workHours.
-          // QAs sin country_code no están en los maps → comportamiento legacy (rawHours sin ajuste).
-          let activeFactorByEntryId: Map<string, number> | null = null;
+          // ── Sabor B: Factor calendario absoluto (mes completo) ────────────────
+          // factor = workHours_QA_en_mes / horas_calendario_del_mes
+          // Se aplica sobre el tiempo acumulado de status_history para estimar
+          // las horas efectivas de trabajo, descontando fines de semana, festivos y OOO.
+          // QAs sin country_code → comportamiento legacy (rawHours sin ajuste).
+          // by design: el feature flag permite rollback instantáneo si hay regresiones.
           let frozenFactorByEntryId: Map<string, number> | null = null;
           if (process.env.ENABLE_WORK_CALENDAR_ADJUSTMENT === "true") {
             const qaNames = qaEntries.map((e) =>
@@ -606,14 +512,10 @@ export async function syncTaskTimings(
               const month = (taskMeta as { month: number })?.month ?? 0;
 
               if (year > 0 && month > 0) {
-                const activeFactorByName = new Map<string, number>();
                 const frozenFactorByName = new Map<string, number>();
 
-                // Calcular ambos factores en paralelo para minimizar latencia:
-                // - active: ventana [since_current, ahora], isOngoing=true
-                // - frozen: mes completo (sin ventana), isOngoing=false
                 await Promise.all(
-                  qaConfigs.flatMap((qc) => {
+                  qaConfigs.map((qc) => {
                     const qaConfig = {
                       id: qc.id as string,
                       country_code: qc.country_code as string | null,
@@ -623,34 +525,12 @@ export async function syncTaskTimings(
                       lunch_hours: qc.lunch_hours as number | null,
                       work_days: qc.work_days as number[] | null,
                     };
-                    return [
-                      getAdjustmentFactor(
-                        qaConfig,
-                        year,
-                        month,
-                        activeQAWindow,
-                        true, // isOngoing: clampea effectiveEnd al último momento laboral
-                        // rawCalendarHoursOverride: ClickUp midió exactamente estos minutos
-                        // de calendario para la sesión activa. Usarlo como denominador
-                        // evita sobreestimar cuando la tarea cruzó fin de semana/feriado.
-                        currentSessionByMinute > 0
-                          ? currentSessionByMinute / 60
-                          : undefined,
-                      ).then((f) => {
-                        if (f !== null)
-                          activeFactorByName.set(qc.name as string, f);
-                      }),
-                      getAdjustmentFactor(
-                        qaConfig,
-                        year,
-                        month,
-                        undefined, // ventana = mes completo para entries históricos
-                        false,
-                      ).then((f) => {
+                    return getAdjustmentFactor(qaConfig, year, month).then(
+                      (f) => {
                         if (f !== null)
                           frozenFactorByName.set(qc.name as string, f);
-                      }),
-                    ];
+                      },
+                    );
                   }),
                 );
 
@@ -674,7 +554,6 @@ export async function syncTaskTimings(
                   );
                 };
 
-                activeFactorByEntryId = buildFactorMap(activeFactorByName);
                 frozenFactorByEntryId = buildFactorMap(frozenFactorByName);
               }
             }
@@ -696,28 +575,16 @@ export async function syncTaskTimings(
           // rawHours = by_minute / 180 = calendarHours / 3 (estimación 8h/24h por día).
           // Fórmula correcta: calendarHours × calFactor = (rawHours × 3) × calFactor = workHours.
           // Sin calFactor (legacy): rawHours (estimación rough que incluye fines de semana).
-          // frozen usa factor mensual (sin ventana); active usa factor de la ventana vigente.
           const rows = qaEntries.flatMap((entry) =>
             Object.keys(categoryHours)
               .filter((slug) => categoryMap.has(slug))
               .map((slug) => {
-                const frozenRaw = (frozenHours[slug] ?? 0) / qaCount;
-                const activeRaw = (activeHoursMap[slug] ?? 0) / qaCount;
-                const frozenCalFactor = frozenFactorByEntryId?.get(
+                const rawHours = (categoryHours[slug] ?? 0) / qaCount;
+                const calFactor = frozenFactorByEntryId?.get(
                   entry.id as string,
                 );
-                const activeCalFactor = activeFactorByEntryId?.get(
-                  entry.id as string,
-                );
-                const effectiveFrozen =
-                  frozenCalFactor !== undefined
-                    ? frozenRaw * 3 * frozenCalFactor
-                    : frozenRaw;
-                const effectiveActive =
-                  activeCalFactor !== undefined
-                    ? activeRaw * 3 * activeCalFactor
-                    : activeRaw;
-                const effectiveHours = effectiveFrozen + effectiveActive;
+                const effectiveHours =
+                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -734,47 +601,19 @@ export async function syncTaskTimings(
             categories: Object.keys(categoryHours)
               .filter((slug) => categoryMap.has(slug))
               .map((slug) => {
-                const frozenRaw = (frozenHours[slug] ?? 0) / qaCount;
-                const activeRaw = (activeHoursMap[slug] ?? 0) / qaCount;
-                const frozenCalFactor = frozenFactorByEntryId?.get(
-                  qe.id as string,
-                );
-                const activeCalFactor = activeFactorByEntryId?.get(
-                  qe.id as string,
-                );
-                const effectiveFrozen =
-                  frozenCalFactor !== undefined
-                    ? frozenRaw * 3 * frozenCalFactor
-                    : frozenRaw;
-                const effectiveActive =
-                  activeCalFactor !== undefined
-                    ? activeRaw * 3 * activeCalFactor
-                    : activeRaw;
-                const effectiveHours = effectiveFrozen + effectiveActive;
-                const hasCalFactor =
-                  frozenCalFactor !== undefined ||
-                  activeCalFactor !== undefined;
+                const rawHours = (categoryHours[slug] ?? 0) / qaCount;
+                const calFactor = frozenFactorByEntryId?.get(qe.id as string);
+                const effectiveHours =
+                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
                     slug,
                   hours: Math.round(effectiveHours * 100) / 100,
-                  ...(hasCalFactor
+                  ...(calFactor !== undefined
                     ? {
-                        raw_hours:
-                          Math.round((frozenRaw + activeRaw) * 100) / 100,
-                        // Factor combinado coherente: effectiveHours / (rawTotal * 3),
-                        // garantiza raw_hours * 3 * factor = hours en todos los casos.
-                        // Cuando solo existe un factor coincide con ese factor exacto.
-                        // Cuando existen ambos es el promedio ponderado real.
-                        factor:
-                          frozenRaw + activeRaw > 0
-                            ? Math.round(
-                                (effectiveHours /
-                                  ((frozenRaw + activeRaw) * 3)) *
-                                  10000,
-                              ) / 10000
-                            : (activeCalFactor ?? frozenCalFactor),
+                        raw_hours: Math.round(rawHours * 100) / 100,
+                        factor: Math.round(calFactor * 10000) / 10000,
                       }
                     : {}),
                 };
