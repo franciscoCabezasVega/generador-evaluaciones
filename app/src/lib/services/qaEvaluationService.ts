@@ -258,6 +258,7 @@ export async function listQAEvaluationsForRange(
           ? ev.cumplimiento
           : (cumplimientoMap[qaName] ?? null),
       has_persisted_evaluation: !!ev,
+      task_count: tasaMap[qaName]?.size ?? 0,
     };
   });
 }
@@ -281,6 +282,10 @@ export async function upsertQAEvaluation(
   if (input.excelencia !== undefined) payload.excelencia = input.excelencia;
   if (input.soft_skills !== undefined) payload.soft_skills = input.soft_skills;
   if (input.comentarios !== undefined) payload.comentarios = input.comentarios;
+  if (input.tasa_aceptacion !== undefined)
+    payload.tasa_aceptacion = input.tasa_aceptacion;
+  if (input.cumplimiento !== undefined)
+    payload.cumplimiento = input.cumplimiento;
 
   // Verificar si ya existe para decidir si agregar created_by
   const { data: existing, error: existingError } = await supabase

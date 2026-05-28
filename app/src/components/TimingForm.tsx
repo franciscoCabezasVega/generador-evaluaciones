@@ -834,11 +834,6 @@ function TimingFormComponent(
             )?.task_link
           }
           safeFetch={safeFetch}
-          onSaveFirst={
-            !isEditing && !initialData?.id && formData.qa_entries.length > 0
-              ? saveForSync
-              : undefined
-          }
           onSyncSuccess={(freshQaEntries) => {
             setFormData((prev) => ({
               ...prev,

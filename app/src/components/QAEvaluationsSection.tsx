@@ -22,6 +22,8 @@ function toLocalDateString(date: Date): string {
 
 // Estado de edición local por fila
 interface RowEditState {
+  tasa_aceptacion: string;
+  cumplimiento: string;
   excelencia: string;
   soft_skills: string;
   comentarios: string;
@@ -32,6 +34,14 @@ interface RowEditState {
 
 function initRowEditState(row: QAEvaluationRow): RowEditState {
   return {
+    tasa_aceptacion:
+      row.tasa_aceptacion !== null && row.tasa_aceptacion !== undefined
+        ? String(row.tasa_aceptacion)
+        : "",
+    cumplimiento:
+      row.cumplimiento !== null && row.cumplimiento !== undefined
+        ? String(row.cumplimiento)
+        : "",
     excelencia:
       row.excelencia !== null && row.excelencia !== undefined
         ? String(row.excelencia)
@@ -48,7 +58,7 @@ function initRowEditState(row: QAEvaluationRow): RowEditState {
 }
 
 function SkeletonTable() {
-  const cols = 9;
+  const cols = 10;
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full text-sm">
@@ -68,13 +78,19 @@ function SkeletonTable() {
                 <div className="h-4 bg-gray-200 rounded w-28" />
               </td>
               <td className="px-4 py-4">
+                <div className="h-5 bg-gray-200 rounded w-8 mx-auto" />
+              </td>
+              <td className="px-4 py-4">
                 <div className="h-5 bg-gray-200 rounded-full w-36" />
               </td>
               <td className="px-4 py-4">
-                <div className="h-5 bg-gray-200 rounded w-8 mx-auto" />
+                <div className="h-8 bg-gray-200 rounded w-16 mx-auto" />
               </td>
               <td className="px-4 py-4">
-                <div className="h-5 bg-gray-200 rounded w-8 mx-auto" />
+                <div className="h-8 bg-gray-200 rounded w-16 mx-auto" />
+              </td>
+              <td className="px-4 py-4">
+                <div className="h-8 bg-gray-200 rounded w-16 mx-auto" />
               </td>
               <td className="px-4 py-4">
                 <div className="h-8 bg-gray-200 rounded w-16 mx-auto" />
@@ -177,7 +193,12 @@ export default function QAEvaluationsSection() {
 
   const handleFieldChange = (
     qaId: string,
-    field: "excelencia" | "soft_skills" | "comentarios",
+    field:
+      | "tasa_aceptacion"
+      | "cumplimiento"
+      | "excelencia"
+      | "soft_skills"
+      | "comentarios",
     value: string,
   ) => {
     setEditStates((prev) => ({
@@ -200,6 +221,8 @@ export default function QAEvaluationsSection() {
     // Validaciones frontend
     const excelencia = parseScore(state.excelencia);
     const softSkills = parseScore(state.soft_skills);
+    const tasaAceptacion = parseScore(state.tasa_aceptacion);
+    const cumplimiento = parseScore(state.cumplimiento);
 
     if (excelencia !== null && (excelencia < 0 || excelencia > 5)) {
       setEditStates((prev) => ({
@@ -221,6 +244,26 @@ export default function QAEvaluationsSection() {
       }));
       return;
     }
+    if (tasaAceptacion !== null && (tasaAceptacion < 0 || tasaAceptacion > 5)) {
+      setEditStates((prev) => ({
+        ...prev,
+        [qaId]: {
+          ...prev[qaId],
+          saveError: "Tasa de aceptación debe estar entre 0 y 5",
+        },
+      }));
+      return;
+    }
+    if (cumplimiento !== null && (cumplimiento < 0 || cumplimiento > 5)) {
+      setEditStates((prev) => ({
+        ...prev,
+        [qaId]: {
+          ...prev[qaId],
+          saveError: "Cumplimiento debe estar entre 0 y 5",
+        },
+      }));
+      return;
+    }
 
     setEditStates((prev) => ({
       ...prev,
@@ -238,6 +281,8 @@ export default function QAEvaluationsSection() {
           qa_id: qaId,
           start_date: startDate,
           end_date: endDate,
+          tasa_aceptacion: tasaAceptacion,
+          cumplimiento: cumplimiento,
           excelencia: excelencia,
           soft_skills: softSkills,
           comentarios: state.comentarios || null,
@@ -263,6 +308,8 @@ export default function QAEvaluationsSection() {
           return {
             ...r,
             id: savedEval.id ?? r.id,
+            tasa_aceptacion: tasaAceptacion,
+            cumplimiento: cumplimiento,
             excelencia: excelencia,
             soft_skills: softSkills,
             comentarios: state.comentarios || null,
@@ -297,34 +344,10 @@ export default function QAEvaluationsSection() {
         );
       }
 
-      // Resetear la fila a vacía
-      setRows((prev) =>
-        prev.map((r) => {
-          if (r.qa_id !== qaId) return r;
-          return {
-            ...r,
-            id: "",
-            excelencia: null,
-            soft_skills: null,
-            comentarios: null,
-            has_persisted_evaluation: false,
-          };
-        }),
-      );
-
-      setEditStates((prev) => ({
-        ...prev,
-        [qaId]: {
-          excelencia: "",
-          soft_skills: "",
-          comentarios: "",
-          isDirty: false,
-          isSaving: false,
-          saveError: null,
-        },
-      }));
-
+      // Resetear la fila a vacía y refrescar desde el servidor para
+      // obtener los valores recalculados de tasa/cumplimiento
       setDeleteConfirmId(null);
+      await fetchEvaluations();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al eliminar";
       alert(msg);
@@ -395,6 +418,9 @@ export default function QAEvaluationsSection() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
                   Nombre
                 </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
+                  Cant. tareas
+                </th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
                   Periodo
                 </th>
@@ -446,6 +472,13 @@ export default function QAEvaluationsSection() {
                       {row.qa_name}
                     </td>
 
+                    {/* Cantidad de tareas */}
+                    <td className="px-4 py-3 text-center">
+                      <span className="inline-block text-gray-700 font-semibold tabular-nums">
+                        {row.task_count ?? 0}
+                      </span>
+                    </td>
+
                     {/* Periodo */}
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">
@@ -453,33 +486,53 @@ export default function QAEvaluationsSection() {
                       </span>
                     </td>
 
-                    {/* Tasa de aceptación (readonly) */}
+                    {/* Tasa de aceptación (editable) */}
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-block bg-gray-100 text-gray-600 rounded px-2 py-0.5 text-sm font-mono">
-                        {row.tasa_aceptacion != null
-                          ? row.tasa_aceptacion % 1 === 0
-                            ? row.tasa_aceptacion.toFixed(0)
-                            : row.tasa_aceptacion
-                          : 0}
-                      </span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="5"
+                        value={state.tasa_aceptacion}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            row.qa_id,
+                            "tasa_aceptacion",
+                            e.target.value,
+                          )
+                        }
+                        disabled={!canEdit}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        placeholder="—"
+                      />
                     </td>
 
-                    {/* Cumplimiento (readonly) */}
+                    {/* Cumplimiento (editable) */}
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-block bg-gray-100 text-gray-600 rounded px-2 py-0.5 text-sm font-mono">
-                        {row.cumplimiento != null
-                          ? row.cumplimiento % 1 === 0
-                            ? row.cumplimiento.toFixed(0)
-                            : row.cumplimiento
-                          : 0}
-                      </span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="5"
+                        value={state.cumplimiento}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            row.qa_id,
+                            "cumplimiento",
+                            e.target.value,
+                          )
+                        }
+                        disabled={!canEdit}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        placeholder="—"
+                      />
                     </td>
 
                     {/* Excelencia */}
                     <td className="px-4 py-3 text-center">
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         max="5"
                         value={state.excelencia}
@@ -500,7 +553,7 @@ export default function QAEvaluationsSection() {
                     <td className="px-4 py-3 text-center">
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         max="5"
                         value={state.soft_skills}
@@ -521,8 +574,8 @@ export default function QAEvaluationsSection() {
                     <td className="px-4 py-3 text-center">
                       {(() => {
                         const vals = [
-                          row.tasa_aceptacion,
-                          row.cumplimiento,
+                          parseScore(state.tasa_aceptacion),
+                          parseScore(state.cumplimiento),
                           parseScore(state.excelencia),
                           parseScore(state.soft_skills),
                         ].filter(
