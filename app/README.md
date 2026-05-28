@@ -29,9 +29,11 @@ El formulario de creación/edición de tareas incluye un botón **"Autocompletar
 1. El cliente llama a `POST /api/tasks/ai-autofill` con `{ linkOrId }`.
 2. El endpoint obtiene la tarea de ClickUp vía `GET /api/v2/task/{taskId}` (requiere `clickup_settings` configurado en Ajustes).
 3. Carga los catálogos activos de la BD (`products`, `project_types`, `complexities`, `squads`, `qa_members`).
-4. Llama a **OpenAI gpt-4o-mini** (JSON mode) con el contexto sanitizado.
-5. Valida cada sugerencia contra los catálogos: cualquier valor que no exista exactamente en el catálogo se descarta (`null`) — nunca se propaga al frontend un valor inventado.
-6. En **modo creación** con campos vacíos: aplica las sugerencias directamente. En **modo edición** o con campos ya completados: muestra un panel de diff con toggles por campo.
+4. **Pre-resolución server-side** (antes de llamar a la IA): el squad se extrae del campo personalizado "Equipo" de ClickUp resolviendo el UUID del label contra `type_config.options`; el `product_type` se deriva del producto al que pertenece ese squad en el catálogo; el estado se mapea desde el status de ClickUp; el QA asignado se matchea por email/username contra `qa_members`. Estos valores son más confiables que lo que inferiría la IA.
+5. Llama a **OpenAI gpt-4o-mini** (JSON mode) con el contexto sanitizado. La IA solo infiere: nombre, tipo de proyecto y complejidad (talla). **No infiere** mes, año ni fecha de esfuerzo — esos campos quedan con sus valores por defecto para que el usuario los complete.
+6. Valida cada sugerencia contra los catálogos: cualquier valor que no exista exactamente en el catálogo se descarta (`null`) — nunca se propaga al frontend un valor inventado.
+7. Los valores pre-resueltos (squad, producto, estado, QA) sobrescriben lo que haya devuelto la IA.
+8. En **modo creación** con campos vacíos: aplica todas las sugerencias directamente (incluyendo squad). En **modo edición** o con campos ya completados: muestra un panel de diff con toggles por campo.
 
 Variables de entorno requeridas: `OPENAI_API_KEY`.
 La API key de ClickUp se configura cifrada en la tabla `clickup_settings` desde la sección Ajustes de la app.
