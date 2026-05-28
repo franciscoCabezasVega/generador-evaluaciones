@@ -48,9 +48,6 @@ interface TimingFormProps {
   lockedTask?: Task;
   /** Callback para sincronizar QA hacia la tarea cuando se añaden/quitan desde el form de timing */
   onQAChange?: (taskId: string, qaNames: string[]) => Promise<void>;
-  /** Guarda el timing (sin cerrar el modal) y retorna el nuevo timingId.
-   *  Usado por ClickUpSyncInline para el flujo de un solo clic. */
-  onCreateForSync?: (data: CreateTaskTimingInput) => Promise<string | null>;
 }
 
 interface QAFormData {
@@ -79,7 +76,6 @@ function TimingFormComponent(
     safeFetch,
     lockedTask,
     onQAChange,
-    onCreateForSync,
   }: TimingFormProps,
   ref: React.Ref<{ handleCancelWithConfirm: () => void }>,
 ) {
@@ -469,28 +465,6 @@ function TimingFormComponent(
   const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR + i);
 
   const grandTotal = getGrandTotal();
-
-  /** Guarda el timing en background sin cerrar el modal (para flujo de sync en un clic).
-   *  Salta la validación de horas mínimas — el sync las llenará. */
-  const saveForSync = async (): Promise<string | null> => {
-    if (!onCreateForSync) return null;
-    if (formData.qa_entries.length === 0) return null;
-    const taskId = lockedTask?.id ?? formData.task_id;
-    if (!taskId) return null;
-    const qaEntries: CreateTimingQAEntryInput[] = formData.qa_entries.map(
-      (e) => ({
-        qa_name: e.qa_name,
-        hours_by_category: e.hours_by_category,
-      }),
-    );
-    return onCreateForSync({
-      task_id: taskId,
-      month: Number(formData.month),
-      year: Number(formData.year),
-      qa_entries: qaEntries,
-      for_sync: true,
-    });
-  };
 
   // Color palette for QA members
   const QA_COLORS = [
