@@ -323,6 +323,13 @@ const TimingStatsPanel = forwardRef<
     const activeCategories = timingCategories.filter(
       (c: CatalogTimingCategory) => c.is_active && !QA_NON_CTRL.has(c.slug),
     );
+    const slugToId: Record<string, string> = {};
+    for (const cat of timingCategories) slugToId[cat.slug] = cat.id;
+    const excludedCatIdsForPDF = new Set(
+      QA_NON_CONTROLLABLE_CATEGORY_SLUGS.map((s) => slugToId[s]).filter(
+        Boolean,
+      ),
+    );
 
     function buildData(
       filteredTimings: TaskTiming[],
@@ -337,29 +344,33 @@ const TimingStatsPanel = forwardRef<
       const taskMap = new Map(filteredTasks.map((t) => [t.id, t]));
 
       for (const t of filteredTimings) {
-        totalTimingHours += t.total_hours ?? 0;
+        // Solo contar horas controlables (excluir Tiempo No Productivo)
+        let hours = 0;
+        for (const entry of t.qa_entries ?? []) {
+          for (const [catId, h] of Object.entries(entry.hours_by_category)) {
+            if (!excludedCatIdsForPDF.has(catId)) hours += h;
+          }
+        }
+        if (hours === 0) continue;
+
+        totalTimingHours += hours;
         timingTaskIds.add(t.task_id);
         const task = taskMap.get(t.task_id);
         if (task) {
           const pt = task.project_type ?? "Sin tipo";
           const ptype = task.product_type ?? "Sin producto";
-          productHoursMap[pt] =
-            (productHoursMap[pt] ?? 0) + (t.total_hours ?? 0);
+          productHoursMap[pt] = (productHoursMap[pt] ?? 0) + hours;
           productTypeHoursMap[ptype] =
-            (productTypeHoursMap[ptype] ?? 0) + (t.total_hours ?? 0);
+            (productTypeHoursMap[ptype] ?? 0) + hours;
           if (task.tshirt_size)
             complexityHoursMap[task.tshirt_size] =
-              (complexityHoursMap[task.tshirt_size] ?? 0) +
-              (t.total_hours ?? 0);
-          if ((t.total_hours ?? 0) > 0) {
-            const dateKey = (t.created_at ?? "").split("T")[0];
-            if (dateKey) {
-              if (!dailyProductTypeMap[dateKey])
-                dailyProductTypeMap[dateKey] = {};
-              dailyProductTypeMap[dateKey][ptype] =
-                (dailyProductTypeMap[dateKey][ptype] ?? 0) +
-                (t.total_hours ?? 0);
-            }
+              (complexityHoursMap[task.tshirt_size] ?? 0) + hours;
+          const dateKey = (t.created_at ?? "").split("T")[0];
+          if (dateKey) {
+            if (!dailyProductTypeMap[dateKey])
+              dailyProductTypeMap[dateKey] = {};
+            dailyProductTypeMap[dateKey][ptype] =
+              (dailyProductTypeMap[dateKey][ptype] ?? 0) + hours;
           }
         }
       }

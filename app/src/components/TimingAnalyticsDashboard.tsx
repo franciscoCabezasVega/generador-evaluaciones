@@ -420,9 +420,8 @@ export function TimingAnalyticsDashboard({
   // para el gráfico de líneas y la tabla resumen
   const productTypeHoursMap: Record<string, number> = {};
   const dailyProductTypeMap: Record<string, Record<string, number>> = {};
-  // totalTimingHours = TODAS las horas del rango, independientemente de si la
-  // tarea tiene project_type o tshirt_size asignado. Es el denominador único
-  // que garantiza coherencia entre ambos donuts, las barras y los KPIs.
+  // totalTimingHours = solo horas controlables (excluye Tiempo No Productivo)
+  // para coherencia con el donut de Distribución QA y los KPIs de eficiencia.
   let totalTimingHours = 0;
 
   if (timings.length > 0 && tasks.length > 0) {
@@ -430,7 +429,15 @@ export function TimingAnalyticsDashboard({
     for (const timing of timings) {
       const task = taskMap.get(timing.task_id);
       if (!task) continue;
-      const hours = timing.total_hours ?? 0;
+
+      // Calcular horas controlables sumando solo categorías no excluidas
+      let hours = 0;
+      for (const entry of timing.qa_entries ?? []) {
+        for (const [catId, h] of Object.entries(entry.hours_by_category)) {
+          if (!excludedCatIds.has(catId)) hours += h;
+        }
+      }
+      if (hours === 0) continue;
 
       // Suma al total real siempre que la tarea exista
       totalTimingHours += hours;
@@ -628,11 +635,15 @@ export function TimingAnalyticsDashboard({
       {/* ── FILA 1: KPI Cards ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KPICard
-          label="Tiempo total invertido"
+          label="Total acumulado equipo"
           value={
             timingsLoading ? "..." : formatTime(totalTimingHours || totalHours)
           }
-          subtitle="100% del tiempo registrado"
+          subtitle={
+            timingsLoading
+              ? "Cargando..."
+              : `Suma de ${nActiveQAs} QA${nActiveQAs !== 1 ? "s" : ""} · ~${formatTime(nActiveQAs > 0 ? (totalTimingHours || totalHours) / nActiveQAs : 0)}/QA`
+          }
           accentColor={PALETTE[0].solid}
           accentBg={PALETTE[0].light}
           icon={
