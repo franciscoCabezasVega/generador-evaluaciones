@@ -512,17 +512,20 @@ export function QAStatsDashboard({
                     width,
                     value,
                   }: {
-                    x?: number;
-                    y?: number;
-                    width?: number;
-                    value?: number;
+                    x?: number | string;
+                    y?: number | string;
+                    width?: number | string;
+                    value?: number | string;
                   }) => {
-                    const v = value ?? 0;
+                    const v = typeof value === "number" ? value : 0;
+                    const nx = typeof x === "number" ? x : 0;
+                    const ny = typeof y === "number" ? y : 0;
+                    const nw = typeof width === "number" ? width : 0;
                     if (!v || v <= 0) return <g />;
                     return (
                       <text
-                        x={(x ?? 0) + (width ?? 0) / 2}
-                        y={(y ?? 0) - 5}
+                        x={nx + nw / 2}
+                        y={ny - 5}
                         textAnchor="middle"
                         fontSize={9}
                         fill="var(--foreground)"
