@@ -508,11 +508,15 @@ export function TimingAnalyticsDashboard({
   const maxTop5Hours = top5Tasks[0]?.hours ?? 1;
 
   // ── Distribución de tiempo por QA (desde qa_entries de timings filtrados) ─
+  // Solo se cuentan horas de categorías controlables (excluye Tiempo No Productivo)
   const qaDistMap: Record<string, number> = {};
   for (const timing of timings) {
     for (const entry of timing.qa_entries ?? []) {
-      qaDistMap[entry.qa_name] =
-        (qaDistMap[entry.qa_name] ?? 0) + entry.total_hours;
+      for (const [catId, hours] of Object.entries(entry.hours_by_category)) {
+        if (!excludedCatIds.has(catId)) {
+          qaDistMap[entry.qa_name] = (qaDistMap[entry.qa_name] ?? 0) + hours;
+        }
+      }
     }
   }
   const sortedQADistEntries = Object.entries(qaDistMap)
