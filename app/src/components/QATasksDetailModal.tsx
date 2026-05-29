@@ -162,7 +162,7 @@ export default function QATasksDetailModal({
         {/* Header */}
         <div>
           <h2 className="text-xl font-bold">{qaName}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Periodo: {periodLabel}</p>
+          <p className="text-sm text-gray-500 mt-0.5">Período: {periodLabel}</p>
         </div>
 
         {/* Tabla */}
@@ -199,7 +199,7 @@ export default function QATasksDetailModal({
                     colSpan={6}
                     className="px-3 py-8 text-center text-gray-500"
                   >
-                    No hay tareas asignadas en este periodo.
+                    No hay tareas asignadas en este período.
                   </td>
                 </tr>
               ) : (
@@ -358,7 +358,7 @@ export default function QATasksDetailModal({
                     </span>{" "}
                     tarea{total !== 1 ? "s" : ""}{" "}
                     {total !== 1 ? "fueron" : "fue"} completada
-                    {total !== 1 ? "s" : ""} en el periodo.
+                    {total !== 1 ? "s" : ""} en el período.
                   </p>
                   <p>
                     <span className="font-semibold text-gray-700">

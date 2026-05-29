@@ -263,7 +263,7 @@ export async function GET(request: NextRequest) {
     let tasksQuery = supabase.from("tasks").select("*");
 
     if (search) {
-      // Modo búsqueda global: ignorar los demás filtros para buscar en todos los periodos
+      // Modo búsqueda global: ignorar los demás filtros para buscar en todos los períodos
       tasksQuery = tasksQuery.ilike("name", `%${search}%`).limit(150);
     } else {
       if (month) {

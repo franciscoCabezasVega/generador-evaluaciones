@@ -871,10 +871,10 @@ function TaskFormComponent(
         </div>
       </fieldset>
 
-      {/* Sección 3: Periodo y Estado */}
+      {/* Sección 3: Período y Estado */}
       <fieldset className="space-y-4">
         <legend className="text-sm font-semibold text-gray-700 border-b pb-2 w-full">
-          Periodo y Estado
+          Período y Estado
         </legend>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

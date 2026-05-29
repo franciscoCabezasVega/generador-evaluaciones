@@ -422,7 +422,7 @@ export default function QAEvaluationsSection() {
                   Cant. tareas
                 </th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
-                  Periodo
+                  Período
                 </th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">
                   Tasa aceptación
@@ -479,7 +479,7 @@ export default function QAEvaluationsSection() {
                       </span>
                     </td>
 
-                    {/* Periodo */}
+                    {/* Período */}
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">
                         {formatPeriod(startDate, endDate)}
@@ -643,7 +643,7 @@ export default function QAEvaluationsSection() {
                           onClick={() =>
                             setDetailQA({ qaName: row.qa_name ?? "" })
                           }
-                          title="Ver tareas del periodo"
+                          title="Ver tareas del período"
                           className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-950/20 rounded transition"
                         >
                           <Eye size={15} />

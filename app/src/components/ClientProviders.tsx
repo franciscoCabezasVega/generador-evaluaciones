@@ -6,6 +6,10 @@ import { TourProvider } from "@/contexts/TourContext";
 import { MutationQueueProvider } from "@/contexts/MutationQueueContext";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { useAuth } from "@/contexts/AuthContext";
+import { installRechartsConsoleFilter } from "@/lib/rechartsConsoleFilter";
+
+// Filtro idempotente de un warning cosmético de recharts en dev (ver archivo).
+installRechartsConsoleFilter();
 
 // TourOverlay es un componente visual con default export — lazy-loaded tras hidratación
 const TourOverlay = dynamic(() => import("@/components/TourOverlay"), {
