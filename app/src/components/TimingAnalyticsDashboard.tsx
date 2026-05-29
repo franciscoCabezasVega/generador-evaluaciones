@@ -910,9 +910,9 @@ export function TimingAnalyticsDashboard({
                         return v as string;
                       }
                     }}
-                    formatter={(value: number, name: string) => [
-                      formatTime(value),
-                      name,
+                    formatter={(value, name) => [
+                      formatTime(typeof value === "number" ? value : 0),
+                      String(name ?? ""),
                     ]}
                   />
                   <Legend

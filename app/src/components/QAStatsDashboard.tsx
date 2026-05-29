@@ -506,17 +506,7 @@ export function QAStatsDashboard({
                   dataKey="hours"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={90}
-                  label={({
-                    x,
-                    y,
-                    width,
-                    value,
-                  }: {
-                    x?: number | string;
-                    y?: number | string;
-                    width?: number | string;
-                    value?: number | string;
-                  }) => {
+                  label={({ x, y, width, value }) => {
                     const v = typeof value === "number" ? value : 0;
                     const nx = typeof x === "number" ? x : 0;
                     const ny = typeof y === "number" ? y : 0;
@@ -655,9 +645,9 @@ export function QAStatsDashboard({
                   width={36}
                 />
                 <RTooltip
-                  formatter={(value: number, name: string) => [
-                    formatTime(value),
-                    name,
+                  formatter={(value, name) => [
+                    formatTime(typeof value === "number" ? value : 0),
+                    String(name ?? ""),
                   ]}
                   contentStyle={{ fontSize: 11 }}
                 />
@@ -904,9 +894,9 @@ export function QAStatsDashboard({
                   width={34}
                 />
                 <RTooltip
-                  formatter={(value: number, name: string) => [
-                    formatTime(value),
-                    name,
+                  formatter={(value, name) => [
+                    formatTime(typeof value === "number" ? value : 0),
+                    String(name ?? ""),
                   ]}
                   contentStyle={{ fontSize: 11 }}
                 />
@@ -962,9 +952,9 @@ export function QAStatsDashboard({
                   width={44}
                 />
                 <RTooltip
-                  formatter={(value: number, name: string) => [
-                    `${(value as number).toFixed(1)}%`,
-                    name,
+                  formatter={(value, name) => [
+                    `${(typeof value === "number" ? value : 0).toFixed(1)}%`,
+                    String(name ?? ""),
                   ]}
                   contentStyle={{ fontSize: 11 }}
                 />
