@@ -791,7 +791,6 @@ export default function TimingsPage() {
             ]
           : []),
       ];
-      // @ts-expect-error — JSX element passed to pdf() at runtime
       const blob = await pdf(TimingAnalyticsPDFDocument({ pages })).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

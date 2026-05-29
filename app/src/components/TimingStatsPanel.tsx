@@ -604,7 +604,6 @@ const TimingStatsPanel = forwardRef<
               : []),
           ];
           if (pages.length === 0) return;
-          // @ts-expect-error — JSX element passed to pdf() at runtime
           const blob = await pdf(
             TimingAnalyticsPDFDocument({ pages }),
           ).toBlob();
