@@ -1065,9 +1065,6 @@ export default forwardRef(TimingFormComponent);
 interface ClickUpSyncInlineProps {
   taskId: string;
   timingId?: string;
-  /** Si se pasa, el botón Sincronizar guardará el timing primero (sin cerrar el modal)
-   *  y usará el ID devuelto para el sync — flujo de un solo clic. */
-  onSaveFirst?: () => Promise<string | null>;
   /** task_link de la tarea (ej: https://app.clickup.com/t/86e0pxw4d) — se usa
    *  para pre-rellenar el input cuando aún no hay un clickup_qa_task_id guardado. */
   taskLink?: string;
@@ -1099,7 +1096,6 @@ function ClickUpSyncInline({
   taskLink,
   safeFetch,
   onSyncSuccess,
-  onSaveFirst,
 }: ClickUpSyncInlineProps) {
   // Extraer el ID del último segmento de la URL de ClickUp
   // ej: https://app.clickup.com/t/86e0pxw4d → "86e0pxw4d"
@@ -1120,11 +1116,6 @@ function ClickUpSyncInline({
     type: "success" | "error";
     text: string;
   } | null>(null);
-  // Cuando onSaveFirst crea el timing, guardamos el ID aquí para usarlo en el sync
-  const [localTimingId, setLocalTimingId] = useState<string | undefined>(
-    timingId,
-  );
-
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -1188,60 +1179,16 @@ function ClickUpSyncInline({
     }
   }, [clickupIdFromLink, syncInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // previewOnly=true en modo edición (timingId ya existe):
-  //   Sincronizar solo carga las horas en el form sin escribir en BD.
-  //   El guardado real ocurre al hacer clic en "Actualizar" (submit normal del form).
-  // previewOnly=false en modo creación (sin timingId):
-  //   Se guarda el timing primero (onSaveFirst) y luego sync escribe en BD.
-  // by design: no se usa localTimingId aquí — solo el prop original.
-  const previewOnly = !!timingId;
+  // Siempre en modo preview: sync solo carga las horas en el form sin escribir
+  // horas en BD. El guardado real ocurre al hacer clic en "Crear" o "Actualizar".
+  // by design: el comportamiento es idéntico para timings nuevos y existentes.
+  const previewOnly = true;
 
   const handleSync = async () => {
     const id = clickupId.trim();
     if (!id) {
       setMsg({ type: "error", text: "Ingresa el ID de la subtarea ClickUp." });
       return;
-    }
-    // Si el timing aún no fue guardado y hay onSaveFirst, guardar automáticamente
-    // antes de sincronizar (flujo de un solo clic — solo aplica en modo creación).
-    let effectiveTimingId = localTimingId;
-    if (!effectiveTimingId) {
-      if (!onSaveFirst) {
-        setMsg({
-          type: "error",
-          text: "Guarda el timing primero (botón Crear) y luego sincroniza.",
-        });
-        return;
-      }
-      setSyncing(true);
-      setMsg({ type: "success", text: "Guardando timing..." });
-      try {
-        const newId = await onSaveFirst();
-        if (!newId) {
-          setMsg({
-            type: "error",
-            text: "Error al guardar el timing. Intenta de nuevo.",
-          });
-          setSyncing(false);
-          return;
-        }
-        setLocalTimingId(newId);
-        effectiveTimingId = newId;
-        setMsg({
-          type: "success",
-          text: "Timing guardado. Sincronizando con ClickUp...",
-        });
-      } catch (saveErr) {
-        setMsg({
-          type: "error",
-          text:
-            saveErr instanceof Error
-              ? saveErr.message
-              : "Error al guardar el timing. Intenta de nuevo.",
-        });
-        setSyncing(false);
-        return;
-      }
     }
     setSyncing(true);
     setMsg(null);
@@ -1279,50 +1226,24 @@ function ClickUpSyncInline({
         registered: true,
         sync_enabled: true,
         clickup_qa_task_id: data.clickup_qa_task_id ?? id,
-        // previewOnly: el backend no persiste last_synced_at (Step 5a se omite),
-        // conservar el valor actual para evitar inconsistencia UI ↔ DB al recargar.
-        last_synced_at: previewOnly
-          ? (prev?.last_synced_at ?? null)
-          : new Date().toISOString(),
+        // Siempre preview: el backend no persiste last_synced_at (Step 5a se omite).
+        // Conservar el valor actual para evitar inconsistencia UI ↔ DB al recargar.
+        last_synced_at: prev?.last_synced_at ?? null,
         last_clickup_status: prev?.last_clickup_status ?? null,
       }));
 
       // Hidratar el form con las horas de ClickUp.
-      // previewOnly=true (modo edición): las horas vienen en la respuesta (no se escribieron en BD).
-      //   → onSyncSuccess carga los valores en el form; el guardado real es el submit normal.
-      // previewOnly=false (modo creación): se re-fetcha el timing desde BD (ya fue escrito).
-      if (!data.skipped && onSyncSuccess) {
-        if (previewOnly && data.preview_qa_entries) {
-          onSyncSuccess(data.preview_qa_entries);
-        } else if (!previewOnly && effectiveTimingId) {
-          try {
-            const freshRes = await safeFetch(
-              `/api/timings/${effectiveTimingId}`,
-            );
-            if (freshRes.ok) {
-              const freshTiming = (await freshRes.json()) as {
-                qa_entries?: Array<{
-                  qa_name: string;
-                  hours_by_category: Record<string, number>;
-                }>;
-              };
-              if (freshTiming.qa_entries) {
-                onSyncSuccess(freshTiming.qa_entries);
-              }
-            }
-          } catch {
-            // silencioso — el form ya mostrará el mensaje de éxito del sync
-          }
-        }
+      // Siempre preview: las horas vienen en la respuesta y se cargan en el form;
+      // el guardado real ocurre al hacer clic en "Crear" o "Actualizar".
+      if (!data.skipped && onSyncSuccess && data.preview_qa_entries) {
+        onSyncSuccess(data.preview_qa_entries);
       }
 
       setMsg({
         type: "success",
         text: data.skipped
           ? "Sincronizado. No había registros de timing todavía — los tiempos se cargarán cuando existan entradas QA."
-          : previewOnly
-            ? "Vista previa cargada desde ClickUp. Revisa las horas y haz clic en Actualizar para guardar."
-            : "¡Tiempos sincronizados correctamente desde ClickUp!",
+          : `Vista previa cargada desde ClickUp. Revisa las horas y haz clic en ${timingId ? "Actualizar" : "Crear"} para guardar.`,
       });
     } catch (err) {
       console.error("[ClickUp sync error]", err);
