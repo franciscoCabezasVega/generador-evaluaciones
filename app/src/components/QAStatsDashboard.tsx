@@ -204,9 +204,10 @@ export function QAStatsDashboard({
         ),
       );
       const effectiveTestingCatId = slugToId["effective_testing"] ?? null;
-      // Solo las 3 categorías válidas para el total de horas promedio
+      // Solo las 2 categorías válidas para el total de horas promedio
+      // (qa_fixed se movió a Tiempo No Productivo — no se cuenta como tiempo controlable)
       const validSumCatIds = new Set(
-        ["effective_testing", "qa_retesting", "qa_fixed"]
+        ["effective_testing", "qa_retesting"]
           .map((s) => slugToId[s])
           .filter(Boolean),
       );
@@ -575,7 +576,7 @@ export function QAStatsDashboard({
               Total horas promedio válidas
             </p>
             <p className="mt-0.5 text-[9px] text-muted-foreground">
-              (Testing + QA Fixed + Retesting)
+              (Testing + Retesting)
             </p>
             <p className="mt-1.5 text-xl font-bold text-blue-400">
               {formatTime(avgValidPerQA)}

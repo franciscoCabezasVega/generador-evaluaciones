@@ -11,8 +11,11 @@ const WORK_DAYS_PER_MONTH = 22; // Días laborales promedio
  * y por lo tanto deben excluirse de los reportes y métricas de QA
  * (totales, eficiencia, promedios, leyendas, columnas y comparativas).
  *
- * - qa_on_hold:    la tarea está en pausa por definiciones/bloqueos externos.
- * - qa_sin_asignar: la tarea aún no fue tomada por ningún QA.
+ * - qa_on_hold:              la tarea está en pausa por definiciones/bloqueos externos.
+ * - qa_sin_asignar:          la tarea aún no fue tomada por ningún QA.
+ * - waiting_development_fixes: la tarea está devuelta a Dev (fuera del control del QA).
+ * - qa_ready_for_testing:    la tarea aún no inició testing activo.
+ * - qa_fixed:                corrección en Dev, tiempo no atribuible al QA.
  *
  * Los datos crudos siguen guardándose en BD; este filtro aplica solo a la
  * presentación y al cálculo de KPIs de QA.
@@ -20,6 +23,9 @@ const WORK_DAYS_PER_MONTH = 22; // Días laborales promedio
 export const QA_NON_CONTROLLABLE_CATEGORY_SLUGS: readonly string[] = [
   "qa_on_hold",
   "qa_sin_asignar",
+  "waiting_development_fixes",
+  "qa_ready_for_testing",
+  "qa_fixed",
 ];
 
 /**

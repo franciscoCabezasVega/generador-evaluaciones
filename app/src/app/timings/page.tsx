@@ -581,8 +581,9 @@ export default function TimingsPage() {
     );
     const effectiveTestingCatId = slugToId["effective_testing"] ?? null;
     // Same valid-sum categories as the web dashboard
+    // (qa_fixed se movió a Tiempo No Productivo — no se cuenta como tiempo controlable)
     const validSumCatIds = new Set(
-      ["effective_testing", "qa_retesting", "qa_fixed"]
+      ["effective_testing", "qa_retesting"]
         .map((s) => slugToId[s])
         .filter(Boolean),
     );

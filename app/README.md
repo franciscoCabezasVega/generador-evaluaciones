@@ -165,6 +165,18 @@ La estructura del documento unificado es:
 
 `buildQAStatsData` en `timings/page.tsx` ahora computa y expone `nonControllableCategories: Array<{ id, name, color, hours }>` — la lista de categorías excluidas de la métrica de eficiencia (controladas por `QA_NON_CONTROLLABLE_CATEGORY_SLUGS`). `PDFQAStatsData` incluye este campo y `PDFQAStatsPage` lo usa para renderizar un sub-listado indentado bajo la fila "Tiempo No Productivo*" en el panel D de distribución porcentual, idéntico al comportamiento de la web.
 
+Las categorías clasificadas como **Tiempo No Productivo** (excluidas de gráficas, eficiencia y totales controlables) son:
+
+| Slug | Nombre visible | Motivo |
+|---|---|---|
+| `qa_on_hold` | QA - On Hold | Bloqueada por factores externos |
+| `qa_sin_asignar` | QA - Sin Asignar | Aún no tomada por ningún QA |
+| `waiting_development_fixes` | QA - Returned to Dev | Tiempo en manos de Dev, fuera del control de QA |
+| `qa_ready_for_testing` | QA - Ready for Testing | Espera de inicio de testing, no tiempo activo |
+| `qa_fixed` | QA - Fixed | Corrección en Dev, no atribuible al QA |
+
+El total de horas promedio válidas del panel lateral muestra únicamente `Testing + Retesting`.
+
 ### Filtro de warning cosmético de recharts en dev (D1)
 
 `app/src/lib/rechartsConsoleFilter.ts` instala (una sola vez, idempotente) un wrapper sobre `console.warn`/`console.error` que suprime únicamente el mensaje `"width(-1) and height(-1) of chart should be greater than 0"`. Este warning lo emite `ResponsiveContainer` de recharts en su primer ciclo de medición antes del primer paint del navegador; se recupera solo en el frame siguiente y no afecta funcionalidad (recharts #3615/#4196). El filtro **solo se activa en `NODE_ENV === "development"`** y solo en cliente; en producción recharts no emite el warning. Cualquier otro `console.warn`/`console.error` pasa intacto. Se invoca desde `ClientProviders` al montar.
