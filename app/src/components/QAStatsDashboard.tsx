@@ -496,8 +496,8 @@ export function QAStatsDashboard({
                   width={34}
                 />
                 <RTooltip
-                  formatter={(value: number) => [
-                    formatTime(value),
+                  formatter={(value) => [
+                    formatTime(typeof value === "number" ? value : 0),
                     "Promedio equipo",
                   ]}
                   contentStyle={{ fontSize: 11 }}
