@@ -177,6 +177,15 @@ Las categorías clasificadas como **Tiempo No Productivo** (excluidas de gráfic
 
 El total de horas promedio válidas del panel lateral muestra únicamente `Testing + Retesting`.
 
+### KPIs y donuts de tiempo excluyen horas no productivas (T4)
+
+`totalTimingHours` en `TimingAnalyticsDashboard` y `TimingStatsPanel` se calcula iterando `qa_entries.hours_by_category` y omitiendo las categorías de `QA_NON_CONTROLLABLE_CATEGORY_SLUGS`. Esto afecta:
+
+- KPI **"Total acumulado equipo"** (antes "Tiempo total invertido"): muestra solo horas controlables con subtítulo dinámico `Suma de N QAs · ~Xd/QA` para contextualizar que el valor es la suma del equipo completo, no de un solo QA.
+- Donuts de **Distribución por Producto**, **Tiempo por Tipo de Proyecto** y **Distribución por Complejidad**: los totales y porcentajes reflejan únicamente tiempo productivo.
+- Donut **Tiempo por QA (Distribución)**: acumula solo horas controlables por QA (no `entry.total_hours`).
+- Tabla **Cumplimiento por tipo de actividad**: ya usaba `activeCategories` filtradas; no requirió cambio.
+
 ### Filtro de warning cosmético de recharts en dev (D1)
 
 `app/src/lib/rechartsConsoleFilter.ts` instala (una sola vez, idempotente) un wrapper sobre `console.warn`/`console.error` que suprime únicamente el mensaje `"width(-1) and height(-1) of chart should be greater than 0"`. Este warning lo emite `ResponsiveContainer` de recharts en su primer ciclo de medición antes del primer paint del navegador; se recupera solo en el frame siguiente y no afecta funcionalidad (recharts #3615/#4196). El filtro **solo se activa en `NODE_ENV === "development"`** y solo en cliente; en producción recharts no emite el warning. Cualquier otro `console.warn`/`console.error` pasa intacto. Se invoca desde `ClientProviders` al montar.
