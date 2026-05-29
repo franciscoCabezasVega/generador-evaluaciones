@@ -2060,7 +2060,7 @@ export function TshirtSizeComparison({
         <p className="text-sm text-gray-600 mb-4">
           Análisis de los tiempos de QA comparados con las horas esperadas según
           la complejidad de la tarea, agrupados por complejidad y tipo de
-          proyecto sin importar el periodo.
+          proyecto sin importar el período.
         </p>
       </div>
 

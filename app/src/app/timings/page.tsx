@@ -20,14 +20,13 @@ import Modal from "@/components/Modal";
 import { SkeletonTable } from "@/components/Skeleton";
 import DateRangePicker, { DateRange } from "@/components/DateRangePicker";
 import {
-  TimingMetricsDistributionChart,
-  TimingMetricsComparisonChart,
-  SquadTimingSummaryCard,
   QAHoursBarChart,
   QAEfficiencyChart,
   QASummaryCards,
   TshirtSizeComparison,
 } from "@/components/TimingMetrics";
+import { TimingAnalyticsDashboard } from "@/components/TimingAnalyticsDashboard";
+import { QAStatsDashboard } from "@/components/QAStatsDashboard";
 import {
   Task,
   TaskTiming,
@@ -36,20 +35,35 @@ import {
   UpdateTaskTimingInput,
   SquadTimingMetrics,
   QATimingMetrics,
+  CatalogTimingCategory,
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
+import {
+  formatTime,
+  QA_NON_CONTROLLABLE_CATEGORY_SLUGS,
+} from "@/lib/timingUtils";
+import type {
+  PDFChartData,
+  PDFQAStatsData,
+} from "@/components/TimingAnalyticsPDFDocument";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, BarChart3, List, Users } from "lucide-react";
+import { RefreshCw, BarChart3, List, Users, FileDown } from "lucide-react";
 
 export default function TimingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
-  const { products } = useCatalogData();
+  const { products, timingCategories } = useCatalogData();
   const [showForm, setShowForm] = useState(false);
   const [editingTiming, setEditingTiming] = useState<TaskTiming | null>(null);
   const [registeringTask, setRegisteringTask] = useState<Task | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const formRef = useRef<{ handleCancelWithConfirm: () => void }>(null);
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const [exportingPDF, setExportingPDF] = useState(false);
+  const [analyticsTab, setAnalyticsTab] = useState<
+    "qa-manual" | "qa-automation" | "manual" | "automation"
+  >("qa-manual");
+  const AUTOMATION_QA = "Automatización QA";
 
   // Filtros — rango de fechas en vez de mes/año
   const [filters, setFilters] = useState({
@@ -259,6 +273,545 @@ export default function TimingsPage() {
     refreshQAMetrics();
     refreshAllTimings();
   }, [refreshTimings, refreshMetrics, refreshQAMetrics, refreshAllTimings]);
+
+  // ── PDF data ────────────────────────────────────────────────────────────
+  const QA_NON_CTRL_SET = new Set(QA_NON_CONTROLLABLE_CATEGORY_SLUGS);
+
+  // Timings/tasks filtrados por sub-pestaña de analytics
+  // Manual:       excluye project_type "Automatización QA" Y product_type "Automation"
+  // Automatización: incluye cualquiera de los dos
+  const AUTOMATION_PRODUCT = "Automation";
+  const { manualTimings, manualTasks, automationTimings, automationTasks } =
+    useMemo(() => {
+      const tArr = timings ?? [];
+      const tkArr = tasks ?? [];
+      const taskMap = new Map(tkArr.map((t) => [t.id, t]));
+      const isAutomation = (
+        task:
+          | { project_type?: string | null; product_type?: string | null }
+          | undefined,
+      ) =>
+        task?.project_type === AUTOMATION_QA ||
+        task?.product_type === AUTOMATION_PRODUCT;
+      return {
+        manualTimings: tArr.filter(
+          (t) => !isAutomation(taskMap.get(t.task_id)),
+        ),
+        manualTasks: tkArr.filter((t) => !isAutomation(t)),
+        automationTimings: tArr.filter((t) =>
+          isAutomation(taskMap.get(t.task_id)),
+        ),
+        automationTasks: tkArr.filter((t) => isAutomation(t)),
+      };
+    }, [timings, tasks, AUTOMATION_QA, AUTOMATION_PRODUCT]);
+
+  const { pdfDataManual, pdfDataAutomation } = useMemo<{
+    pdfDataManual: PDFChartData | null;
+    pdfDataAutomation: PDFChartData | null;
+  }>(() => {
+    if (!metrics || metrics.length === 0)
+      return { pdfDataManual: null, pdfDataAutomation: null };
+    const activeCategories = timingCategories.filter(
+      (c: CatalogTimingCategory) => c.is_active && !QA_NON_CTRL_SET.has(c.slug),
+    );
+    const PALETTE = [
+      "#F59E0B",
+      "#3B82F6",
+      "#8B5CF6",
+      "#EC4899",
+      "#10B981",
+      "#EF4444",
+      "#06B6D4",
+      "#84CC16",
+    ];
+    const COMPLEXITY_COLORS: Record<string, string> = {
+      XS: "#10B981",
+      S: "#3B82F6",
+      M: "#8B5CF6",
+      L: "#F59E0B",
+      XL: "#EC4899",
+      XXL: "#EF4444",
+    };
+    const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL"];
+    const fmtDateStr = (s: string) => {
+      const [y, m, d] = s.split("-");
+      return `${d}/${m}/${y}`;
+    };
+    const dateRange = `${fmtDateStr(apiStartDate)} - ${fmtDateStr(apiEndDate)}`;
+
+    function buildData(
+      filteredTimings: TaskTiming[],
+      filteredTasks: Task[],
+    ): PDFChartData {
+      let totalTimingHours = 0;
+      const productHoursMap: Record<string, number> = {};
+      const productTypeHoursMap: Record<string, number> = {};
+      const complexityHoursMap: Record<string, number> = {};
+      const dailyProductTypeMap: Record<string, Record<string, number>> = {};
+      const timingTaskIds = new Set<string>();
+      const taskMap = new Map(filteredTasks.map((t) => [t.id, t]));
+
+      for (const t of filteredTimings) {
+        totalTimingHours += t.total_hours ?? 0;
+        timingTaskIds.add(t.task_id);
+        const task = taskMap.get(t.task_id);
+        if (task) {
+          const pt = task.project_type ?? "Sin tipo";
+          productHoursMap[pt] =
+            (productHoursMap[pt] ?? 0) + (t.total_hours ?? 0);
+          const ptype = task.product_type ?? "Sin producto";
+          productTypeHoursMap[ptype] =
+            (productTypeHoursMap[ptype] ?? 0) + (t.total_hours ?? 0);
+          if (task.tshirt_size)
+            complexityHoursMap[task.tshirt_size] =
+              (complexityHoursMap[task.tshirt_size] ?? 0) +
+              (t.total_hours ?? 0);
+          if ((t.total_hours ?? 0) > 0) {
+            const dateKey = (t.created_at ?? "").split("T")[0];
+            if (dateKey) {
+              if (!dailyProductTypeMap[dateKey])
+                dailyProductTypeMap[dateKey] = {};
+              dailyProductTypeMap[dateKey][ptype] =
+                (dailyProductTypeMap[dateKey][ptype] ?? 0) +
+                (t.total_hours ?? 0);
+            }
+          }
+        }
+      }
+
+      const totalTimingTasks = timingTaskIds.size;
+      const avgPerTask =
+        totalTimingTasks > 0 ? totalTimingHours / totalTimingTasks : 0;
+      const nActiveQAs = (qaMetrics ?? []).filter(
+        (q) => q.total_hours > 0,
+      ).length;
+      const totalQAHours = (qaMetrics ?? []).reduce(
+        (s, q) => s + q.total_hours,
+        0,
+      );
+      const avgPerQA = nActiveQAs > 0 ? totalQAHours / nActiveQAs : 0;
+      const avgEfficiency =
+        (qaMetrics ?? []).length > 0
+          ? (qaMetrics ?? []).reduce(
+              (s, q) => s + (q.efficiency_rate ?? 0),
+              0,
+            ) / (qaMetrics ?? []).length
+          : 0;
+
+      const allProductTypes = Object.keys(productTypeHoursMap).sort(
+        (a, b) => (productTypeHoursMap[b] ?? 0) - (productTypeHoursMap[a] ?? 0),
+      );
+      const productTypeSegments = allProductTypes.map((p, i) => ({
+        label: p,
+        hours: productTypeHoursMap[p],
+        pct:
+          totalTimingHours > 0
+            ? (productTypeHoursMap[p] / totalTimingHours) * 100
+            : 0,
+        color: PALETTE[i % PALETTE.length],
+      }));
+      const productTypeColors: Record<string, string> = {};
+      allProductTypes.forEach((p, i) => {
+        productTypeColors[p] = PALETTE[i % PALETTE.length];
+      });
+
+      const sortedDates = Object.keys(dailyProductTypeMap).sort();
+      const cumulativeTracker: Record<string, number> = {};
+      allProductTypes.forEach((p) => {
+        cumulativeTracker[p] = 0;
+      });
+      const cumulativeChartData = sortedDates.map((date) => {
+        const entry: Record<string, string | number> = { date };
+        for (const product of allProductTypes) {
+          cumulativeTracker[product] =
+            (cumulativeTracker[product] ?? 0) +
+            (dailyProductTypeMap[date]?.[product] ?? 0);
+          entry[product] = Math.round(cumulativeTracker[product] * 100) / 100;
+        }
+        return entry;
+      });
+
+      const allProjectTypes = Object.keys(productHoursMap).sort(
+        (a, b) => (productHoursMap[b] ?? 0) - (productHoursMap[a] ?? 0),
+      );
+      const projectSegments = allProjectTypes.map((p, i) => ({
+        label: p,
+        hours: productHoursMap[p],
+        pct:
+          totalTimingHours > 0
+            ? (productHoursMap[p] / totalTimingHours) * 100
+            : 0,
+        color: PALETTE[i % PALETTE.length],
+      }));
+
+      const complexitySegments = SIZE_ORDER.filter(
+        (sz) => (complexityHoursMap[sz] ?? 0) > 0,
+      )
+        .map((sz) => ({
+          size: sz,
+          hours: complexityHoursMap[sz] ?? 0,
+          pct:
+            totalTimingHours > 0
+              ? ((complexityHoursMap[sz] ?? 0) / totalTimingHours) * 100
+              : 0,
+          color: COMPLEXITY_COLORS[sz] ?? "#6B7280",
+        }))
+        .sort((a, b) => b.hours - a.hours);
+
+      const top5Tasks = [...filteredTimings]
+        .sort((a, b) => (b.total_hours ?? 0) - (a.total_hours ?? 0))
+        .slice(0, 5)
+        .map((t) => {
+          const task = taskMap.get(t.task_id);
+          return { name: task?.name ?? t.task_id, hours: t.total_hours ?? 0 };
+        });
+
+      const qaDistMapPDF: Record<string, number> = {};
+      for (const t of filteredTimings) {
+        for (const entry of t.qa_entries ?? []) {
+          qaDistMapPDF[entry.qa_name] =
+            (qaDistMapPDF[entry.qa_name] ?? 0) + entry.total_hours;
+        }
+      }
+      const sortedQADist = Object.entries(qaDistMapPDF)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+      const totalQADistHours = sortedQADist.reduce((s, [, h]) => s + h, 0);
+      const qaDistSegments = sortedQADist.map(([qa_name, hours], i) => ({
+        name: qa_name,
+        hours,
+        pct: totalQADistHours > 0 ? (hours / totalQADistHours) * 100 : 0,
+        color: PALETTE[i % PALETTE.length],
+      }));
+
+      const activityHoursMapPDF: Record<string, number> = {};
+      for (const t of filteredTimings) {
+        for (const entry of t.qa_entries ?? []) {
+          for (const [catId, h] of Object.entries(entry.hours_by_category)) {
+            activityHoursMapPDF[catId] = (activityHoursMapPDF[catId] ?? 0) + h;
+          }
+        }
+      }
+      const nQAs = Math.max((qaMetrics ?? []).length, 1);
+      const availableHoursTotal = 160 * nQAs;
+      const activityRows = activeCategories
+        .map((cat: CatalogTimingCategory) => ({
+          name: cat.name,
+          hours: activityHoursMapPDF[cat.id] ?? 0,
+          color: cat.hex_color,
+        }))
+        .filter((r: { hours: number }) => r.hours > 0)
+        .sort((a: { hours: number }, b: { hours: number }) => b.hours - a.hours)
+        .map((r: { name: string; hours: number; color: string }) => ({
+          ...r,
+          compliance:
+            availableHoursTotal > 0 ? (r.hours / availableHoursTotal) * 100 : 0,
+          isOver:
+            availableHoursTotal > 0 &&
+            (r.hours / availableHoursTotal) * 100 > 100,
+        }));
+      const totalActivityHours = activityRows.reduce(
+        (s: number, r: { hours: number }) => s + r.hours,
+        0,
+      );
+
+      return {
+        generatedAt: new Date().toLocaleString("es"),
+        dateRange,
+        totalTimingHours,
+        totalTimingTasks,
+        avgPerTask,
+        avgPerQA,
+        avgEfficiency,
+        nActiveQAs,
+        productTypeSegments,
+        projectSegments,
+        complexitySegments,
+        productTypeSummary: productTypeSegments,
+        cumulativeChartData,
+        allProductTypes,
+        productTypeColors,
+        top5Tasks,
+        qaDistSegments,
+        activityRows,
+        totalActivityHours,
+        availableHoursTotal,
+        nQAs,
+      };
+    }
+
+    return {
+      pdfDataManual: buildData(manualTimings, manualTasks),
+      pdfDataAutomation: buildData(automationTimings, automationTasks),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    metrics,
+    qaMetrics,
+    manualTimings,
+    manualTasks,
+    automationTimings,
+    automationTasks,
+    timingCategories,
+  ]);
+
+  // ── PDF QA Stats data (Estadístico QA) ────────────────────────────────
+  const { pdfQAStatsManual, pdfQAStatsAutomation } = useMemo<{
+    pdfQAStatsManual: PDFQAStatsData | null;
+    pdfQAStatsAutomation: PDFQAStatsData | null;
+  }>(() => {
+    if (!timingCategories || timingCategories.length === 0) {
+      return { pdfQAStatsManual: null, pdfQAStatsAutomation: null };
+    }
+
+    const QA_NON_CTRL = new Set(QA_NON_CONTROLLABLE_CATEGORY_SLUGS);
+    const activeCategories = timingCategories.filter(
+      (c: CatalogTimingCategory) => c.is_active && !QA_NON_CTRL.has(c.slug),
+    );
+
+    const slugToId: Record<string, string> = {};
+    for (const cat of timingCategories)
+      slugToId[(cat as CatalogTimingCategory).slug] = (
+        cat as CatalogTimingCategory
+      ).id;
+    const excludedCatIds = new Set(
+      QA_NON_CONTROLLABLE_CATEGORY_SLUGS.map((s) => slugToId[s]).filter(
+        Boolean,
+      ),
+    );
+    const effectiveTestingCatId = slugToId["effective_testing"] ?? null;
+    // Same valid-sum categories as the web dashboard
+    const validSumCatIds = new Set(
+      ["effective_testing", "qa_retesting", "qa_fixed"]
+        .map((s) => slugToId[s])
+        .filter(Boolean),
+    );
+    const fmtDateStr = (s: string) => {
+      const [y, m, d] = s.split("-");
+      return `${d}/${m}/${y}`;
+    };
+    const dateRange = `${fmtDateStr(apiStartDate)} - ${fmtDateStr(apiEndDate)}`;
+
+    function buildQAStatsData(
+      filteredTimings: TaskTiming[],
+    ): PDFQAStatsData | null {
+      const map: Record<
+        string,
+        { hoursByCategory: Record<string, number>; totalHours: number }
+      > = {};
+      for (const timing of filteredTimings) {
+        for (const entry of timing.qa_entries ?? []) {
+          if (!map[entry.qa_name])
+            map[entry.qa_name] = { hoursByCategory: {}, totalHours: 0 };
+          map[entry.qa_name].totalHours += entry.total_hours;
+          for (const [catId, h] of Object.entries(entry.hours_by_category)) {
+            map[entry.qa_name].hoursByCategory[catId] =
+              (map[entry.qa_name].hoursByCategory[catId] ?? 0) + h;
+          }
+        }
+      }
+      if (Object.keys(map).length === 0) return null;
+
+      const rawQAs = Object.entries(map).map(([name, data]) => {
+        let controllable = 0;
+        let effectiveTesting = 0;
+        let validHours = 0;
+        for (const [catId, h] of Object.entries(data.hoursByCategory)) {
+          if (!excludedCatIds.has(catId)) {
+            controllable += h;
+            if (effectiveTestingCatId && catId === effectiveTestingCatId)
+              effectiveTesting += h;
+          }
+          if (validSumCatIds.has(catId)) validHours += h;
+        }
+        return {
+          name,
+          hoursByCategory: data.hoursByCategory,
+          controllableHours: controllable,
+          validHours,
+          efficiencyRate:
+            controllable > 0 ? (effectiveTesting / controllable) * 100 : 0,
+        };
+      });
+
+      const activeQAs = rawQAs.filter((q) => q.controllableHours > 0);
+      const nQAs = activeQAs.length;
+      if (nQAs === 0) return null;
+
+      const totalControllable = activeQAs.reduce(
+        (s, q) => s + q.controllableHours,
+        0,
+      );
+      const avgControllablePerQA = totalControllable / nQAs;
+      const avgValidPerQA =
+        nQAs > 0
+          ? activeQAs.reduce((s, q) => s + (q.validHours ?? 0), 0) / nQAs
+          : 0;
+      const avgEfficiency =
+        activeQAs.reduce((s, q) => s + q.efficiencyRate, 0) / nQAs;
+
+      const totalByCat: Record<string, number> = {};
+      for (const qa of rawQAs) {
+        for (const cat of activeCategories) {
+          const c = cat as CatalogTimingCategory;
+          totalByCat[c.id] =
+            (totalByCat[c.id] ?? 0) + (qa.hoursByCategory[c.id] ?? 0);
+        }
+      }
+      const totalTeamHours = Object.values(totalByCat).reduce(
+        (s, h) => s + h,
+        0,
+      );
+
+      // Non-controllable hours (excluded categories)
+      let nonControllableHours = 0;
+      const nonControllableByCatMap: Record<string, number> = {};
+      for (const qa of rawQAs) {
+        for (const [catId, h] of Object.entries(qa.hoursByCategory)) {
+          if (excludedCatIds.has(catId)) {
+            nonControllableHours += h;
+            nonControllableByCatMap[catId] =
+              (nonControllableByCatMap[catId] ?? 0) + h;
+          }
+        }
+      }
+      const totalAllHours = totalTeamHours + nonControllableHours;
+      const nonControllableCategories = (
+        timingCategories as CatalogTimingCategory[]
+      )
+        .filter(
+          (c) =>
+            excludedCatIds.has(c.id) &&
+            (nonControllableByCatMap[c.id] ?? 0) > 0,
+        )
+        .sort(
+          (a, b) =>
+            (nonControllableByCatMap[b.id] ?? 0) -
+            (nonControllableByCatMap[a.id] ?? 0),
+        )
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.hex_color,
+          hours: nonControllableByCatMap[c.id] ?? 0,
+        }));
+
+      const categories = [...activeCategories]
+        .filter((c: CatalogTimingCategory) => (totalByCat[c.id] ?? 0) > 0)
+        .sort(
+          (a: CatalogTimingCategory, b: CatalogTimingCategory) =>
+            (totalByCat[b.id] ?? 0) - (totalByCat[a.id] ?? 0),
+        )
+        .map((cat: CatalogTimingCategory) => ({
+          id: cat.id,
+          name: cat.name,
+          color: cat.hex_color,
+          teamAvgHours: (totalByCat[cat.id] ?? 0) / nQAs,
+          teamTotalHours: totalByCat[cat.id] ?? 0,
+          teamPct:
+            totalTeamHours > 0
+              ? ((totalByCat[cat.id] ?? 0) / totalTeamHours) * 100
+              : 0,
+        }));
+
+      return {
+        generatedAt: new Date().toLocaleString("es"),
+        dateRange,
+        nQAs,
+        avgEfficiency,
+        avgControllablePerQA,
+        avgValidPerQA,
+        totalTeamHours,
+        nonControllableHours,
+        totalAllHours,
+        nonControllableCategories,
+        categories,
+        qas: activeQAs.sort(
+          (a, b) => b.controllableHours - a.controllableHours,
+        ),
+      };
+    }
+
+    return {
+      pdfQAStatsManual: buildQAStatsData(manualTimings),
+      pdfQAStatsAutomation: buildQAStatsData(automationTimings),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualTimings, automationTimings, timingCategories]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (
+      !pdfDataManual &&
+      !pdfDataAutomation &&
+      !pdfQAStatsManual &&
+      !pdfQAStatsAutomation
+    )
+      return;
+    setExportingPDF(true);
+    try {
+      const [{ pdf }, { TimingAnalyticsPDFDocument }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/TimingAnalyticsPDFDocument"),
+      ]);
+      const pages = [
+        ...(pdfQAStatsManual
+          ? [
+              {
+                type: "qa-stats" as const,
+                data: pdfQAStatsManual,
+                label: "Estadístico QA — Manual",
+              },
+            ]
+          : []),
+        ...(pdfQAStatsAutomation
+          ? [
+              {
+                type: "qa-stats" as const,
+                data: pdfQAStatsAutomation,
+                label: "Estadístico QA — Automatización",
+              },
+            ]
+          : []),
+        ...(pdfDataManual
+          ? [
+              {
+                type: "analytics" as const,
+                data: pdfDataManual,
+                label: "Manual",
+              },
+            ]
+          : []),
+        ...(pdfDataAutomation
+          ? [
+              {
+                type: "analytics" as const,
+                data: pdfDataAutomation,
+                label: "Automatización QA",
+              },
+            ]
+          : []),
+      ];
+      // @ts-expect-error — JSX element passed to pdf() at runtime
+      const blob = await pdf(TimingAnalyticsPDFDocument({ pages })).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analisis-qa-tiempos-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generando PDF:", err);
+    } finally {
+      setExportingPDF(false);
+    }
+  }, [
+    pdfDataManual,
+    pdfDataAutomation,
+    pdfQAStatsManual,
+    pdfQAStatsAutomation,
+  ]);
 
   // Handle crear/editar timing
   const handleSubmit = async (
@@ -504,7 +1057,21 @@ export default function TimingsPage() {
 
         {/* Botón de actualizar para métricas */}
         {(viewMode === "metrics" || viewMode === "qa-metrics") && (
-          <div className="mb-8 flex justify-end">
+          <div className="mb-8 flex justify-end gap-2">
+            {viewMode === "metrics" && (
+              <button
+                onClick={handleExportPDF}
+                disabled={exportingPDF}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Exportar análisis a PDF"
+              >
+                <FileDown
+                  size={18}
+                  className={exportingPDF ? "animate-bounce" : ""}
+                />
+                {exportingPDF ? "Generando PDF..." : "Exportar PDF"}
+              </button>
+            )}
             <button
               onClick={handleRefreshAll}
               disabled={metricsLoading || qaMetricsLoading || isRefreshing}
@@ -550,33 +1117,82 @@ export default function TimingsPage() {
             />
           </div>
         ) : viewMode === "metrics" ? (
-          <div className="space-y-8">
-            {/* Gráfico de distribución */}
-            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-              <TimingMetricsDistributionChart
-                metrics={metrics}
-                loading={metricsLoading}
-              />
+          <div>
+            {/* Tab bar */}
+            <div className="mb-0 flex overflow-x-auto border-b border-border">
+              <button
+                onClick={() => setAnalyticsTab("qa-manual")}
+                className={`relative shrink-0 px-5 py-3 text-sm font-semibold transition-colors ${
+                  analyticsTab === "qa-manual"
+                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Estadístico QA — Manual
+              </button>
+              <button
+                onClick={() => setAnalyticsTab("qa-automation")}
+                className={`relative shrink-0 px-5 py-3 text-sm font-semibold transition-colors ${
+                  analyticsTab === "qa-automation"
+                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Estadístico QA — Automatización
+              </button>
+              <button
+                onClick={() => setAnalyticsTab("manual")}
+                className={`relative shrink-0 px-5 py-3 text-sm font-semibold transition-colors ${
+                  analyticsTab === "manual"
+                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Tiempo y Cumplimiento — Manual
+              </button>
+              <button
+                onClick={() => setAnalyticsTab("automation")}
+                className={`relative shrink-0 px-5 py-3 text-sm font-semibold transition-colors ${
+                  analyticsTab === "automation"
+                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Tiempo y Cumplimiento — Automatización
+              </button>
             </div>
-
-            {/* Gráfico comparativo */}
-            <div className="rounded-xl border border-gray-200 bg-gray-100 p-6">
-              <TimingMetricsComparisonChart
-                metrics={metrics}
-                loading={metricsLoading}
-              />
-            </div>
-
-            {/* Tarjetas de resumen detalladas */}
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Análisis Detallado por Producto
-              </h2>
-              {metrics.map((metric) => (
-                <div key={metric.product_type}>
-                  <SquadTimingSummaryCard metric={metric} />
-                </div>
-              ))}
+            {/* Tab content */}
+            <div
+              ref={dashboardRef}
+              className="rounded-b-xl border border-t-0 border-border bg-card px-6 py-6"
+            >
+              {analyticsTab === "qa-manual" ||
+              analyticsTab === "qa-automation" ? (
+                <QAStatsDashboard
+                  timings={
+                    analyticsTab === "qa-manual"
+                      ? manualTimings
+                      : automationTimings
+                  }
+                  loading={loading || tasksLoading}
+                />
+              ) : (
+                <TimingAnalyticsDashboard
+                  metrics={metrics}
+                  qaMetrics={qaMetrics}
+                  timings={
+                    analyticsTab === "manual"
+                      ? manualTimings
+                      : automationTimings
+                  }
+                  tasks={
+                    analyticsTab === "manual" ? manualTasks : automationTasks
+                  }
+                  loading={metricsLoading}
+                  qaLoading={qaMetricsLoading}
+                  timingsLoading={loading || tasksLoading}
+                />
+              )}
             </div>
           </div>
         ) : (

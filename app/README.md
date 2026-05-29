@@ -146,6 +146,25 @@ Ahora `_inflight` apunta a la promesa **real** (mismo patrón que `_refreshInfli
 
 `GET /api/cron/sync-clickup-timings` verifica el día de la semana en zona horaria `America/Bogota` antes de ejecutar el sync. Los sábados y domingos retorna `{ ok: true, skipped: true, reason: "non-working day" }` sin llamar a `syncAllEnabledTasks`. Esto evita que el sync corra en fin de semana y genere horas infladas por tiempo no laboral medido por ClickUp fuera de la ventana activa. El cron-job.org recibe un 200 normal (no genera alertas falsas).
 
+### Panel de análisis de tiempos en Reportes (T1)
+
+`TimingStatsPanel` es un componente `forwardRef` que replica las 4 pestañas del módulo de Métricas de Tiempos (Estadístico QA Manual, Estadístico QA Automatización, Tiempo y Cumplimiento Manual, Tiempo y Cumplimiento Automatización) directamente embebido en la sección de Reportes de QA. El panel se sincroniza automáticamente con el rango de fechas del filtro de reportes (`startDate`/`endDate`) y hace sus propios fetches a `/api/timings`, `/api/tasks`, `/api/timings/metrics` y `/api/timings/metrics/qa` al montar. Expone `generatePDF()` vía `useImperativeHandle` para que el padre pueda disparar la descarga del PDF unificado.
+
+### PDF unificado de Reportes (T2)
+
+El botón "Descargar PDF" en Reportes genera ahora un **único archivo multi-página** usando exclusivamente `@react-pdf/renderer`. El flujo anterior descargaba dos archivos separados (tabla de evaluaciones con jsPDF + análisis de tiempos con react-pdf); ahora `QAReportSection` pasa `qaRows` al `TimingStatsPanel` y delega toda la generación a `timingPanelRef.current.generatePDF()`.
+
+La estructura del documento unificado es:
+1. **Página 1** — `PDFQAEvaluationPage`: tabla de evaluaciones del período (A3 landscape) con KPIs resumen (total miembros, con evaluación, promedios), tabla completa con Tasa Aceptación, Cumplimiento, Excelencia, Soft Skills y Calificación Final calculada.
+2. **Páginas 2–3** — `PDFQAStatsPage` × 2: estadístico QA Manual y de Automatización.
+3. **Páginas 4–5** — `PDFReportPage` × 2: tiempo y cumplimiento Manual y de Automatización QA.
+
+`PDFPageDef` se extendió con el tipo `"qa-evaluation"` (sin propiedad `label` ya que la página se autoidentifica). La función `downloadQAReportPDF` de `qaReportPdfService.ts` ya no se invoca desde `QAReportSection`; se conserva solo para posible reuso futuro.
+
+### `nonControllableCategories` en datos PDF estadístico QA (T3)
+
+`buildQAStatsData` en `timings/page.tsx` ahora computa y expone `nonControllableCategories: Array<{ id, name, color, hours }>` — la lista de categorías excluidas de la métrica de eficiencia (controladas por `QA_NON_CONTROLLABLE_CATEGORY_SLUGS`). `PDFQAStatsData` incluye este campo y `PDFQAStatsPage` lo usa para renderizar un sub-listado indentado bajo la fila "Tiempo No Productivo*" en el panel D de distribución porcentual, idéntico al comportamiento de la web.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

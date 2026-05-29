@@ -8,7 +8,9 @@ import DateRangePicker, { DateRange } from "@/components/DateRangePicker";
 import { Button } from "@/components/ui/button";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import { QAEvaluationRow } from "@/lib/types";
-import { downloadQAReportPDF } from "@/lib/services/qaReportPdfService";
+import TimingStatsPanel, {
+  TimingStatsPanelHandle,
+} from "@/components/TimingStatsPanel";
 
 function toLocalDateString(date: Date): string {
   const y = date.getFullYear();
@@ -63,6 +65,7 @@ export default function QAReportSection() {
   const [downloading, setDownloading] = useState(false);
   const { safeFetch } = useSafeAuthFetch();
   const abortRef = useRef<AbortController | null>(null);
+  const timingPanelRef = useRef<TimingStatsPanelHandle>(null);
 
   const startDate = toLocalDateString(dateRange.startDate);
   const endDate = toLocalDateString(dateRange.endDate);
@@ -107,7 +110,8 @@ export default function QAReportSection() {
   const handleDownloadPDF = async () => {
     setDownloading(true);
     try {
-      downloadQAReportPDF(rows, startDate, endDate);
+      // PDF unificado: evaluación QA + 4 páginas de análisis de tiempos
+      await timingPanelRef.current?.generatePDF();
     } finally {
       setDownloading(false);
     }
@@ -161,7 +165,7 @@ export default function QAReportSection() {
         <SkeletonCard />
       ) : rows.length === 0 ? (
         <div className="bg-gray-100 border border-gray-200 rounded-xl p-10 text-center text-gray-500 text-sm">
-          No hay datos de evaluación para el periodo seleccionado.
+          No hay datos de evaluación para el período seleccionado.
         </div>
       ) : (
         <div className="bg-gray-100 border border-gray-200 rounded-xl p-6 card-glow">
@@ -353,6 +357,14 @@ export default function QAReportSection() {
           </p>
         </div>
       )}
+
+      {/* ── Panel de análisis de tiempos (4 pestañas) ── */}
+      <TimingStatsPanel
+        ref={timingPanelRef}
+        startDate={startDate}
+        endDate={endDate}
+        qaRows={rows}
+      />
     </div>
   );
 }

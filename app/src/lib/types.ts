@@ -318,7 +318,7 @@ export interface QAEvaluation {
 export interface QAEvaluationRow extends QAEvaluation {
   // Fila completa lista para render, con flag de persistencia
   has_persisted_evaluation: boolean;
-  task_count?: number; // Total de tareas asignadas al QA en el periodo
+  task_count?: number; // Total de tareas asignadas al QA en el período
 }
 
 export interface UpsertQAEvaluationInput {
