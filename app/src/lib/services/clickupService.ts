@@ -807,6 +807,60 @@ export async function syncTaskTimings(
       }
     }
 
+    // Fallback previewOnly: cuando no hay timing registrado aún (o no hay
+    // timing_qa_entries), construir la vista previa usando assigned_qa de la tarea.
+    // Esto permite que el usuario vea las horas de ClickUp antes de guardar,
+    // con el mismo comportamiento que cuando el timing ya existe.
+    // by design: no se escribe nada en BD — el guardado lo hace el usuario al
+    // hacer clic en "Crear" o "Actualizar".
+    if (options?.previewOnly && Object.keys(categoryHours).length > 0) {
+      const { data: taskWithQA } = await supabase
+        .from("tasks")
+        .select("assigned_qa")
+        .eq("id", internalTaskId)
+        .maybeSingle();
+
+      const assignedQA: string[] = Array.isArray(taskWithQA?.assigned_qa)
+        ? (taskWithQA!.assigned_qa as string[])
+        : [];
+
+      if (assignedQA.length > 0) {
+        const fallbackSlugs = Object.keys(categoryHours);
+        const { data: fallbackCategories } = await supabase
+          .from("timing_categories")
+          .select("id, slug")
+          .in("slug", fallbackSlugs);
+
+        const fallbackCatMap = new Map<string, string>(
+          (fallbackCategories ?? []).map((c) => [
+            c.slug as string,
+            c.id as string,
+          ]),
+        );
+
+        const qaCount = assignedQA.length;
+        const previewQaEntries = assignedQA.map((qa_name) => {
+          const hours_by_category: Record<string, number> = {};
+          for (const slug of fallbackSlugs) {
+            const catId = fallbackCatMap.get(slug);
+            if (catId) {
+              const rawHours = (categoryHours[slug] ?? 0) / qaCount;
+              const hours = Math.round(rawHours * 100) / 100;
+              if (hours > 0) hours_by_category[catId] = hours;
+            }
+          }
+          return { qa_name, hours_by_category };
+        });
+
+        return {
+          taskId: internalTaskId,
+          clickupTaskId: clickupQaTaskId,
+          success: true,
+          preview_qa_entries: previewQaEntries,
+        };
+      }
+    }
+
     // Step 5b: Nothing was written (no timing row, no qa entries, or no mapped
     // statuses). Record the attempt timestamp but signal skipped so callers
     // can distinguish "sync ran but had nothing to write" from success.
