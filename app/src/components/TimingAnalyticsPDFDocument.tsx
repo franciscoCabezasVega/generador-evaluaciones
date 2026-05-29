@@ -1600,7 +1600,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
     ? `Las tareas de talla ${complexitySegments[0].size} concentran el mayor tiempo (${complexitySegments[0].pct.toFixed(1)}%).`
     : "";
   const qaNote = qaDistSegments[0]
-    ? `${qaDistSegments[0].name} lidera con ${qaDistSegments[0].pct.toFixed(1)}% del tiempo total.`
+    ? `${qaDistSegments[0].label} lidera con ${qaDistSegments[0].pct.toFixed(1)}% del tiempo total.`
     : "";
   const totalQADistHours = qaDistSegments.reduce((acc, q) => acc + q.hours, 0);
 
@@ -1899,7 +1899,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
               />
               <View style={{ flex: 1, marginLeft: 8 }}>
                 {qaDistSegments.map((seg) => (
-                  <View key={seg.name} style={s.tRow}>
+                  <View key={seg.label} style={s.tRow}>
                     <View
                       style={{
                         flex: 3,
@@ -1908,7 +1908,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
                       }}
                     >
                       <View style={{ ...s.dot, backgroundColor: seg.color }} />
-                      <Text style={s.tLabel}>{seg.name}</Text>
+                      <Text style={s.tLabel}>{seg.label}</Text>
                     </View>
                     <Text style={s.tVal}>{formatTime(seg.hours)}</Text>
                     <Text style={{ ...s.tPct, color: seg.color }}>

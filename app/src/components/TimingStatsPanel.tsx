@@ -456,7 +456,7 @@ const TimingStatsPanel = forwardRef<
         .slice(0, 8);
       const totalQADistHours = sortedQADist.reduce((s, [, h]) => s + h, 0);
       const qaDistSegments = sortedQADist.map(([qa_name, hours], i) => ({
-        name: qa_name,
+        label: qa_name,
         hours,
         pct: totalQADistHours > 0 ? (hours / totalQADistHours) * 100 : 0,
         color: PALETTE[i % PALETTE.length],
