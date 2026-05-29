@@ -18,7 +18,8 @@
     "lighthouse:assert": "lhci assert",
     "precheck": "pnpm lint",
     "precheck:ci": "pnpm lint && pnpm exec jest --ci --forceExit",
-    "verify": "pnpm lint && pnpm test && pnpm test:e2e && pnpm build"
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
