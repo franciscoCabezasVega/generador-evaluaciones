@@ -165,6 +165,10 @@ La estructura del documento unificado es:
 
 `buildQAStatsData` en `timings/page.tsx` ahora computa y expone `nonControllableCategories: Array<{ id, name, color, hours }>` — la lista de categorías excluidas de la métrica de eficiencia (controladas por `QA_NON_CONTROLLABLE_CATEGORY_SLUGS`). `PDFQAStatsData` incluye este campo y `PDFQAStatsPage` lo usa para renderizar un sub-listado indentado bajo la fila "Tiempo No Productivo*" en el panel D de distribución porcentual, idéntico al comportamiento de la web.
 
+### Filtro de warning cosmético de recharts en dev (D1)
+
+`app/src/lib/rechartsConsoleFilter.ts` instala (una sola vez, idempotente) un wrapper sobre `console.warn`/`console.error` que suprime únicamente el mensaje `"width(-1) and height(-1) of chart should be greater than 0"`. Este warning lo emite `ResponsiveContainer` de recharts en su primer ciclo de medición antes del primer paint del navegador; se recupera solo en el frame siguiente y no afecta funcionalidad (recharts #3615/#4196). El filtro **solo se activa en `NODE_ENV === "development"`** y solo en cliente; en producción recharts no emite el warning. Cualquier otro `console.warn`/`console.error` pasa intacto. Se invoca desde `ClientProviders` al montar.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
