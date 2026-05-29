@@ -413,9 +413,7 @@ function LegendRow({
         <View
           style={{ ...(square ? s.dotSq : s.dot), backgroundColor: color }}
         />
-        <Text style={s.tLabel} numberOfLines={1}>
-          {label}
-        </Text>
+        <Text style={s.tLabel}>{label}</Text>
       </View>
       <Text style={s.tVal}>{formatTime(hours)}</Text>
       <Text style={{ ...s.tPct, color }}>{pct.toFixed(1)}%</Text>
@@ -444,9 +442,7 @@ function HBar({
         }}
       >
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ fontSize: 7.5, color: "#374151" }} numberOfLines={1}>
-            {label}
-          </Text>
+          <Text style={{ fontSize: 7.5, color: "#374151" }}>{label}</Text>
           <Text style={{ fontSize: 6.5, color: "#9CA3AF", marginLeft: 4 }}>
             {formatTime(hours)}
           </Text>
@@ -682,7 +678,6 @@ function PDFQACategoryVertBars({
           <View key={cat.id} style={{ flex: 1, alignItems: "center" }}>
             <Text
               style={{ fontSize: 6, color: "#374151", textAlign: "center" }}
-              numberOfLines={2}
             >
               {cat.name.length > 14
                 ? cat.name.slice(0, 13) + "\u2026"
@@ -741,7 +736,7 @@ function PDFGroupedBarChart({
                 marginRight: 2,
               }}
             />
-            <Text style={{ fontSize: 6, color: "#374151" }} numberOfLines={1}>
+            <Text style={{ fontSize: 6, color: "#374151" }}>
               {cat.name.length > 20 ? cat.name.slice(0, 19) + "…" : cat.name}
             </Text>
           </View>
@@ -782,7 +777,6 @@ function PDFGroupedBarChart({
                 textAlign: "center",
                 marginTop: 4,
               }}
-              numberOfLines={1}
             >
               {qa.name.split(" ")[0]}
             </Text>
@@ -829,7 +823,7 @@ function PDFStackedBar100({
                 marginRight: 2,
               }}
             />
-            <Text style={{ fontSize: 6, color: "#374151" }} numberOfLines={1}>
+            <Text style={{ fontSize: 6, color: "#374151" }}>
               {cat.name.length > 20 ? cat.name.slice(0, 19) + "…" : cat.name}
             </Text>
           </View>
@@ -881,7 +875,6 @@ function PDFStackedBar100({
                   textAlign: "center",
                   marginTop: 4,
                 }}
-                numberOfLines={1}
               >
                 {qa.name.split(" ")[0]}
               </Text>
@@ -1176,10 +1169,7 @@ function PDFQAStatsPage({
                     }}
                   />
                 </View>
-                <Text
-                  style={{ flex: 1, fontSize: 7.5, color: "#111827" }}
-                  numberOfLines={1}
-                >
+                <Text style={{ flex: 1, fontSize: 7.5, color: "#111827" }}>
                   {cat.name}
                 </Text>
                 <Text
@@ -1301,9 +1291,7 @@ function PDFQAStatsPage({
                     }}
                   >
                     <View style={{ ...s.dot, backgroundColor: cat.color }} />
-                    <Text style={s.tLabel} numberOfLines={1}>
-                      {cat.name}
-                    </Text>
+                    <Text style={s.tLabel}>{cat.name}</Text>
                   </View>
                   <Text style={{ ...s.tPct, color: cat.color }}>
                     {pct.toFixed(1)}%
@@ -1329,7 +1317,6 @@ function PDFQAStatsPage({
                         color: "#71717A",
                         fontFamily: "Helvetica-Bold",
                       }}
-                      numberOfLines={1}
                     >
                       Tiempo No Productivo*
                     </Text>
@@ -1377,7 +1364,6 @@ function PDFQAStatsPage({
                         />
                         <Text
                           style={{ flex: 1, fontSize: 6, color: "#9CA3AF" }}
-                          numberOfLines={1}
                         >
                           {cat.name}
                         </Text>
@@ -1438,10 +1424,7 @@ function PDFQAStatsPage({
                       alignItems: "center",
                     }}
                   >
-                    <Text
-                      style={{ fontSize: 7.5, color: "#374151", flex: 1 }}
-                      numberOfLines={1}
-                    >
+                    <Text style={{ fontSize: 7.5, color: "#374151", flex: 1 }}>
                       {i + 1}. {qa.name}
                     </Text>
                     <Text
@@ -1525,10 +1508,7 @@ function PDFQAStatsPage({
                     marginRight: 2,
                   }}
                 />
-                <Text
-                  style={{ fontSize: 6, color: "#374151" }}
-                  numberOfLines={1}
-                >
+                <Text style={{ fontSize: 6, color: "#374151" }}>
                   {cat.name.length > 20
                     ? cat.name.slice(0, 19) + "…"
                     : cat.name}
@@ -1872,10 +1852,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
                       alignItems: "center",
                     }}
                   >
-                    <Text
-                      style={{ fontSize: 7.5, color: "#374151", flex: 1 }}
-                      numberOfLines={1}
-                    >
+                    <Text style={{ fontSize: 7.5, color: "#374151", flex: 1 }}>
                       {t.name}
                     </Text>
                     <Text
@@ -1931,9 +1908,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
                       }}
                     >
                       <View style={{ ...s.dot, backgroundColor: seg.color }} />
-                      <Text style={s.tLabel} numberOfLines={1}>
-                        {seg.name}
-                      </Text>
+                      <Text style={s.tLabel}>{seg.name}</Text>
                     </View>
                     <Text style={s.tVal}>{formatTime(seg.hours)}</Text>
                     <Text style={{ ...s.tPct, color: seg.color }}>
@@ -1965,9 +1940,7 @@ function PDFReportPage({ data, label }: { data: PDFChartData; label: string }) {
                 style={{ flex: 3, flexDirection: "row", alignItems: "center" }}
               >
                 <View style={{ ...s.dotSq, backgroundColor: row.color }} />
-                <Text style={s.tLabel} numberOfLines={1}>
-                  {row.name}
-                </Text>
+                <Text style={s.tLabel}>{row.name}</Text>
               </View>
               <Text style={s.tVal}>{formatTime(row.hours)}</Text>
               <Text
