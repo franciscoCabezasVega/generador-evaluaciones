@@ -1033,9 +1033,9 @@ function PDFQAStatsPage({
   const {
     generatedAt,
     dateRange,
-    nQAs,
+    nQAs: _nQAs,
     avgEfficiency,
-    avgControllablePerQA,
+    avgControllablePerQA: _avgControllablePerQA,
     avgValidPerQA,
     nonControllableHours,
     totalAllHours,

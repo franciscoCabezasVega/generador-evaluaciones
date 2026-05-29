@@ -39,7 +39,7 @@ import {
 } from "@/lib/types";
 import { useCatalogData } from "@/hooks/useCatalogData";
 import {
-  formatTime,
+  formatTime as _formatTime,
   QA_NON_CONTROLLABLE_CATEGORY_SLUGS,
 } from "@/lib/timingUtils";
 import type {

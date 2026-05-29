@@ -611,13 +611,13 @@ export function TimingAnalyticsDashboard({
     }
   }
   categoryTotals.sort((a, b) => b.total - a.total);
-  const totalCatHours = categoryTotals.reduce((s, c) => s + c.total, 0);
+  const _totalCatHours = categoryTotals.reduce((s, c) => s + c.total, 0);
 
   // ── Top 5 por horas (productos) ────────────────────────────────────────
   const top5Products = [...metrics]
     .sort((a, b) => b.total_hours - a.total_hours)
     .slice(0, 5);
-  const maxProductHours = top5Products[0]?.total_hours ?? 0;
+  const _maxProductHours = top5Products[0]?.total_hours ?? 0;
 
   return (
     <div className="space-y-6">
