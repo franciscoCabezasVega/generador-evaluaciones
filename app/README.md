@@ -169,6 +169,22 @@ La estructura del documento unificado es:
 
 `app/src/lib/rechartsConsoleFilter.ts` instala (una sola vez, idempotente) un wrapper sobre `console.warn`/`console.error` que suprime únicamente el mensaje `"width(-1) and height(-1) of chart should be greater than 0"`. Este warning lo emite `ResponsiveContainer` de recharts en su primer ciclo de medición antes del primer paint del navegador; se recupera solo en el frame siguiente y no afecta funcionalidad (recharts #3615/#4196). El filtro **solo se activa en `NODE_ENV === "development"`** y solo en cliente; en producción recharts no emite el warning. Cualquier otro `console.warn`/`console.error` pasa intacto. Se invoca desde `ClientProviders` al montar.
 
+### Git hooks de calidad (GH1)
+
+El proyecto usa [husky](https://typicode.github.io/husky/) con dos hooks:
+
+| Hook | Qué ejecuta | Cuándo |
+|------|-------------|--------|
+| `pre-commit` | `lint-staged` (ESLint sobre archivos staged) | Cada `git commit` |
+| `pre-push` | `tsc --noEmit` en `/app` | Cada `git push` |
+
+El typecheck en `pre-push` atrapa errores de tipos antes de que lleguen a Vercel. También está disponible como script manual:
+
+```bash
+cd app && pnpm typecheck      # solo TS
+cd app && pnpm verify         # lint + typecheck + tests + build
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
