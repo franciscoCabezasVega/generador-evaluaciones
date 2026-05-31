@@ -514,10 +514,21 @@ export const downloadFactoryReportPDF = async (
   productName: string,
   version?: number,
   fileName?: string,
+  performanceComment?: string,
+  communicationComment?: string,
 ): Promise<void> => {
   const { pdf } = await import("@react-pdf/renderer");
   const { FactoryReportPDFDocument } =
     await import("@/components/FactoryReportPDFDocument");
+
+  // Los comentarios de IA viven en campos top-level del reporte (JSON string);
+  // los mergeamos en reportData para que el documento los reciba.
+  const mergedReportData = {
+    ...reportData,
+    performanceComments: performanceComment ?? reportData.performanceComments,
+    communicationComments:
+      communicationComment ?? reportData.communicationComments,
+  };
 
   const generatedAt = new Date().toLocaleDateString("es-ES");
   const finalFileName =
@@ -526,7 +537,7 @@ export const downloadFactoryReportPDF = async (
 
   const blob = await pdf(
     FactoryReportPDFDocument({
-      reportData,
+      reportData: mergedReportData,
       month,
       year,
       productName,
