@@ -501,3 +501,46 @@ export const downloadReportPDF = (
     fileName || `Reporte-Evaluaciones-${productType}-${month}-${year}.pdf`;
   doc.save(finalFileName);
 };
+
+/**
+ * Genera y descarga el PDF de reporte de fábrica usando @react-pdf/renderer,
+ * respetando el diseño visual del modal: hipervínculos, colores y separación
+ * de páginas por squad.
+ */
+export const downloadFactoryReportPDF = async (
+  reportData: ReportDataStructure,
+  month: number,
+  year: number,
+  productName: string,
+  version?: number,
+  fileName?: string,
+): Promise<void> => {
+  const { pdf } = await import("@react-pdf/renderer");
+  const { FactoryReportPDFDocument } =
+    await import("@/components/FactoryReportPDFDocument");
+
+  const generatedAt = new Date().toLocaleDateString("es-ES");
+  const finalFileName =
+    fileName ||
+    `Reporte-Fabrica-${productName}-${month}-${year}${version ? `-v${version}` : ""}.pdf`;
+
+  const blob = await pdf(
+    FactoryReportPDFDocument({
+      reportData,
+      month,
+      year,
+      productName,
+      version,
+      generatedAt,
+    }),
+  ).toBlob();
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = finalFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
