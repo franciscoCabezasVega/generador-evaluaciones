@@ -9,16 +9,24 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
-import { supabase } from "@/lib/supabase";
 import { userProfileService } from "@/lib/services/userProfileService";
 import { authService } from "@/lib/services/authService";
 import { UserProfile, AuthUser } from "@/lib/types";
+import { SessionStore } from "@/lib/auth/SessionStore";
+import { RefreshScheduler } from "@/lib/auth/refreshScheduler";
 import {
   getFromLocalStorage,
   saveToLocalStorage,
   clearLocalStorage,
   validateProfileInBackground,
 } from "./authStorage";
+
+// Bootstrap del SessionStore y RefreshScheduler (idempotente — solo se ejecuta una vez).
+// Se hace aquí, en el provider de más alto nivel con acceso a "use client".
+if (typeof window !== "undefined") {
+  SessionStore.bootstrap();
+  RefreshScheduler.start();
+}
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -157,44 +165,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [initialized, fetchProfileWithRetry]);
 
-  // Escuchar cambios de sesión - Este efecto debe ejecutarse solo una vez
+  // Suscribirse al SessionStore para reflejar cambios de sesión en el estado React.
+  // El store ya maneja: TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, cross-tab, refresh proactivo.
   useEffect(() => {
-    if (!initialized) return; // Esperar a que se haya inicializado
+    if (!initialized) return;
 
     let isMounted = true;
+    let lastUserId: string | undefined;
 
-    // Escuchar cambios futuros de autenticación
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const unsub = SessionStore.subscribe(async (snapshot) => {
       if (!isMounted) return;
 
-      // Manejar evento explícito de cierre de sesión
-      if (event === "SIGNED_OUT") {
-        // Si estamos en proceso de logout, no actualizar estados de React
-        // para evitar el flash de contenido no autenticado.
-        if (isLoggingOutRef.current) return;
+      if (snapshot.status === "anonymous") {
+        // Sesión cerrada
+        if (isLoggingOutRef.current) return; // en proceso de logout voluntario
         setUser(null);
         setProfile(null);
         clearLocalStorage();
+        lastUserId = undefined;
         return;
       }
 
-      // Para cualquier otro evento con sesión válida, asegurar que el
-      // estado de usuario esté sincronizado.  Esto corrige el escenario
-      // donde `user` fue limpiado transitoriamente y un TOKEN_REFRESHED
-      // o INITIAL_SESSION posterior debería restaurarlo.
-      if (session?.user) {
+      if (snapshot.session?.user) {
+        const sessionUser = snapshot.session.user;
         setUser((prev) => {
-          // Solo actualizar si cambió el id o si estaba null
-          if (!prev || prev.id !== session.user.id) {
-            return session.user;
-          }
+          if (!prev || prev.id !== sessionUser.id) return sessionUser;
           return prev;
         });
 
-        // En SIGNED_IN o si no hay perfil en caché, refrescar perfil
-        if (event === "SIGNED_IN") {
+        // Refrescar perfil cuando cambia el usuario (SIGNED_IN desde otra cuenta)
+        const userChanged = lastUserId !== sessionUser.id;
+        lastUserId = sessionUser.id;
+
+        if (userChanged && !getFromLocalStorage()) {
           try {
             const freshProfile = await userProfileService.getUserProfile();
             if (freshProfile && isMounted) {
@@ -202,23 +205,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               saveToLocalStorage(freshProfile);
             }
           } catch (err) {
-            console.error("Error fetching profile on sign in:", err);
+            console.error(
+              "AuthContext: Error fetching profile on sign in:",
+              err,
+            );
           }
         }
-
-        if (event === "TOKEN_REFRESHED") {
-          // eslint-disable-next-line no-console
-          console.debug("AuthContext: Token refreshed, session active");
-        }
       }
-      // Si la sesión es null pero el evento NO es SIGNED_OUT,
-      // no limpiar el usuario.  Puede ser un evento transitorio
-      // mientras Supabase termina de restaurar la sesión desde storage.
     });
 
     return () => {
       isMounted = false;
-      subscription?.unsubscribe();
+      unsub();
     };
   }, [initialized]);
 

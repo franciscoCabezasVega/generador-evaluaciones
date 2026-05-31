@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { invalidateSessionCache, getSessionViaManager } from "@/lib/fetchAuth";
+import { SessionStore } from "@/lib/auth/SessionStore";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, X } from "lucide-react";
 
@@ -16,6 +16,33 @@ type SessionExpiredReason =
   | "unknown";
 
 const REMEMBER_ME_KEY = "login_remembered_email";
+
+/** Traduce mensajes de error de Supabase Auth (en inglés) al español. */
+function translateAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (
+    m.includes("invalid login credentials") ||
+    m.includes("invalid email or password")
+  )
+    return "Correo o contraseña incorrectos.";
+  if (m.includes("email not confirmed"))
+    return "Debes confirmar tu correo electrónico antes de iniciar sesión.";
+  if (m.includes("user not found"))
+    return "No existe una cuenta con ese correo.";
+  if (m.includes("too many requests") || m.includes("rate limit"))
+    return "Demasiados intentos. Espera unos minutos e intenta de nuevo.";
+  if (m.includes("network") || m.includes("fetch"))
+    return "Error de conexión. Verifica tu internet e intenta de nuevo.";
+  if (m.includes("user banned") || m.includes("user is banned"))
+    return "Tu cuenta ha sido suspendida. Contacta al administrador.";
+  if (m.includes("password") && m.includes("weak"))
+    return "La contraseña es demasiado débil.";
+  if (m.includes("signup") && m.includes("disabled"))
+    return "El registro de nuevas cuentas está deshabilitado.";
+  if (!message) return "Error al iniciar sesión.";
+  // Si ya está en español o no se reconoce, devolver como está
+  return message;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -74,17 +101,25 @@ export default function LoginPage() {
         localStorage.removeItem(REMEMBER_ME_KEY);
       }
 
-      invalidateSessionCache();
+      // Esperar evento SIGNED_IN del store (event-driven, sin polling).
+      // onAuthStateChange dispara SIGNED_IN tras signInWithPassword exitoso.
+      await new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          unsub();
+          reject(
+            new Error(
+              "La sesión tardó demasiado en iniciarse. Intenta de nuevo.",
+            ),
+          );
+        }, 10_000);
 
-      let retries = 0;
-      const maxRetries = 5;
-
-      const waitForSessionReady = async (): Promise<void> => {
-        try {
-          const {
-            data: { session },
-          } = await getSessionViaManager();
-          if (session?.user?.id) {
+        const unsub = SessionStore.subscribe((snapshot) => {
+          if (
+            snapshot.status === "authenticated" &&
+            snapshot.session?.user?.id
+          ) {
+            clearTimeout(timeoutId);
+            unsub();
             const redirectTo = searchParams.get("redirectTo");
             // Guard against open-redirect: only allow relative paths
             const safeRedirect =
@@ -94,26 +129,15 @@ export default function LoginPage() {
                 ? redirectTo
                 : "/";
             window.location.href = safeRedirect;
-            return;
+            resolve();
           }
-        } catch {
-          // Silently catch and retry
-        }
-        if (retries < maxRetries) {
-          retries++;
-          await new Promise((resolve) => setTimeout(resolve, 600));
-          await waitForSessionReady();
-        } else {
-          throw new Error(
-            "No se pudo validar la sesión después de múltiples intentos",
-          );
-        }
-      };
-
-      await waitForSessionReady();
+        });
+      });
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setError((error as any).message || "Error al iniciar sesión");
+      const rawMessage: string = (error as any).message || "";
+      const translated = translateAuthError(rawMessage);
+      setError(translated);
       setLoading(false);
     }
   };

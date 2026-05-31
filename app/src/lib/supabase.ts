@@ -1,8 +1,4 @@
-import {
-  createClient,
-  type LockFunc,
-  processLock,
-} from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -11,40 +7,27 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("URL de Supabase o clave anon no configuradas");
 }
 
-// Wrapper de processLock que siempre pasa acquireTimeout=-1.
-//
-// PROBLEMA RAÍZ: _initSupabaseAuthClient en supabase-js solo reenvía un
-// subconjunto de opciones al GoTrueClient y omite `lockAcquireTimeout`.
-// El default del GoTrueClient es 10000ms, lo que genera el warning
-// "Lock acquisition timed out after 10000ms" cuando hay operaciones en cola.
-//
-// La solución: pasar el acquireTimeout=-1 directamente en la llamada a
-// processLock. Con -1, processLock nunca crea el setTimeout del warning.
-// Las operaciones siguen usando la cola FIFO en memoria (comportamiento
-// correcto), solo se elimina el timer artificial que causa el warning.
-const processLockNoTimeout: LockFunc = (name, _acquireTimeout, fn) =>
-  processLock(name, -1, fn);
-
 /**
- * Cliente de Supabase singleton con sesión persistida en localStorage.
+ * Cliente de Supabase singleton para el cliente (browser).
  *
- * IMPORTANTE: usamos `processLock` (in-memory) en vez del lock por defecto
- * (`navigatorLock`, basado en `navigator.locks`). En producción observamos
- * que `navigator.locks` se queda colgado tras refreshes fallidos / tabs
- * inactivos, atrapando todas las llamadas posteriores en un loop infinito
- * de "Session lock timeout".
+ * IMPORTANTE: usamos createBrowserClient de @supabase/ssr para que los tokens
+ * se persistan como cookies (además de localStorage). Esto es requerido para
+ * que el middleware SSR (app/middleware.ts) pueda leer la sesión via getUser()
+ * en cada request; el edge/SSR no tiene acceso a localStorage.
  *
- * processLock es el patrón oficial recomendado por Supabase para SPAs
- * donde la coordinación cross-tab no es crítica:
- *   - SessionManager ya hace coalescing in-memory (1 llamada en vuelo).
- *   - BroadcastChannel sincroniza invalidaciones entre tabs.
+ * autoRefreshToken: false — RefreshScheduler lo gestiona de forma proactiva;
+ * tener dos mecanismos compitiendo introduciría contención de locks.
+ * noOpLock eliminado: SessionStore garantiza que getSession() solo se llama
+ * una vez en bootstrap, eliminando la contención que lo requería.
+ *
+ * Nota: @supabase/ssr v0.10 no expone autoRefreshToken en su tipo restringido
+ * de auth, pero lo pasa al createClient() subyacente en runtime. El cast es
+ * intencional y documentado aquí.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    autoRefreshToken: false, // RefreshScheduler lo gestiona de forma proactiva
     detectSessionInUrl: true,
     flowType: "pkce",
-    lock: processLockNoTimeout,
-  },
+  } as any, // by design: autoRefreshToken no está en el tipo de createBrowserClient
 });

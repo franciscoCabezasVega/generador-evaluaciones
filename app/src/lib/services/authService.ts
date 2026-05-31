@@ -3,6 +3,7 @@ import {
   invalidateSessionCache,
   getSessionViaManager,
   refreshSessionViaManager,
+  markVoluntarySignOut,
 } from "../fetchAuth";
 
 /**
@@ -111,6 +112,11 @@ export const authService = {
       | "refresh_failed"
       | boolean,
   ) {
+    // Señalizar logout voluntario ANTES de llamar signOut() para que
+    // SessionChecker no interprete el SIGNED_OUT como sesión expirada.
+    if (reason === "user-logout") {
+      markVoluntarySignOut();
+    }
     try {
       // Limpiar todos los datos de sesión (await para asegurar limpieza completa)
       await cleanSessionData();

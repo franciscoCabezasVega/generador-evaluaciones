@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.93.3",
     "@tanstack/react-query": "^5.90.20",
     "@vercel/analytics": "^2.0.1",

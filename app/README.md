@@ -126,17 +126,24 @@ La función `public.get_user_is_lead` se creó directamente como `SECURITY INVOK
 
 `drawTable` en `qaReportPdfService.ts` usa `doc.splitTextToSize(cell, maxWidth)` para dividir el texto en líneas que caben en el ancho de columna. El alto de cada fila se calcula dinámicamente (`2 + maxLines × 3.2 + 2 mm`) en lugar de usar un alto fijo, evitando truncamiento de comentarios largos en el PDF exportado.
 
-### Auth loading watchdog (I5)
+### `createBrowserClient` de `@supabase/ssr` — cookies requeridas por el middleware SSR (I5)
 
-`ClientProviders` arranca un timer de 15 s cuando `authLoading` es `true`. Si la carga de sesión no resuelve antes de ese límite (lock de Supabase atascado, red cortada, etc.) ejecuta `window.location.reload()` automáticamente. El timer se cancela si `authLoading` resuelve normalmente. En consola aparece `[auth] Watchdog: carga de sesión bloqueada >15s, recargando página...` para facilitar el diagnóstico.
+El cliente browser usa `createBrowserClient` de `@supabase/ssr` en lugar de `createClient` de `@supabase/supabase-js`. La diferencia crítica: `createClient` persiste tokens **solo en `localStorage`**; `createBrowserClient` los persiste también como **cookies**, que es la única fuente que puede leer el middleware Edge (`app/middleware.ts`). Sin esto, `getUser()` en el middleware siempre veía `null` tras el login y generaba un redirect loop hacia `/auth/login`.
 
-### SessionManager — `_inflight` preservado entre timeouts de caller (I6)
+`autoRefreshToken: false` se pasa al cliente porque `RefreshScheduler` gestiona el ciclo de vida del token de forma proactiva y coordinada cross-tab. Tener dos mecanismos compitiendo introduciría contención de `navigator.locks`.
 
-`SessionManager.getSession()` apuntaba `_inflight` al resultado de `Promise.race([realCall, timeout])`. Cuando el timeout de un caller vencía, `_inflight` se ponía a `null` y el siguiente reintento creaba una **nueva** llamada a `supabase.auth.getSession()`, que competía por el mismo `navigator.lock` → cascada de timeouts en todos los `useCachedFetch` simultáneos.
+### `SessionStore` + `RefreshScheduler` — fuente única de sesión sin locks en el flujo normal (I6)
 
-Ahora `_inflight` apunta a la promesa **real** (mismo patrón que `_refreshInflight`). El timeout es por caller exclusivamente: si vence, solo rechaza para ese caller, pero `_inflight` sigue vivo. Los reintentos de `useSafeAuthFetch` y la llamada de `SessionChecker` se coalescen en la misma promesa sin añadir presión al lock. Cuando Supabase libera el lock, la promesa resuelve una sola vez y todos los callers reciben el resultado.
+`app/src/lib/auth/SessionStore.ts` es un singleton observable que reemplaza al antiguo `SessionManager`. Diferencias clave:
 
-`SessionChecker` también retrasa su primera validación 8 s para evitar competir con los fetches de carga inicial de página.
+| Aspecto | SessionManager (anterior) | SessionStore (actual) |
+|---|---|---|
+| Obtener token | `await getSession()` — adquiría `navigator.lock` | `getAccessToken()` — síncrono, sin locks |
+| Fuente de verdad | `supabase.auth.getSession()` en cada caller | `onAuthStateChange` → estado en memoria |
+| Hydration inicial | Siempre async | Síncrono desde `localStorage` + validación async |
+| Cross-tab | No | `BroadcastChannel` |
+
+`RefreshScheduler` (singleton en `app/src/lib/auth/refreshScheduler.ts`) refresca el token 2 min antes de su expiración con coordinación cross-tab vía `navigator.locks { ifAvailable: true }` — si otra tab tiene el lock, esta espera pasivamente el `TOKEN_REFRESHED` de `onAuthStateChange`. Incluye circuit breaker de 3 fallos consecutivos: al agotarse fuerza logout y redirige a `/auth/login?sessionExpired=true&reason=refresh_failed`.
 
 ### ClickUp Sync — uso directo de `status_history.by_minute` (W4)
 
