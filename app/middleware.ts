@@ -70,10 +70,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/tasks", request.url));
   }
 
-  // Usuario sin sesión intentando acceder a una ruta protegida → login
-  if (!user && !isPublicRoute && !isRootRoute) {
+  // Usuario sin sesión intentando acceder a una ruta protegida (o a la raíz) → login
+  if (!user && !isPublicRoute) {
     const loginUrl = new URL("/auth/login", request.url);
-    loginUrl.searchParams.set("redirectTo", pathname);
+    // No agregar redirectTo para la raíz: el middleware ya redirige / → /tasks
+    // para usuarios autenticados, así que el destino final sería /tasks de todas formas.
+    if (!isRootRoute) {
+      loginUrl.searchParams.set("redirectTo", pathname);
+    }
     return NextResponse.redirect(loginUrl);
   }
 
