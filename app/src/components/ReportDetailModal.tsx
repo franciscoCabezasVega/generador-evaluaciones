@@ -108,6 +108,8 @@ export default function ReportDetailModal({
         report.squad || "Fábrica",
         report.version,
         `Reporte-Fabrica-${report.squad}-${report.month}-${report.year}-v${report.version}.pdf`,
+        report.performance_comment,
+        report.communication_comment,
       );
     } catch (error) {
       console.error("Error descargando PDF:", error);
