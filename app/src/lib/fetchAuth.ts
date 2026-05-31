@@ -1,285 +1,36 @@
 import { supabase } from "./supabase";
+import { SessionStore } from "./auth/SessionStore";
 
 /**
- * Error tipado para el estado transitorio donde la sesión aún no está
- * disponible (el auto-refresh no terminó). Usar `instanceof` en lugar de
- * `message.includes(...)` para que el idioma del mensaje no afecte la lógica.
+ * Error tipado para el estado transitorio donde la sesion aun no esta
+ * disponible (bootstrap no termino). Usar `instanceof` en lugar de
+ * `message.includes(...)` para que el idioma del mensaje no afecte la logica.
  */
 export class SessionUnavailableError extends Error {
   constructor(
-    message = "Sesión no disponible — el token puede estar renovándose",
+    message = "Sesion no disponible — el token puede estar renovandose",
   ) {
     super(message);
     this.name = "SessionUnavailableError";
   }
 }
 
-type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
-type RefreshSessionResult = Awaited<
-  ReturnType<typeof supabase.auth.refreshSession>
->;
-
-// ─── SessionManager (Singleton) ──────────────────────────────────────────────
+// ─── Señal de logout voluntario ──────────────────────────────────────────────
 //
-// Patrón: Singleton + Promise Coalescing
-//
-// Problema que resuelve:
-//   supabase.auth.getSession() adquiere navigator.lock internamente. Si varios
-//   componentes la llaman en paralelo (p.ej. al montar una página), cada llamada
-//   compite por el lock → solo una avanza, el resto espera → timeouts → errores.
-//
-// Solución:
-//   Una única instancia de SessionManager garantiza que solo hay UNA llamada a
-//   supabase.auth.getSession() en vuelo al mismo tiempo. Todos los callers
-//   comparten esa misma promesa. Cuando resuelve, el caché sirve a los siguientes.
-//   El caller puede abortar su *espera* via AbortSignal sin cancelar la promesa
-//   compartida ni afectar a otros callers.
-//
-// Con esto desaparecen: SessionLockError, warmSession complejo, timeout race.
-// ─────────────────────────────────────────────────────────────────────────────
+// Se activa cuando el usuario cierra sesión deliberadamente para que
+// SessionChecker no interprete el SIGNED_OUT como una pérdida de sesión
+// inesperada y evitar así la redirección con el banner de "sesión expirada".
 
-class SessionManager {
-  private static _instance: SessionManager | null = null;
+let _voluntarySignOut = false;
 
-  // Caché en memoria con TTL de 5 min (alineado con TTL del JWT de Supabase)
-  private _cache: {
-    session: GetSessionResult["data"]["session"];
-    at: number;
-  } | null = null;
-  private readonly _TTL = 300_000;
+/** Señaliza que el logout fue voluntario. Llamar antes de supabase.auth.signOut(). */
+export function markVoluntarySignOut(): void {
+  _voluntarySignOut = true;
+}
 
-  // La única promesa en vuelo hacia supabase.auth.getSession()
-  private _inflight: Promise<GetSessionResult> | null = null;
-
-  // La única promesa en vuelo hacia supabase.auth.refreshSession()
-  // Coalesce todas las llamadas concurrentes a refresh para que solo una compita
-  // por navigator.lock. Sin esto, Múltiples retries de safeFetch disparan Múltiples
-  // refreshSession() en paralelo → todos esperan el lock → timeouts en cascada.
-  private _refreshInflight: Promise<RefreshSessionResult> | null = null;
-
-  // Sincronización cross-tab: invalida el caché cuando otra pestaña hace logout/refresh
-  private _channel: BroadcastChannel | null = null;
-
-  private constructor() {
-    if (typeof BroadcastChannel !== "undefined") {
-      this._channel = new BroadcastChannel("session_cache_sync");
-      this._channel.onmessage = (e: MessageEvent) => {
-        if (e.data?.type === "session_invalidated") {
-          this._cache = null;
-          this._inflight = null;
-        }
-      };
-    }
-
-    // Suscribirse a cambios de estado de auth de Supabase.
-    //
-    // Supabase refresca el token ~60s antes de que expire (auto-refresh).
-    // Sin esta suscripción, cuando el usuario vuelve tras inactividad y llama
-    // a getSession(), la promesa compite por navigator.lock con el refresh
-    // que Supabase ya está haciendo en background → bloqueo.
-    //
-    // Con esta suscripción: TOKEN_REFRESHED actualiza el caché directamente
-    // desde el evento (sin llamar a getSession()). Cuando el usuario hace clic
-    // en "Actualizar", el caché ya está fresco → retorno inmediato, sin lock.
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
-        if (session) {
-          this._cache = { session, at: Date.now() };
-          this._inflight = null;
-        }
-      } else if (event === "SIGNED_OUT") {
-        this._cache = null;
-        this._inflight = null;
-      }
-    });
-  }
-
-  static getInstance(): SessionManager {
-    if (!SessionManager._instance) {
-      SessionManager._instance = new SessionManager();
-    }
-    return SessionManager._instance;
-  }
-
-  /** Invalida caché local y notifica a otras pestañas. */
-  invalidate(broadcast = true) {
-    this._cache = null;
-    this._inflight = null;
-    if (broadcast) {
-      this._channel?.postMessage({ type: "session_invalidated" });
-    }
-  }
-
-  /**
-   * Refresca el token. Coalesce llamadas concurrentes — solo una refreshSession()
-   * en vuelo a la vez. Las demás reciben la misma promesa.
-   * Timeout de 10s para evitar bloqueos de navigator.lock.
-   */
-  refreshSession(): Promise<RefreshSessionResult> {
-    if (this._refreshInflight) {
-      // Concurrent caller: comparte la promesa subyacente real pero aplica un
-      // timeout propio. _refreshInflight apunta a la llamada real (no al race),
-      // por lo que un timeout aquí NO la limpia ni inicia un refresh paralelo.
-      let concurrentTimeoutId: ReturnType<typeof setTimeout> | undefined;
-      const concurrentTimeout = new Promise<never>((_, reject) => {
-        concurrentTimeoutId = setTimeout(
-          () =>
-            reject(
-              new DOMException(
-                "refreshSession timed out waiting for lock",
-                "AbortError",
-              ),
-            ),
-          10_000,
-        );
-      });
-      return Promise.race([this._refreshInflight, concurrentTimeout]).finally(
-        () => clearTimeout(concurrentTimeoutId),
-      );
-    }
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () =>
-          reject(
-            new DOMException(
-              "refreshSession timed out waiting for lock",
-              "AbortError",
-            ),
-          ),
-        10_000,
-      );
-    });
-
-    // _refreshInflight apunta a la promesa REAL de supabase.auth.refreshSession(),
-    // no al resultado del race. Así, si el timeout vence para este caller,
-    // _refreshInflight sigue apuntando a la llamada real y los callers
-    // concurrentes pueden coalescerse en ella en vez de iniciar un refresh
-    // paralelo que re-contendería navigator.lock provocando timeouts en cascada.
-    const realRefresh = supabase.auth
-      .refreshSession()
-      .then(
-        (result) => {
-          clearTimeout(timeoutId);
-          // Actualizar caché con la nueva sesión (TOKEN_REFRESHED también lo hará,
-          // pero hacerlo aquí evita una ventana de race entre callers).
-          if (!result.error && result.data.session) {
-            this._cache = { session: result.data.session, at: Date.now() };
-          }
-          return result;
-        },
-        (err) => {
-          clearTimeout(timeoutId);
-          throw err;
-        },
-      )
-      .finally(() => {
-        this._refreshInflight = null;
-      });
-
-    this._refreshInflight = realRefresh;
-
-    // Retorna una vista con timeout para este caller; _refreshInflight permanece.
-    return Promise.race([realRefresh, timeoutPromise]);
-  }
-
-  /**
-   * Retorna la sesión actual con tres niveles de optimización:
-   *
-   * 1. Caché fresco   → retorno inmediato sin ninguna llamada a Supabase.
-   * 2. Llamada en vuelo → se comparte la promesa existente (zero lock adicional).
-   * 3. Sin caché      → inicia UNA llamada a Supabase; callers posteriores comparten.
-   *
-   * Si se pasa un AbortSignal, cancela solo la *espera de este caller*,
-   * sin afectar la promesa compartida ni a otros callers.
-   */
-  getSession(signal?: AbortSignal): Promise<GetSessionResult> {
-    // Nivel 1: caché fresco
-    if (this._cache && Date.now() - this._cache.at < this._TTL) {
-      return Promise.resolve({
-        data: { session: this._cache.session },
-        error: null,
-      } as GetSessionResult);
-    }
-
-    // Nivel 2 + 3: una sola llamada en vuelo
-    if (!this._inflight) {
-      // _inflight apunta a la promesa REAL de supabase.auth.getSession() —
-      // NO al resultado del race con timeout. Mismo patrón que _refreshInflight.
-      //
-      // Motivación: si el timeout del caller vence y _inflight apuntara al race,
-      // se pondría a null → el siguiente reintento crearía una NUEVA llamada a
-      // getSession() → nueva competición por navigator.lock → timeouts en cascada.
-      //
-      // Con _inflight apuntando a la llamada real, un timeout de un caller no la
-      // anula: los callers siguientes se coalescen sobre la misma promesa sin
-      // añadir presión al lock. Cuando Supabase libera el lock y TOKEN_REFRESHED
-      // dispara, la promesa resuelve, el caché se actualiza y todo se desbloquea.
-      this._inflight = supabase.auth
-        .getSession()
-        .then(
-          (result) => {
-            if (!result.error && result.data.session) {
-              this._cache = { session: result.data.session, at: Date.now() };
-            }
-            return result;
-          },
-          (err) => {
-            throw err;
-          },
-        )
-        .finally(() => {
-          this._inflight = null;
-        });
-    }
-
-    // Timeout POR CALLER — no limpia _inflight para que otros callers sigan
-    // coalesciendo en la misma promesa real sin iniciar nuevas llamadas al lock.
-    let callerTimeoutId: ReturnType<typeof setTimeout> | undefined;
-    const callerTimeoutPromise = new Promise<never>((_, reject) => {
-      callerTimeoutId = setTimeout(
-        () =>
-          reject(
-            new DOMException(
-              "getSession timed out waiting for lock",
-              "AbortError",
-            ),
-          ),
-        12_000,
-      );
-    });
-
-    const raceCandidates: Promise<GetSessionResult | never>[] = [
-      this._inflight,
-      callerTimeoutPromise,
-    ];
-
-    if (signal) {
-      if (signal.aborted) {
-        clearTimeout(callerTimeoutId);
-        return Promise.reject(
-          new DOMException("The operation was aborted.", "AbortError"),
-        );
-      }
-      raceCandidates.push(
-        new Promise<never>((_, reject) => {
-          signal.addEventListener(
-            "abort",
-            () =>
-              reject(
-                new DOMException("The operation was aborted.", "AbortError"),
-              ),
-            { once: true },
-          );
-        }),
-      );
-    }
-
-    return Promise.race(raceCandidates).finally(() =>
-      clearTimeout(callerTimeoutId),
-    );
-  }
+/** Retorna true si el logout fue iniciado voluntariamente por el usuario. */
+export function isVoluntarySignOut(): boolean {
+  return _voluntarySignOut;
 }
 
 // ─── Actividad ────────────────────────────────────────────────────────────────
@@ -294,55 +45,89 @@ export function getTimeSinceLastActivity(): number {
   return Date.now() - lastActivityTimestamp;
 }
 
-// ─── API pública de sesión ────────────────────────────────────────────────────
+// ─── API publica de sesion ────────────────────────────────────────────────────
+//
+// Fachadas delgadas sobre SessionStore.
+//
+// ANTES: cada caller llamaba a supabase.auth.getSession() con coalescing +
+//   locks + timeouts + reintentos → cascada de "Session lock timeout" tras
+//   inactividad.
+//
+// AHORA: SessionStore mantiene la sesion en memoria. getAccessToken() es
+//   sincrono. Ningun caller adquiere un lock durante el flujo normal.
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Invalida el caché de sesión (llamar tras login/logout/refresh exitoso).
- * Notifica a otras pestañas via BroadcastChannel.
+ * Legado — en la nueva arquitectura el store se actualiza via onAuthStateChange
+ * para todos los casos (login, logout, refresh). Esta funcion es un no-op intencional.
+ * Mantenida por compatibilidad con callers existentes en authService.ts.
  */
 export function invalidateSessionCache() {
-  SessionManager.getInstance().invalidate();
+  // no-op: SessionStore se actualiza via onAuthStateChange automaticamente.
+  // Llamar applySignOut() aqui revierte actualizaciones validas (login, refresh).
 }
 
 /**
- * Retorna la sesión actual a través del SessionManager (con caché y coalescing).
- * Usar SIEMPRE en lugar de supabase.auth.getSession() directo para evitar
- * competir por navigator.lock y causar "getSession timed out".
+ * Retorna la sesion actual desde el SessionStore (sin adquirir ningun lock).
+ * API mantenida para compatibilidad con AuthContext / authService.
  */
 export async function getSessionViaManager() {
-  try {
-    return await SessionManager.getInstance().getSession();
-  } catch (err) {
-    // Retorna el error real para que los callers puedan distinguir un fallo
-    // transitorio (ej. lock timeout) de un "sin sesión" genuino.
-    // Retornar error: null hacía ambos casos indistinguibles.
-    return {
-      data: { session: null },
-      error: (err instanceof Error || err instanceof DOMException
-        ? err
-        : new Error(String(err))) as unknown as NonNullable<
-        GetSessionResult["error"]
-      >,
-    };
+  const snapshot = SessionStore.getSnapshot();
+
+  // Si el store aun esta en estado 'unknown' (bootstrap no termino),
+  // esperamos que onAuthStateChange dispare el INITIAL_SESSION en supabase-js.
+  // Damos un maximo de 8 s antes de reportar "sin sesion".
+  if (snapshot.status === "unknown") {
+    await new Promise<void>((resolve) => {
+      // Usar un objeto para que clearTimeout sea siempre accesible desde el
+      // callback aunque se ejecute antes de la asignación (queueMicrotask se
+      // ejecuta después de setTimeout, pero el objeto ya está inicializado).
+      const ctrl: { timerId: ReturnType<typeof setTimeout> | undefined } = {
+        timerId: undefined,
+      };
+      const unsub = SessionStore.subscribe((s) => {
+        if (s.status !== "unknown") {
+          clearTimeout(ctrl.timerId); // Evitar que el fallback de 8s quede huérfano
+          unsub();
+          resolve();
+        }
+      });
+      ctrl.timerId = setTimeout(() => {
+        unsub();
+        resolve();
+      }, 8_000);
+    });
   }
+
+  const session = SessionStore.getSession();
+  return {
+    data: { session },
+    error: null as Error | null,
+  };
 }
 
 /**
- * Retorna el usuario actual derivado del SessionManager (sin llamar getUser()).
- * Evita adquirir navigator.lock una segunda vez y previene contención.
+ * Retorna el usuario actual derivado del SessionStore.
+ * Nunca adquiere un lock.
  */
 export async function getCurrentUserViaManager() {
-  const { data, error } = await getSessionViaManager();
-  return { data: { user: data.session?.user ?? null }, error };
+  const { data } = await getSessionViaManager();
+  return { data: { user: data.session?.user ?? null }, error: null };
 }
 
 /**
- * Refresca el token via SessionManager (coalesce). Usar en lugar de
- * supabase.auth.refreshSession() directo para evitar contención en navigator.lock.
+ * Refresca el token una vez. onAuthStateChange actualizara el store via TOKEN_REFRESHED.
  */
 export async function refreshSessionViaManager() {
   try {
-    return await SessionManager.getInstance().refreshSession();
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error && data.session) {
+      SessionStore.applySession(data.session);
+    }
+    return {
+      data: { session: data.session ?? null, user: data.user ?? null },
+      error: error ?? null,
+    };
   } catch (err) {
     return {
       data: { session: null, user: null },
@@ -352,17 +137,12 @@ export async function refreshSessionViaManager() {
 }
 
 /**
- * Pre-calienta el caché iniciando la obtención de sesión si aún no está en vuelo.
- * Útil para "adelantar" la llamada antes de lanzar varios fetches en paralelo.
- * Retorna true si hay sesión válida, false en cualquier otro caso.
+ * Pre-calienta el store esperando que el bootstrap termine.
+ * Retorna true si hay sesion valida.
  */
-export async function warmSession(signal?: AbortSignal): Promise<boolean> {
-  try {
-    const result = await SessionManager.getInstance().getSession(signal);
-    return !result.error && !!result.data.session;
-  } catch {
-    return false;
-  }
+export async function warmSession(_signal?: AbortSignal): Promise<boolean> {
+  const { data } = await getSessionViaManager();
+  return !!data.session;
 }
 
 // ─── authenticatedFetch ───────────────────────────────────────────────────────
@@ -370,11 +150,9 @@ export async function warmSession(signal?: AbortSignal): Promise<boolean> {
 /**
  * Fetch autenticado con el JWT del usuario.
  *
- * La obtención de sesión está completamente serializada por SessionManager:
- * - Caché fresco    → retorno instantáneo.
- * - Lock ocupado    → espera la única promesa compartida (no compite por el lock).
- * - Timeout externo → el AbortSignal del caller (useSafeAuthFetch usa 15 s)
- *                     cancela la espera sin afectar a otros callers.
+ * Lee el access token SINCRONAMENTE desde SessionStore.
+ * No adquiere ningun lock. Si el token no esta disponible (bootstrap no
+ * termino), lanza SessionUnavailableError para que el caller reintente.
  */
 export async function authenticatedFetch(
   url: string,
@@ -388,24 +166,26 @@ export async function authenticatedFetch(
     throw new DOMException("The operation was aborted.", "AbortError");
   }
 
-  const result = await SessionManager.getInstance().getSession(signal);
+  // Intento 1: token sincrono del store
+  let token = SessionStore.getAccessToken();
 
-  if (result.error) {
-    throw new Error(`Error de sesión: ${result.error.message}`);
+  // Intento 2: si el store esta en 'unknown', esperar bootstrap una vez
+  if (!token && SessionStore.getSnapshot().status === "unknown") {
+    await getSessionViaManager(); // Espera hasta 8s al INITIAL_SESSION
+    token = SessionStore.getAccessToken();
   }
 
-  if (!result.data.session) {
-    // Estado transitorio: el auto-refresh aún no terminó. El caller reintentará.
+  if (!token) {
     throw new SessionUnavailableError();
   }
 
   const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${result.data.session.access_token}`);
+  headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    console.warn("Recibido 401 No autorizado — la sesión puede haber expirado");
+    console.warn("Recibido 401 No autorizado — la sesion puede haber expirado");
     throw new Error("No autorizado — el token puede haber expirado");
   }
 

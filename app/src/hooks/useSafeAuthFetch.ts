@@ -165,48 +165,6 @@ export function useSafeAuthFetch() {
         const isAbortError =
           isErrorLike && (error as { name: string }).name === "AbortError";
 
-        // getSession lock timeout — verificar ANTES del check de caller abort
-        // para que el mensaje crudo nunca llegue a la UI.
-        // fetchAuth.ts lanza: new DOMException("getSession timed out...", "AbortError")
-        if (
-          isErrorLike &&
-          (error as { message: string }).message?.includes(
-            "getSession timed out",
-          )
-        ) {
-          const SESSION_LOCK_MAX_RETRIES = 3;
-          if (retryCount < SESSION_LOCK_MAX_RETRIES) {
-            const delay = 2000 + retryCount * 1000;
-            console.warn(
-              `Session lock timeout (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`,
-            );
-            onRetry?.({
-              attempt: retryCount + 1,
-              max: SESSION_LOCK_MAX_RETRIES + 1,
-              reason: "session-lock",
-              delayMs: delay,
-            });
-            try {
-              await abortableDelay(delay, callerSignal);
-            } catch {
-              throw new DOMException(
-                "The operation was aborted.",
-                "AbortError",
-              );
-            }
-            return safeFetch(
-              url,
-              options,
-              retryCount + 1,
-              effectiveTimeout,
-              onRetry,
-            );
-          }
-          throw new Error(
-            "La sesión está ocupada. Espera unos segundos e intenta de nuevo.",
-          );
-        }
-
         // AbortError puede ser por timeout interno, signal del caller, o desmontaje
         if (isAbortError) {
           // Si el caller canceló la request (e.g. cleanup de useEffect / navegación),
@@ -246,48 +204,6 @@ export function useSafeAuthFetch() {
           // Timeout agotado sin reintentos disponibles
           throw new TimeoutError(
             `La solicitud tardó más de ${effectiveTimeout / 1000}s. Verifica tu conexión e intenta de nuevo.`,
-          );
-        }
-
-        // Errores transitorios de lock de sesión — hasta 3 reintentos con delay incremental
-        // Ocurre al volver de otra pestaña: Supabase auto-refresh mantiene el lock
-        if (error instanceof Error && error.name === "SessionLockError") {
-          const SESSION_LOCK_MAX_RETRIES = 3;
-          if (retryCount < SESSION_LOCK_MAX_RETRIES) {
-            // Delay incremental: 2s, 3s, 4s — da tiempo al auto-refresh de terminar
-            const delay = 2000 + retryCount * 1000;
-            console.warn(
-              `Session lock busy (intento ${retryCount + 1}/${SESSION_LOCK_MAX_RETRIES + 1}), reintentando en ${delay}ms...`,
-            );
-            onRetry?.({
-              attempt: retryCount + 1,
-              max: SESSION_LOCK_MAX_RETRIES + 1,
-              reason: "session-lock",
-              delayMs: delay,
-            });
-            try {
-              await abortableDelay(delay, callerSignal);
-            } catch {
-              throw new DOMException(
-                "The operation was aborted.",
-                "AbortError",
-              );
-            }
-            return safeFetch(
-              url,
-              options,
-              retryCount + 1,
-              effectiveTimeout,
-              onRetry,
-            );
-          }
-
-          // Todos los reintentos agotados — dejar que la UI muestre un banner de error
-          console.error(
-            "SessionLockError persistente después de 4 intentos. Propagando error para que la UI lo maneje.",
-          );
-          throw new Error(
-            "La sesión está ocupada. Espera unos segundos e intenta de nuevo.",
           );
         }
 

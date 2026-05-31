@@ -251,8 +251,7 @@ export function useCachedFetch<T>({
         if (!isMountedRef.current || fetchIdRef.current !== myId) return;
 
         const isLockError =
-          (err instanceof Error && err.name === "SessionLockError") ||
-          (err instanceof Error && err.message.includes("sesión está ocupada"));
+          err instanceof Error && err.message.includes("sesión está ocupada");
 
         if (isLockError && !isBackground) {
           console.warn(
