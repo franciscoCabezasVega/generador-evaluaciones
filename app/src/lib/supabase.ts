@@ -29,5 +29,6 @@ export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: false, // RefreshScheduler lo gestiona de forma proactiva
     detectSessionInUrl: true,
     flowType: "pkce",
-  } as any, // by design: autoRefreshToken no está en el tipo de createBrowserClient
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any, // by design: autoRefreshToken no está en el tipo público de createBrowserClient
 });
