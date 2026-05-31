@@ -16,7 +16,7 @@ import { SkeletonReports } from "@/components/Skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMutationQueue } from "@/contexts/MutationQueueContext";
 import { Eye, Trash2, Download, RefreshCw } from "lucide-react";
-import { downloadReportPDF } from "@/lib/services/pdfService";
+import { downloadFactoryReportPDF } from "@/lib/services/pdfService";
 import Modal from "@/components/Modal";
 import dynamic from "next/dynamic";
 import { Report } from "@/lib/types";
@@ -406,12 +406,13 @@ export default function FactoryReportsSection() {
   const handleDownloadPDF = async (report: Report) => {
     try {
       setDownloadingReportId(report.id);
-      downloadReportPDF(
+      await downloadFactoryReportPDF(
         report.report_data,
         report.month,
         report.year,
-        "",
-        `Reporte-Evaluaciones-${report.month}-${report.year}-v${report.version}.pdf`,
+        report.squad || "Fábrica",
+        report.version,
+        `Reporte-Fabrica-${report.squad}-${report.month}-${report.year}-v${report.version}.pdf`,
       );
     } catch (error) {
       console.error("Error descargando PDF:", error);

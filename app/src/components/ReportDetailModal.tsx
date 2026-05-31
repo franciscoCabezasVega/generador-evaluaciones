@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSafeAuthFetch } from "@/hooks/useSafeAuthFetch";
 import Modal from "@/components/Modal";
 import { FileDown } from "lucide-react";
-import { downloadReportPDF } from "@/lib/services/pdfService";
+import { downloadFactoryReportPDF } from "@/lib/services/pdfService";
 import { Report, TaskSquadReportEntry } from "@/lib/types";
 
 interface ReportDetailModalProps {
@@ -101,13 +101,13 @@ export default function ReportDetailModal({
     try {
       setDownloading(true);
 
-      // Llamar al servicio para descargar el PDF
-      downloadReportPDF(
+      await downloadFactoryReportPDF(
         report.report_data,
         report.month,
         report.year,
-        "",
-        `Reporte-Evaluaciones-${report.month}-${report.year}-v${report.version}.pdf`,
+        report.squad || "Fábrica",
+        report.version,
+        `Reporte-Fabrica-${report.squad}-${report.month}-${report.year}-v${report.version}.pdf`,
       );
     } catch (error) {
       console.error("Error descargando PDF:", error);
