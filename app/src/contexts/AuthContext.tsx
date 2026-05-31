@@ -149,12 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error in AuthProvider init:", err);
         // Si hay error de refresh token, limpiar sesión
         if (err instanceof Error && err.message?.includes("Refresh Token")) {
-          await authService.clearSession("error");
+          await authService.clearSession("error").catch(() => {
+            // Ignorar errores de clearSession para no bloquear la resolución del loading
+          });
         }
         setError(err instanceof Error ? err.message : "Unknown error");
         setLoading(false);
         setInitialized(true);
       } finally {
+        // Safety net: garantizar que loading nunca quede permanentemente en true
+        // aunque alguna rama del try/catch no haya alcanzado su setLoading(false).
+        setLoading(false);
         initializingRef.current = false;
       }
     };
