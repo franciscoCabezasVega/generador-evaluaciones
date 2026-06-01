@@ -47,6 +47,7 @@ export interface CatalogProjectType {
   id: string;
   name: string;
   is_active: boolean;
+  requires_squad: boolean;
   created_at: string;
   updated_at: string;
 }

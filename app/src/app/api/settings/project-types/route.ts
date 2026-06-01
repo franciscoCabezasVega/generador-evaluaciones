@@ -63,9 +63,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const requiresSquad =
+    body.requires_squad !== undefined ? Boolean(body.requires_squad) : true;
+
   const { data, error } = await supabase
     .from("project_types")
-    .insert({ name })
+    .insert({ name, requires_squad: requiresSquad })
     .select()
     .single();
 

@@ -98,7 +98,7 @@ Todos los valores de dominio son gestionables desde la sección **Configuración
 |----------|-------------|
 | **Tipos de sistema** | Define los productos o áreas evaluadas (p. ej. Frontend, Backend, QA) |
 | **Equipos (squads)** | Asociados a cada tipo de sistema; cada usuario asigna los suyos |
-| **Tipos de Proyecto** | Clasificación funcional de las tareas (tabla `project_types`) |
+| **Tipos de Proyecto** | Clasificación funcional de las tareas (tabla `project_types`); cada tipo incluye la propiedad **Requiere Squad** para indicar si la tarea debe tener al menos un equipo asignado |
 | **Complejidades** | Tallas de esfuerzo (XS, S, M, L, XL u otras) |
 | **Miembros QA** | Personas que pueden ser asignadas a una tarea |
 | **Categorías de Timing** | Tipos de tiempo registrados por QA (p. ej. Testing efectivo, Espera de fixes, Re-test) |
@@ -569,7 +569,8 @@ app/
 │           ├── 20260520000000_unique_constraint_timing_qa_entries.sql    # UNIQUE(timing_id, task_qa_id) + fix transfer de horas al quitar QA con reemplazo
 │           ├── 20260521000000_alter_timing_hours_to_numeric.sql          # ALTER COLUMN hours TYPE NUMERIC(10,2) para preservar decimales de ClickUp sync
 │           ├── 20260522000000_add_missing_timing_categories.sql          # Categorías faltantes: qa_retesting, qa_on_hold, qa_fixed, qa_sin_asignar, qa_review_client
-│           └── 20260523000000_fix_timings_view_total_hours_numeric.sql   # Recrear view task_timings_with_totals sin cast ::INTEGER (preserva decimales)
+│           ├── 20260523000000_fix_timings_view_total_hours_numeric.sql   # Recrear view task_timings_with_totals sin cast ::INTEGER (preserva decimales)
+│           └── 20260601000000_add_requires_squad_to_project_types.sql    # Columna requires_squad en project_types; false por defecto en "Automatización QA" y "Sin evaluaciones de fabrica"
 │
 ├── vercel.json                        # maxDuration por route de API
 ├── playwright.config.ts               # Configuración Playwright

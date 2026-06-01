@@ -459,8 +459,11 @@ function TaskFormComponent(
     [formData.squads, handleUpdateSquadReturns],
   );
 
-  // Validar si el formulario es válido
-  const isSquadRequired = formData.project_type !== "Automatización QA";
+  // Derivar si squad es requerido desde el catálogo (requires_squad).
+  // Fallback a true si el tipo aún no se cargó, para no perder la validación.
+  const isSquadRequired =
+    projectTypes.find((pt) => pt.name === formData.project_type)
+      ?.requires_squad ?? true;
 
   // ── AI Autofill handler ────────────────────────────────────────────────────
 
