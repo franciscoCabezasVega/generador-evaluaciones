@@ -49,6 +49,10 @@ export async function PATCH(
     updates.is_active = Boolean(body.is_active);
   }
 
+  if (body.requires_squad !== undefined) {
+    updates.requires_squad = Boolean(body.requires_squad);
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No hay campos para actualizar" },

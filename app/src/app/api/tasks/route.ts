@@ -34,16 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Squad is required for all project types except "Automatización QA"
-    const squadRequired = body.project_type !== "Automatización QA";
-    if (squadRequired && (!body.squads || body.squads.length === 0)) {
-      return NextResponse.json(
-        { error: "Missing required fields or empty squads array" },
-        { status: 400 },
-      );
-    }
-
-    // Validar campos obligatorios nuevos
+    // Validar campos obligatorios
     if (
       !body.assigned_qa ||
       !Array.isArray(body.assigned_qa) ||
@@ -70,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar complejidad y tipo de proyecto en paralelo
-    const [{ data: complexityExists }, { data: categoryExists }] =
+    const [{ data: complexityExists }, { data: projectTypeData }] =
       await Promise.all([
         supabase
           .from("complexities")
@@ -80,7 +71,7 @@ export async function POST(request: NextRequest) {
           .maybeSingle(),
         supabase
           .from("project_types")
-          .select("id")
+          .select("id, requires_squad")
           .eq("name", body.project_type)
           .eq("is_active", true)
           .maybeSingle(),
@@ -93,9 +84,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!categoryExists) {
+    if (!projectTypeData) {
       return NextResponse.json(
         { error: "Tipo de proyecto inválido" },
+        { status: 400 },
+      );
+    }
+
+    // Squad is required unless the project type explicitly sets requires_squad = false
+    const squadRequired = projectTypeData.requires_squad !== false;
+    if (squadRequired && (!body.squads || body.squads.length === 0)) {
+      return NextResponse.json(
+        { error: "Missing required fields or empty squads array" },
         { status: 400 },
       );
     }

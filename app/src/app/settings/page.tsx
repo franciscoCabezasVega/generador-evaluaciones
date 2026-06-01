@@ -17,7 +17,8 @@ import { authenticatedFetch } from "@/lib/fetchAuth";
 import { invalidateCatalogCache } from "@/hooks/useCatalogData";
 import CacheWarningBanner from "@/components/CacheWarningBanner";
 import ClickUpSettingsPanel from "@/components/ClickUpSettingsPanel";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
+import { CatalogProjectType } from "@/lib/types";
 
 // ─── Tipos de tab ─────────────────────────────────────────────────────────────
 type TabId =
@@ -104,6 +105,13 @@ const PROJECT_TYPE_FIELDS: FieldDef[] = [
     type: "text",
     placeholder: "Ej: Bug fix",
     required: true,
+  },
+  {
+    key: "requires_squad",
+    label: "Requiere Squad",
+    type: "toggle",
+    description:
+      "Indica si este tipo de proyecto debe tener al menos un squad asignado.",
   },
 ];
 
@@ -609,6 +617,34 @@ export default function SettingsPage() {
                     fields={PROJECT_TYPE_FIELDS}
                     onRefresh={handleRefresh}
                     itemLabel="tipo de proyecto"
+                    extraColumns={[
+                      {
+                        header: "Requiere Squad",
+                        render: (item: CatalogItem) => {
+                          const pt = item as unknown as CatalogProjectType;
+                          return pt.requires_squad ? (
+                            <ToggleRight size={22} className="text-amber-500" />
+                          ) : (
+                            <ToggleLeft size={22} className="text-gray-400" />
+                          );
+                        },
+                        onClick: async (item: CatalogItem) => {
+                          const pt = item as unknown as CatalogProjectType;
+                          await authenticatedFetch(
+                            `/api/settings/project-types/${item.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                requires_squad: !pt.requires_squad,
+                              }),
+                            },
+                          );
+                          invalidateCatalogCache();
+                          handleRefresh();
+                        },
+                      },
+                    ]}
                   />
                 )}
                 {activeTab === "complexities" && (

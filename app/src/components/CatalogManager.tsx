@@ -93,6 +93,10 @@ interface CatalogManagerProps {
   extraColumns?: {
     header: string;
     render: (item: CatalogItem) => React.ReactNode;
+    /** Si se provee, la celda se renderiza como botón y se llama al hacer click */
+    onClick?: (item: CatalogItem) => void;
+    /** Si retorna true para un item, el botón de la celda queda deshabilitado */
+    disabled?: (item: CatalogItem) => boolean;
   }[];
   /** Nombre amigable del plural (para mensajes) */
   itemLabel?: string;
@@ -492,7 +496,17 @@ export default function CatalogManager({
                   </td>
                   {extraColumns.map((col) => (
                     <td key={col.header} className="px-4 py-3 text-gray-600">
-                      {col.render(item)}
+                      {col.onClick ? (
+                        <button
+                          onClick={() => col.onClick!(item)}
+                          disabled={col.disabled?.(item)}
+                          className="inline-flex items-center justify-center text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-40"
+                        >
+                          {col.render(item)}
+                        </button>
+                      ) : (
+                        col.render(item)
+                      )}
                     </td>
                   ))}
                   <td className="px-4 py-3 text-center">

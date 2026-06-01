@@ -99,11 +99,15 @@ export async function PATCH(
         taskUpdateData.project_type
           ? supabase
               .from("project_types")
-              .select("id")
+              .select("id, requires_squad")
               .eq("name", taskUpdateData.project_type)
               .eq("is_active", true)
               .maybeSingle()
-          : Promise.resolve({ data: true }),
+          : Promise.resolve({
+              data: { requires_squad: true } as {
+                requires_squad: boolean;
+              } | null,
+            }),
       ]);
 
       if (taskUpdateData.tshirt_size && !complexityResult.data) {
@@ -119,23 +123,30 @@ export async function PATCH(
           { status: 400 },
         );
       }
+
+      // Guardar el valor de requires_squad del tipo de proyecto para usarlo en la validación de squads
+      if (
+        taskUpdateData.project_type &&
+        categoryResult.data &&
+        squads &&
+        Array.isArray(squads)
+      ) {
+        const requiresSquad =
+          (categoryResult.data as { requires_squad: boolean })
+            .requires_squad !== false;
+        if (requiresSquad && squads.length === 0) {
+          return NextResponse.json(
+            { error: "Missing required fields or empty squads array" },
+            { status: 400 },
+          );
+        }
+      }
     }
 
     // Validar devoluciones ANTES de entrar en la sección de escritura
     if (squads && Array.isArray(squads)) {
-      // Squad is required unless the project type is "Automatización QA".
-      // Only enforce when project_type is explicitly provided in the PATCH body;
-      // partial updates that omit project_type should not re-validate squads.
-      const squadRequired =
-        body.project_type !== undefined &&
-        body.project_type !== "Automatización QA";
-      if (squadRequired && squads.length === 0) {
-        return NextResponse.json(
-          { error: "Missing required fields or empty squads array" },
-          { status: 400 },
-        );
-      }
-
+      // La validación de "squad requerido" ya se hizo arriba cuando project_type fue provisto.
+      // Aquí solo validamos que los valores numéricos sean enteros positivos.
       for (const squadData of squads) {
         if (
           !validateReturns(squadData.low_returns) ||
