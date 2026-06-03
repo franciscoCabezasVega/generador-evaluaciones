@@ -665,7 +665,7 @@ export default function TasksPage() {
                             0,
                           ) / squads.length,
                         )
-                      : "0.0";
+                      : "10";
                   const isExpanded = expandedTaskId === task.id;
 
                   return (
