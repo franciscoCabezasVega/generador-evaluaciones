@@ -486,14 +486,54 @@ export async function syncTaskTimings(
             );
           };
 
-          // ── Sabor B: Factor calendario absoluto (mes completo) ────────────────
-          // factor = workHours_QA_en_mes / horas_calendario_del_mes
+          // ── Sabor B: Factor calendario absoluto (ventana QA real) ─────────────
+          // factor = workHours_QA_en_ventana / horas_calendario_en_ventana
           // Se aplica sobre el tiempo acumulado de status_history para estimar
           // las horas efectivas de trabajo, descontando fines de semana, festivos y OOO.
+          // Para tareas en curso, usamos el calendario acumulado real de ClickUp
+          // como denominador para que fines de semana/feriados no inflen horas efectivas.
           // QAs sin country_code → comportamiento legacy (rawHours sin ajuste).
           // by design: el feature flag permite rollback instantáneo si hay regresiones.
           let frozenFactorByEntryId: Map<string, number> | null = null;
           if (process.env.ENABLE_WORK_CALENDAR_ADJUSTMENT === "true") {
+            const year = (taskMeta as { year: number })?.year ?? 0;
+            const month = (taskMeta as { month: number })?.month ?? 0;
+
+            const qaWindow =
+              year > 0 && month > 0
+                ? _extractTaskQAWindow(
+                    timeData.status_history ?? [],
+                    { year, month },
+                    timeData.current_status,
+                  )
+                : undefined;
+
+            const latestStatusEntry =
+              timeData.current_status ??
+              timeData.status_history?.reduce((prev, curr) =>
+                Number(curr.total_time.since) > Number(prev.total_time.since)
+                  ? curr
+                  : prev,
+              );
+
+            const isOngoingQAWindow =
+              !!latestStatusEntry &&
+              !!STATUS_CATEGORY_MAP[latestStatusEntry.status.toLowerCase()] &&
+              !isTerminalStatus(latestStatusEntry.status);
+
+            const rawCalendarHoursInQA = (timeData.status_history ?? []).reduce(
+              (sum, entry) => {
+                if (!STATUS_CATEGORY_MAP[entry.status.toLowerCase()])
+                  return sum;
+                const minutes = Number(entry.total_time.by_minute) || 0;
+                return sum + minutes / 60;
+              },
+              0,
+            );
+
+            const rawCalendarHoursOverride =
+              rawCalendarHoursInQA > 0 ? rawCalendarHoursInQA : undefined;
+
             const qaNames = qaEntries.map((e) =>
               extractQaName(e as Record<string, unknown>),
             );
@@ -508,9 +548,6 @@ export async function syncTaskTimings(
               .in("name", uniqueNames);
 
             if (qaConfigs && qaConfigs.length > 0) {
-              const year = (taskMeta as { year: number })?.year ?? 0;
-              const month = (taskMeta as { month: number })?.month ?? 0;
-
               if (year > 0 && month > 0) {
                 const frozenFactorByName = new Map<string, number>();
 
@@ -525,12 +562,17 @@ export async function syncTaskTimings(
                       lunch_hours: qc.lunch_hours as number | null,
                       work_days: qc.work_days as number[] | null,
                     };
-                    return getAdjustmentFactor(qaConfig, year, month).then(
-                      (f) => {
-                        if (f !== null)
-                          frozenFactorByName.set(qc.name as string, f);
-                      },
-                    );
+                    return getAdjustmentFactor(
+                      qaConfig,
+                      year,
+                      month,
+                      qaWindow,
+                      isOngoingQAWindow,
+                      rawCalendarHoursOverride,
+                    ).then((f) => {
+                      if (f !== null)
+                        frozenFactorByName.set(qc.name as string, f);
+                    });
                   }),
                 );
 
