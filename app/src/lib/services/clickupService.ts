@@ -40,9 +40,16 @@ interface ClickUpTimeInStatusResponse {
 /** Maps a timing_categories slug to total hours computed from ClickUp. */
 type CategoryHours = Record<string, number>;
 
+type ClickUpCheckpoint = {
+  status: string;
+  since: string;
+  byMinute: number;
+};
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
+const CLICKUP_CHECKPOINT_PREFIX = "__cp__";
 
 /**
  * Maps ClickUp status names (lowercase) to timing_categories slugs.
@@ -177,6 +184,61 @@ function mapStatusesToCategoryHours(
     }
   }
   return result;
+}
+
+export function serializeCheckpoint(cp: ClickUpCheckpoint): string {
+  return (
+    CLICKUP_CHECKPOINT_PREFIX +
+    [
+      encodeURIComponent(cp.status),
+      encodeURIComponent(cp.since),
+      cp.byMinute,
+    ].join("|")
+  );
+}
+
+export function parseCheckpoint(raw: string | null): {
+  checkpoint: ClickUpCheckpoint | null;
+  statusForDisplay: string | null;
+} {
+  if (!raw) return { checkpoint: null, statusForDisplay: null };
+  if (!raw.startsWith(CLICKUP_CHECKPOINT_PREFIX)) {
+    return { checkpoint: null, statusForDisplay: raw };
+  }
+  const payload = raw.slice(CLICKUP_CHECKPOINT_PREFIX.length);
+  const [statusEnc, sinceEnc, byMinuteRaw] = payload.split("|");
+  const byMinute = Number(byMinuteRaw);
+  let status = "";
+  let since = "";
+  try {
+    status = decodeURIComponent(statusEnc ?? "");
+    since = decodeURIComponent(sinceEnc ?? "");
+  } catch {
+    return { checkpoint: null, statusForDisplay: null };
+  }
+  if (!status || !since || !Number.isFinite(byMinute) || byMinute < 0) {
+    return { checkpoint: null, statusForDisplay: null };
+  }
+  return {
+    checkpoint: { status, since, byMinute },
+    statusForDisplay: status,
+  };
+}
+
+export function computeIncrementalDeltaMinutes(
+  previous: ClickUpCheckpoint | null,
+  current: ClickUpCheckpoint,
+): number | null {
+  // Primera ejecución en modo incremental: bootstrap sin escribir horas.
+  if (!previous) return null;
+
+  // Misma sesión/estado: sumar únicamente el avance desde el último sync.
+  if (previous.status === current.status && previous.since === current.since) {
+    return Math.max(0, current.byMinute - previous.byMinute);
+  }
+
+  // Cambio de estado o reinicio de sesión: arrancar desde lo que lleve el estado actual.
+  return Math.max(0, current.byMinute);
 }
 
 /**
@@ -359,23 +421,82 @@ export async function syncTaskTimings(
   const taskId = extractClickUpTaskId(clickupQaTaskId);
 
   try {
+    const { data: syncMeta, error: syncMetaError } = await supabase
+      .from("clickup_task_sync")
+      .select("last_clickup_status")
+      .eq("task_id", internalTaskId)
+      .maybeSingle();
+
+    if (syncMetaError) {
+      throw new Error(
+        `Error de BD al leer clickup_task_sync: ${syncMetaError.message}`,
+      );
+    }
+
+    const previousCp = parseCheckpoint(syncMeta?.last_clickup_status ?? null);
+
     // Step 2: Fetch from ClickUp
     const timeData = await fetchTimeInStatus(taskId, apiKey);
 
+    const currentStatusMapped =
+      timeData.current_status &&
+      STATUS_CATEGORY_MAP[timeData.current_status.status.toLowerCase()]
+        ? timeData.current_status
+        : null;
+
+    const latestMappedStatus = (timeData.status_history ?? [])
+      .filter((e) => !!STATUS_CATEGORY_MAP[e.status.toLowerCase()])
+      .reduce<ClickUpTimeInStatus | null>((prev, curr) => {
+        if (!prev) return curr;
+        return Number(curr.total_time.since) > Number(prev.total_time.since)
+          ? curr
+          : prev;
+      }, null);
+
+    const activeStatus = currentStatusMapped ?? latestMappedStatus;
+    const activeSlug = activeStatus
+      ? (STATUS_CATEGORY_MAP[activeStatus.status.toLowerCase()] ?? null)
+      : null;
+    const activeByMinute =
+      currentStatusMapped?.total_time.by_minute ??
+      activeStatus?.total_time.by_minute ??
+      0;
+    const activeSince = activeStatus?.total_time.since ?? "";
+
+    const activeCheckpoint =
+      activeStatus && activeSlug
+        ? {
+            status: activeStatus.status,
+            since: activeSince,
+            byMinute: Math.max(0, Number(activeByMinute) || 0),
+          }
+        : null;
+
     // Step 3: Mapear status_history a horas por categoría.
-    // Se usa status_history.by_minute directamente (tiempo acumulado total por status).
-    // current_status no se procesa por separado para evitar doble conteo cuando
-    // status_history.by_minute y current_status.by_minute representan la misma sesión.
-    const categoryHours = mapStatusesToCategoryHours(
-      timeData.status_history ?? [],
-    );
+    // Preview mantiene el cálculo legacy (historial completo).
+    // Escritura real usa modo incremental por estado actual para evitar
+    // registrar múltiples estados simultáneamente en la misma ventana.
+    const categoryHours = options?.previewOnly
+      ? mapStatusesToCategoryHours(timeData.status_history ?? [])
+      : (() => {
+          if (!activeCheckpoint || !activeSlug) return {};
+          const deltaMinutes = computeIncrementalDeltaMinutes(
+            previousCp.checkpoint,
+            activeCheckpoint,
+          );
+          if (deltaMinutes === null || deltaMinutes <= 0) return {};
+          return { [activeSlug]: deltaMinutes / 180 };
+        })();
 
     // Determine the latest status (highest orderindex = most recent)
     const latestStatus =
+      activeStatus?.status ??
       timeData.status_history?.reduce(
         (prev, curr) => (curr.orderindex > prev.orderindex ? curr : prev),
         timeData.status_history[0],
-      )?.status ?? null;
+      )?.status ??
+      previousCp.statusForDisplay ??
+      null;
 
     // Step 4: Write hours into the correct schema hierarchy:
     //   task_timings → timing_qa_entries → timing_qa_category_hours
@@ -614,6 +735,20 @@ export async function syncTaskTimings(
             }[];
           };
 
+          // Leer estado actual para poder hacer suma incremental sin perder acumulados.
+          const { data: currentHours } = await supabase
+            .from("timing_qa_category_hours")
+            .select("timing_qa_entry_id, category_id, hours")
+            .in("timing_qa_entry_id", entryIds)
+            .in("category_id", categoryIds);
+
+          const oldHoursMap = new Map<string, number>(
+            (currentHours ?? []).map((h) => [
+              `${h.timing_qa_entry_id as string}|${h.category_id as string}`,
+              (h.hours as number) ?? 0,
+            ]),
+          );
+
           // rawHours = by_minute / 180 = calendarHours / 3 (estimación 8h/24h por día).
           // Fórmula correcta: calendarHours × calFactor = (rawHours × 3) × calFactor = workHours.
           // Sin calFactor (legacy): rawHours (estimación rough que incluye fines de semana).
@@ -625,8 +760,13 @@ export async function syncTaskTimings(
                 const calFactor = frozenFactorByEntryId?.get(
                   entry.id as string,
                 );
-                const effectiveHours =
+                const deltaHours =
                   calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
+                const key = `${entry.id as string}|${categoryMap.get(slug)!}`;
+                const previousHours = options?.previewOnly
+                  ? 0
+                  : (oldHoursMap.get(key) ?? 0);
+                const effectiveHours = previousHours + deltaHours;
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -645,8 +785,13 @@ export async function syncTaskTimings(
               .map((slug) => {
                 const rawHours = (categoryHours[slug] ?? 0) / qaCount;
                 const calFactor = frozenFactorByEntryId?.get(qe.id as string);
-                const effectiveHours =
+                const deltaHours =
                   calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
+                const catId = categoryMap.get(slug)!;
+                const previousHours = options?.previewOnly
+                  ? 0
+                  : (oldHoursMap.get(`${qe.id as string}|${catId}`) ?? 0);
+                const effectiveHours = previousHours + deltaHours;
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
@@ -692,12 +837,6 @@ export async function syncTaskTimings(
           // Capture current (old) state from DB for diff comparison + audit
           let oldQAEntries: AuditQAEntry[] = [];
           if (categoryIds.length > 0) {
-            const { data: currentHours } = await supabase
-              .from("timing_qa_category_hours")
-              .select("timing_qa_entry_id, category_id, hours")
-              .in("timing_qa_entry_id", entryIds)
-              .in("category_id", categoryIds);
-
             oldQAEntries = (qaEntries as Record<string, unknown>[])
               .map((qe) => {
                 const cats = (currentHours ?? [])
@@ -755,7 +894,7 @@ export async function syncTaskTimings(
             normalizeEntries(oldQAEntries) !== normalizeEntries(newForDiff);
 
           if (hasActualChanges) {
-            if (categoryIds.length > 0) {
+            if (categoryIds.length > 0 && options?.previewOnly) {
               const { error: deleteError } = await supabase
                 .from("timing_qa_category_hours")
                 .delete()
@@ -790,7 +929,9 @@ export async function syncTaskTimings(
               .from("clickup_task_sync")
               .update({
                 last_synced_at: new Date().toISOString(),
-                last_clickup_status: latestStatus,
+                last_clickup_status: activeCheckpoint
+                  ? serializeCheckpoint(activeCheckpoint)
+                  : latestStatus,
                 ...(latestStatus && isTerminalStatus(latestStatus)
                   ? { sync_enabled: false }
                   : {}),
@@ -846,6 +987,37 @@ export async function syncTaskTimings(
             };
           }
         }
+      }
+    }
+
+    // Modo incremental: primer sync sin checkpoint previo (bootstrap) o sin delta.
+    // Actualizamos checkpoint y timestamp, pero no escribimos horas ni auditoría.
+    if (!options?.previewOnly && activeCheckpoint) {
+      const deltaMinutes = computeIncrementalDeltaMinutes(
+        previousCp.checkpoint,
+        activeCheckpoint,
+      );
+      if (deltaMinutes === null || deltaMinutes <= 0) {
+        const { error: bootstrapError } = await supabase
+          .from("clickup_task_sync")
+          .update({
+            last_synced_at: new Date().toISOString(),
+            last_clickup_status: serializeCheckpoint(activeCheckpoint),
+          })
+          .eq("task_id", internalTaskId);
+
+        if (bootstrapError) {
+          throw new Error(
+            `Error de BD al actualizar checkpoint incremental: ${bootstrapError.message}`,
+          );
+        }
+
+        return {
+          taskId: internalTaskId,
+          clickupTaskId: clickupQaTaskId,
+          success: true,
+          skipped: true,
+        };
       }
     }
 
@@ -908,7 +1080,12 @@ export async function syncTaskTimings(
     // can distinguish "sync ran but had nothing to write" from success.
     const { error: skipUpdateError } = await supabase
       .from("clickup_task_sync")
-      .update({ last_synced_at: new Date().toISOString() })
+      .update({
+        last_synced_at: new Date().toISOString(),
+        ...(activeCheckpoint
+          ? { last_clickup_status: serializeCheckpoint(activeCheckpoint) }
+          : {}),
+      })
       .eq("task_id", internalTaskId);
 
     if (skipUpdateError) {

@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, getServiceClient } from "@/lib/auth";
 import { syncTaskTimings } from "@/lib/services/clickupService";
 
+function normalizeStatusForDisplay(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("__cp__")) return raw;
+
+  const payload = raw.slice("__cp__".length);
+  const [statusEnc] = payload.split("|");
+  if (!statusEnc) return null;
+
+  try {
+    return decodeURIComponent(statusEnc);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/tasks/[id]/clickup-sync
  * Returns the ClickUp sync status for a task.
@@ -52,7 +67,9 @@ export async function GET(
     sync_enabled: data?.sync_enabled ?? false,
     clickup_qa_task_id: data?.clickup_qa_task_id ?? null,
     last_synced_at: data?.last_synced_at ?? null,
-    last_clickup_status: data?.last_clickup_status ?? null,
+    last_clickup_status: normalizeStatusForDisplay(
+      data?.last_clickup_status ?? null,
+    ),
   });
 }
 
