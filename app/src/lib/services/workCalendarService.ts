@@ -383,7 +383,51 @@ export async function getWorkingHoursForQA(
     }
   }
 
-  return totalHours;
+  // ── Ajuste por día parcial al INICIO de la ventana ────────────────────────
+  // Simétrico al ajuste de window.to: si la ventana empieza a mitad de jornada
+  // (p.ej. la tarea entró a QA a las 14:38), el primer día fue contado completo
+  // pero solo corresponden las horas entre window.from y el fin de jornada.
+  // Sin esto, una tarea creada por la tarde "regala" toda la mañana como horas
+  // trabajadas, lo que produce factores > 1 y horas infladas (caso jun/2026).
+  if (window?.from && resolvedTz) {
+    const localHour = getLocalHourDecimal(window.from, resolvedTz);
+    if (localHour !== null) {
+      const workStart = parseTimeToHours(qa.work_start_time ?? "08:00");
+      const workEnd = parseTimeToHours(qa.work_end_time ?? "17:00");
+
+      const localDate = getLocalCalendarDate(window.from, resolvedTz);
+      if (localDate) {
+        const localDateStr = toLocalDateStr(localDate);
+        // Guard de timezone: el loop cuenta días en hora del server; si el día
+        // local del QA es anterior al primer día contado (ej. from = 1° de mes
+        // 00:00 UTC = tarde del día anterior en LATAM), no hay nada que restar.
+        const firstCountedStr =
+          allDays.length > 0 ? toLocalDateStr(allDays[0]!) : null;
+        const isWithinCounted =
+          firstCountedStr !== null && localDateStr >= firstCountedStr;
+
+        const isCounted =
+          isWithinCounted &&
+          !oooDateSet.has(localDateStr) &&
+          isWorkingDay(localDate, qa, holidays);
+
+        if (isCounted && localHour > workStart) {
+          // Horas de jornada ya transcurridas antes de que empezara la ventana.
+          // Cap a perDay: si la ventana empezó después del fin de jornada, se
+          // descuenta como máximo el aporte completo de ese día.
+          const missedBeforeStart = Math.min(
+            Math.min(localHour, workEnd) - workStart,
+            perDay,
+          );
+          totalHours -= missedBeforeStart;
+        }
+      }
+    }
+  }
+
+  // Las restas de inicio/fin pueden dejar un residuo marginalmente negativo en
+  // ventanas degeneradas dentro de un mismo día — clamp inferior a 0.
+  return Math.max(0, totalHours);
 }
 
 /**

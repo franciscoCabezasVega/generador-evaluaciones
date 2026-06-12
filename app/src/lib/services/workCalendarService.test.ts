@@ -13,6 +13,7 @@ import {
   isWorkingDay,
   dailyHours,
   getAdjustmentFactor,
+  getWorkingHoursForQA,
 } from "@/lib/services/workCalendarService";
 import type {
   QAWorkConfig,
@@ -352,5 +353,159 @@ describe("getAdjustmentFactor — isOngoing=true estabiliza el factor en días n
       true,
     );
     expect(result).toBeNull();
+  });
+});
+
+// ── getWorkingHoursForQA — ajuste de día parcial al inicio de la ventana ───
+
+describe("getWorkingHoursForQA — ventanas parciales (inicio y fin)", () => {
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(() => {
+    getServiceClient.mockReturnValue(buildMockSupabase([], []));
+    originalFetch = global.fetch;
+    global.fetch = jest.fn().mockImplementation((url: string | URL) => {
+      const isNager = String(url).includes("nager.at");
+      return Promise.resolve({
+        ok: isNager,
+        json: () => Promise.resolve(isNager ? [] : null),
+      });
+    }) as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+    global.fetch = originalFetch;
+  });
+
+  /**
+   * Caso reportado (jun/2026): la tarea entró a QA a media tarde, pero el
+   * cálculo contaba el día completo desde workStart → +6.5h fantasma.
+   * Jueves 21/05/2026 14:30 Bogota = 19:30 UTC → EOD 17:00 Bogota = 22:00 UTC.
+   * Esperado: solo las horas restantes de jornada (8 − 6.5 = 1.5h).
+   */
+  it("ventana que empieza a media tarde solo cuenta las horas restantes de jornada", async () => {
+    const from = new Date("2026-05-21T19:30:00.000Z"); // 14:30 Bogota
+    const to = new Date("2026-05-21T22:00:00.000Z"); // 17:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(1.5, 1);
+  });
+
+  /**
+   * Delta overnight: del cierre de jornada (17:00) a la mañana siguiente antes
+   * de empezar (08:00) no transcurre ninguna hora laboral → 0h.
+   * Antes del fix, este intervalo sumaba horas (causa principal de inflación).
+   */
+  it("ventana overnight (EOD → 8AM día siguiente) produce 0 horas", async () => {
+    const from = new Date("2026-05-21T22:00:00.000Z"); // jue 17:00 Bogota
+    const to = new Date("2026-05-22T13:00:00.000Z"); // vie 08:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(0, 1);
+  });
+
+  it("ventana que empieza antes del inicio de jornada cuenta el día completo", async () => {
+    const from = new Date("2026-05-21T11:00:00.000Z"); // 06:00 Bogota
+    const to = new Date("2026-05-21T22:00:00.000Z"); // 17:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(8, 1);
+  });
+
+  /**
+   * Escenario completo del caso real: entra a QA jueves 14:38, sync viernes
+   * 09:00 → tarde del jueves (~2.4h con la convención sin hora de almuerzo
+   * explícita) + 1h de la mañana del viernes.
+   */
+  it("ventana tarde de un día → mañana del siguiente suma solo horas de jornada", async () => {
+    const from = new Date("2026-05-21T19:38:00.000Z"); // jue 14:38 Bogota
+    const to = new Date("2026-05-22T14:00:00.000Z"); // vie 09:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    // jue: 8 − 6.63 (mañana no trabajada) = 1.37 · vie: 1h transcurrida → ~2.37
+    expect(hours).toBeCloseTo(2.37, 1);
+  });
+
+  /**
+   * Guard de timezone: from = 1° de mes 00:00 UTC equivale a la tarde del día
+   * anterior en Bogotá. El ajuste de inicio no debe restar horas de un día
+   * que no pertenece a la ventana contada.
+   */
+  it("from = inicio de mes 00:00 UTC no descuenta el día anterior (guard TZ)", async () => {
+    const from = MAY_1_UTC; // 30/abr 19:00 Bogota
+    const to = new Date("2026-05-01T22:00:00.000Z"); // vie 1/may 17:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(8, 1);
+  });
+
+  /**
+   * Feriado dentro del intervalo del delta → 0h aunque ClickUp siga midiendo.
+   * QA de Ecuador con festivo el lunes 25/05; delta viernes EOD → lunes 10 AM.
+   */
+  it("feriado dentro del delta produce 0 horas", async () => {
+    const ECUADOR_QA: QAWorkConfig = {
+      ...COLOMBIA_QA,
+      id: "qa-ec-test",
+      country_code: "EC",
+    };
+    getServiceClient.mockReturnValue(
+      buildMockSupabase(
+        [],
+        [
+          {
+            country_code: "EC",
+            holiday_date: "2026-05-25",
+            name: "Festivo de prueba",
+          },
+        ],
+      ),
+    );
+
+    const from = new Date("2026-05-22T22:00:00.000Z"); // vie 17:00 Guayaquil
+    const to = new Date("2026-05-25T15:00:00.000Z"); // lun festivo 10:00
+
+    const hours = await getWorkingHoursForQA(ECUADOR_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(0, 1);
+  });
+
+  /**
+   * Día OOO dentro del intervalo del delta → 0h (vacaciones/permiso).
+   */
+  it("día OOO dentro del delta produce 0 horas", async () => {
+    getServiceClient.mockReturnValue(
+      buildMockSupabase(
+        [{ date_from: "2026-05-22", date_to: "2026-05-22" }],
+        [],
+      ),
+    );
+
+    const from = new Date("2026-05-21T22:00:00.000Z"); // jue 17:00 Bogota
+    const to = new Date("2026-05-22T15:00:00.000Z"); // vie OOO 10:00 Bogota
+
+    const hours = await getWorkingHoursForQA(COLOMBIA_QA, YEAR, MONTH, {
+      from,
+      to,
+    });
+    expect(hours).toBeCloseTo(0, 1);
   });
 });

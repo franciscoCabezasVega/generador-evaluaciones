@@ -1,4 +1,5 @@
 import {
+  computeDeltaWindowStart,
   computeIncrementalDeltaMinutes,
   parseCheckpoint,
   serializeCheckpoint,
@@ -55,5 +56,66 @@ describe("clickupService incremental checkpoint", () => {
     });
 
     expect(delta).toBeNull();
+  });
+});
+
+describe("computeDeltaWindowStart", () => {
+  const SINCE_MS = 1781206702355; // 11/jun/2026 ~19:38 UTC
+  const LAST_SYNC = "2026-06-12T14:00:00.000Z";
+
+  it("misma sesión: la ventana del delta arranca en lastSyncedAt", () => {
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 100 },
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 160 },
+      LAST_SYNC,
+    );
+    expect(result).toEqual(new Date(LAST_SYNC));
+  });
+
+  it("cambio de estado: la ventana arranca en el since del estado actual", () => {
+    const newSince = 1781300000000;
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 100 },
+      { status: "QA - Fixed", since: String(newSince), byMinute: 30 },
+      LAST_SYNC,
+    );
+    expect(result).toEqual(new Date(newSince));
+  });
+
+  it("misma sesión sin lastSyncedAt: usa el since del estado", () => {
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 100 },
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 160 },
+      null,
+    );
+    expect(result).toEqual(new Date(SINCE_MS));
+  });
+
+  it("sin checkpoint previo (bootstrap): usa el since del estado", () => {
+    const result = computeDeltaWindowStart(
+      null,
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 20 },
+      LAST_SYNC,
+    );
+    expect(result).toEqual(new Date(SINCE_MS));
+  });
+
+  it("misma sesión con since posterior a lastSyncedAt: prefiere since", () => {
+    const lateSince = new Date("2026-06-12T15:30:00.000Z").getTime();
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: String(lateSince), byMinute: 10 },
+      { status: "QA - Testing", since: String(lateSince), byMinute: 40 },
+      LAST_SYNC,
+    );
+    expect(result).toEqual(new Date(lateSince));
+  });
+
+  it("since inválido y cambio de estado: retorna null", () => {
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: "1781206702355", byMinute: 100 },
+      { status: "QA - Fixed", since: "invalid", byMinute: 30 },
+      LAST_SYNC,
+    );
+    expect(result).toBeNull();
   });
 });
