@@ -16,6 +16,7 @@ import { decryptText } from "@/lib/encryption";
 import { endOfMonth } from "date-fns";
 import {
   getAdjustmentFactor,
+  getWorkingHoursForQA,
   type TaskQAWindow,
 } from "@/lib/services/workCalendarService";
 
@@ -242,6 +243,43 @@ export function computeIncrementalDeltaMinutes(
 }
 
 /**
+ * Inicio de la ventana de tiempo a la que corresponde el delta incremental.
+ *
+ * - Misma sesión (status+since iguales): el delta avanzó desde el último sync
+ *   → la ventana arranca en lastSyncedAt (o en `since` si es posterior).
+ * - Cambio de estado / nueva sesión: el delta es el acumulado del estado actual
+ *   → la ventana arranca en el `since` del estado.
+ * - Sin datos válidos → null (el caller hace fallback al factor de ventana completa).
+ *
+ * Se usa para computar las horas laborales reales del QA dentro del intervalo
+ * del delta, en lugar de aplicar el factor promedio de toda la ventana QA
+ * (que mezcla períodos trabajados y no trabajados e infla los totales).
+ */
+export function computeDeltaWindowStart(
+  previous: ClickUpCheckpoint | null,
+  current: ClickUpCheckpoint,
+  lastSyncedAt: string | null,
+): Date | null {
+  const sinceMs = Number(current.since);
+  const sinceDate =
+    Number.isFinite(sinceMs) && sinceMs > 0 ? new Date(sinceMs) : null;
+
+  if (!previous) return sinceDate;
+
+  const sameSession =
+    previous.status === current.status && previous.since === current.since;
+  if (sameSession && lastSyncedAt) {
+    const last = new Date(lastSyncedAt);
+    if (!isNaN(last.getTime())) {
+      // `since` posterior a lastSyncedAt (reinicio de sesión sin cambiar el par
+      // status/since) → preferir since para no contar tiempo fuera del estado.
+      return sinceDate && sinceDate > last ? sinceDate : last;
+    }
+  }
+  return sinceDate;
+}
+
+/**
  * Whether a ClickUp status indicates the task is finished and no further
  * sync is needed.
  */
@@ -423,7 +461,7 @@ export async function syncTaskTimings(
   try {
     const { data: syncMeta, error: syncMetaError } = await supabase
       .from("clickup_task_sync")
-      .select("last_clickup_status")
+      .select("last_clickup_status, last_synced_at")
       .eq("task_id", internalTaskId)
       .maybeSingle();
 
@@ -616,6 +654,11 @@ export async function syncTaskTimings(
           // QAs sin country_code → comportamiento legacy (rawHours sin ajuste).
           // by design: el feature flag permite rollback instantáneo si hay regresiones.
           let frozenFactorByEntryId: Map<string, number> | null = null;
+          // Modo incremental: horas laborales reales del QA dentro del intervalo
+          // del delta [inicio_delta, ahora]. Tiene precedencia sobre el factor de
+          // ventana completa, que mezcla períodos trabajados y no trabajados
+          // (causó inflación: factor promedio aplicado a deltas overnight/madrugada).
+          let deltaWorkHoursByEntryId: Map<string, number> | null = null;
           if (process.env.ENABLE_WORK_CALENDAR_ADJUSTMENT === "true") {
             const year = (taskMeta as { year: number })?.year ?? 0;
             const month = (taskMeta as { month: number })?.month ?? 0;
@@ -672,19 +715,20 @@ export async function syncTaskTimings(
               if (year > 0 && month > 0) {
                 const frozenFactorByName = new Map<string, number>();
 
+                const toQAConfig = (qc: (typeof qaConfigs)[number]) => ({
+                  id: qc.id as string,
+                  country_code: qc.country_code as string | null,
+                  timezone: qc.timezone as string | null,
+                  work_start_time: qc.work_start_time as string | null,
+                  work_end_time: qc.work_end_time as string | null,
+                  lunch_hours: qc.lunch_hours as number | null,
+                  work_days: qc.work_days as number[] | null,
+                });
+
                 await Promise.all(
                   qaConfigs.map((qc) => {
-                    const qaConfig = {
-                      id: qc.id as string,
-                      country_code: qc.country_code as string | null,
-                      timezone: qc.timezone as string | null,
-                      work_start_time: qc.work_start_time as string | null,
-                      work_end_time: qc.work_end_time as string | null,
-                      lunch_hours: qc.lunch_hours as number | null,
-                      work_days: qc.work_days as number[] | null,
-                    };
                     return getAdjustmentFactor(
-                      qaConfig,
+                      toQAConfig(qc),
                       year,
                       month,
                       qaWindow,
@@ -718,6 +762,52 @@ export async function syncTaskTimings(
                 };
 
                 frozenFactorByEntryId = buildFactorMap(frozenFactorByName);
+
+                // ── Horas laborales del intervalo del delta (solo escritura) ──
+                // El delta de ClickUp corresponde al intervalo [inicio_delta, ahora];
+                // las horas efectivas de ese intervalo son las horas de jornada del
+                // QA dentro de él, descontando feriados y OOO (getWorkingHoursForQA).
+                // Overnight/fin de semana/feriado → 0h; hora hábil completa → 1h.
+                if (!options?.previewOnly && activeCheckpoint) {
+                  const deltaStart = computeDeltaWindowStart(
+                    previousCp.checkpoint,
+                    activeCheckpoint,
+                    (syncMeta?.last_synced_at as string | null) ?? null,
+                  );
+                  if (deltaStart) {
+                    const monthStartD = new Date(year, month - 1, 1);
+                    const monthEndD = endOfMonth(monthStartD);
+                    const nowD = new Date();
+                    const fromD =
+                      deltaStart < monthStartD ? monthStartD : deltaStart;
+                    const toD = nowD > monthEndD ? monthEndD : nowD;
+
+                    const deltaWorkByName = new Map<string, number>();
+                    await Promise.all(
+                      qaConfigs
+                        .filter((qc) => qc.country_code)
+                        .map((qc) => {
+                          const promise =
+                            fromD < toD
+                              ? getWorkingHoursForQA(
+                                  toQAConfig(qc),
+                                  year,
+                                  month,
+                                  {
+                                    from: fromD,
+                                    to: toD,
+                                  },
+                                )
+                              : Promise.resolve(0);
+                          return promise.then((h) => {
+                            deltaWorkByName.set(qc.name as string, h);
+                          });
+                        }),
+                    );
+
+                    deltaWorkHoursByEntryId = buildFactorMap(deltaWorkByName);
+                  }
+                }
               }
             }
           }
@@ -750,18 +840,40 @@ export async function syncTaskTimings(
           );
 
           // rawHours = by_minute / 180 = calendarHours / 3 (estimación 8h/24h por día).
-          // Fórmula correcta: calendarHours × calFactor = (rawHours × 3) × calFactor = workHours.
-          // Sin calFactor (legacy): rawHours (estimación rough que incluye fines de semana).
+          // Precedencia del cálculo del delta a escribir:
+          //  1. deltaWork (modo incremental): horas laborales reales del intervalo
+          //     del delta, cap al calendario del delta. Respeta jornada/feriados/OOO.
+          //  2. calFactor (preview/recálculo completo): calendarHours × factor.
+          //  3. legacy (QA sin config de calendario): rawHours sin ajuste.
+          // El factor reportado en audit es siempre deltaHours/calendarHours ∈ [0,1].
+          const computeEntryDelta = (entryId: string, slug: string) => {
+            const rawHours = (categoryHours[slug] ?? 0) / qaCount;
+            const calCapHours = rawHours * 3; // horas calendario del delta por QA
+            const deltaWork = deltaWorkHoursByEntryId?.get(entryId);
+            const calFactor = frozenFactorByEntryId?.get(entryId);
+
+            let deltaHours: number;
+            let factorApplied: number | undefined;
+            if (deltaWork !== undefined) {
+              deltaHours = Math.min(deltaWork / qaCount, calCapHours);
+              factorApplied = calCapHours > 0 ? deltaHours / calCapHours : 0;
+            } else if (calFactor !== undefined) {
+              deltaHours = calCapHours * calFactor;
+              factorApplied = calFactor;
+            } else {
+              deltaHours = rawHours;
+            }
+            return { rawHours, deltaHours, factorApplied };
+          };
+
           const rows = qaEntries.flatMap((entry) =>
             Object.keys(categoryHours)
               .filter((slug) => categoryMap.has(slug))
               .map((slug) => {
-                const rawHours = (categoryHours[slug] ?? 0) / qaCount;
-                const calFactor = frozenFactorByEntryId?.get(
+                const { deltaHours } = computeEntryDelta(
                   entry.id as string,
+                  slug,
                 );
-                const deltaHours =
-                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
                 const key = `${entry.id as string}|${categoryMap.get(slug)!}`;
                 const previousHours = options?.previewOnly
                   ? 0
@@ -783,10 +895,8 @@ export async function syncTaskTimings(
             categories: Object.keys(categoryHours)
               .filter((slug) => categoryMap.has(slug))
               .map((slug) => {
-                const rawHours = (categoryHours[slug] ?? 0) / qaCount;
-                const calFactor = frozenFactorByEntryId?.get(qe.id as string);
-                const deltaHours =
-                  calFactor !== undefined ? rawHours * 3 * calFactor : rawHours;
+                const { rawHours, deltaHours, factorApplied } =
+                  computeEntryDelta(qe.id as string, slug);
                 const catId = categoryMap.get(slug)!;
                 const previousHours = options?.previewOnly
                   ? 0
@@ -797,10 +907,10 @@ export async function syncTaskTimings(
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
                     slug,
                   hours: Math.round(effectiveHours * 100) / 100,
-                  ...(calFactor !== undefined
+                  ...(factorApplied !== undefined
                     ? {
                         raw_hours: Math.round(rawHours * 100) / 100,
-                        factor: Math.round(calFactor * 10000) / 10000,
+                        factor: Math.round(factorApplied * 10000) / 10000,
                       }
                     : {}),
                 };
