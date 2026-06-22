@@ -266,15 +266,25 @@ export function computeDeltaWindowStart(
 
   if (!previous) return sinceDate;
 
+  // Calcular `last` una sola vez: se usa en ambas ramas para recortar la ventana
+  // al último sync y no contar horas laborales ya atribuidas en runs anteriores.
+  const last = lastSyncedAt ? new Date(lastSyncedAt) : null;
+  const validLast = last && !isNaN(last.getTime()) ? last : null;
+
   const sameSession =
     previous.status === current.status && previous.since === current.since;
-  if (sameSession && lastSyncedAt) {
-    const last = new Date(lastSyncedAt);
-    if (!isNaN(last.getTime())) {
-      // `since` posterior a lastSyncedAt (reinicio de sesión sin cambiar el par
-      // status/since) → preferir since para no contar tiempo fuera del estado.
-      return sinceDate && sinceDate > last ? sinceDate : last;
-    }
+  if (sameSession && validLast) {
+    // `since` posterior a lastSyncedAt (reinicio de sesión sin cambiar el par
+    // status/since) → preferir since para no contar tiempo fuera del estado.
+    return sinceDate && sinceDate > validLast ? sinceDate : validLast;
+  }
+
+  // Cambio de estado / nueva sesión: recortar igualmente por lastSyncedAt para
+  // evitar que getWorkingHoursForQA cuente días ya atribuidos en syncs previos.
+  // Sin este recorte, la ventana arranca en `since` (p.ej. viernes) y el delta
+  // de trabajo puede incluir jornadas ya contadas, produciendo doble conteo.
+  if (validLast && sinceDate && sinceDate < validLast) {
+    return validLast;
   }
   return sinceDate;
 }
@@ -525,6 +535,14 @@ export async function syncTaskTimings(
           if (deltaMinutes === null || deltaMinutes <= 0) return {};
           return { [activeSlug]: deltaMinutes / 180 };
         })();
+
+    // Techo absoluto: total real de horas por categoría según el historial completo
+    // de ClickUp (misma fuente que usa el preview manual). Se usa solo en modo
+    // escritura para garantizar que la acumulación incremental nunca supere el
+    // valor correcto, incluso si hay un cambio de estado tras el fin de semana.
+    const absoluteCategoryHours = options?.previewOnly
+      ? categoryHours // preview ya usa historial completo; reutilizar sin costo.
+      : mapStatusesToCategoryHours(timeData.status_history ?? []);
 
     // Determine the latest status (highest orderindex = most recent)
     const latestStatus =
@@ -878,7 +896,19 @@ export async function syncTaskTimings(
                 const previousHours = options?.previewOnly
                   ? 0
                   : (oldHoursMap.get(key) ?? 0);
-                const effectiveHours = previousHours + deltaHours;
+                const accumulated = previousHours + deltaHours;
+                // Techo absoluto: el acumulado nunca puede superar el total real
+                // de ClickUp (historial completo × factor). Evita doble conteo
+                // tras cambio de estado y autocorrige filas ya infladas.
+                const calFactor = frozenFactorByEntryId?.get(
+                  entry.id as string,
+                );
+                const absRaw = (absoluteCategoryHours[slug] ?? 0) / qaCount;
+                const ceiling =
+                  calFactor !== undefined ? absRaw * 3 * calFactor : absRaw;
+                const effectiveHours = options?.previewOnly
+                  ? accumulated
+                  : Math.min(accumulated, ceiling);
                 return {
                   timing_qa_entry_id: entry.id as string,
                   category_id: categoryMap.get(slug)!,
@@ -901,7 +931,19 @@ export async function syncTaskTimings(
                 const previousHours = options?.previewOnly
                   ? 0
                   : (oldHoursMap.get(`${qe.id as string}|${catId}`) ?? 0);
-                const effectiveHours = previousHours + deltaHours;
+                const accumulated = previousHours + deltaHours;
+                const calFactorAudit = frozenFactorByEntryId?.get(
+                  qe.id as string,
+                );
+                const absRawAudit =
+                  (absoluteCategoryHours[slug] ?? 0) / qaCount;
+                const ceilingAudit =
+                  calFactorAudit !== undefined
+                    ? absRawAudit * 3 * calFactorAudit
+                    : absRawAudit;
+                const effectiveHours = options?.previewOnly
+                  ? accumulated
+                  : Math.min(accumulated, ceilingAudit);
                 return {
                   category_name:
                     (categories ?? []).find((c) => c.slug === slug)?.name ??
