@@ -118,4 +118,19 @@ describe("computeDeltaWindowStart", () => {
     );
     expect(result).toBeNull();
   });
+
+  it("cambio de estado con since ANTERIOR a lastSyncedAt: recorta al lastSyncedAt", () => {
+    // Bug de regresión: si el since del nuevo estado cae antes del último sync
+    // (p.ej. ClickUp reajusta el timestamp del estado, o la tarea volvió a un
+    // estado que ya tenía historial), computeDeltaWindowStart devolvía sinceDate
+    // sin recortar, haciendo que getWorkingHoursForQA recontara horas ya atribuidas.
+    // Ahora debe recortarse a lastSyncedAt para que solo se cuenten horas nuevas.
+    const oldSince = new Date("2026-06-01T09:00:00.000Z").getTime(); // antes de LAST_SYNC
+    const result = computeDeltaWindowStart(
+      { status: "QA - Testing", since: String(SINCE_MS), byMinute: 100 },
+      { status: "QA - Testing", since: String(oldSince), byMinute: 200 },
+      LAST_SYNC,
+    );
+    expect(result).toEqual(new Date(LAST_SYNC));
+  });
 });
