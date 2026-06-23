@@ -169,6 +169,7 @@ export async function POST(
     ok: true,
     skipped: result.skipped ?? false,
     clickup_qa_task_id: cleanId,
+    ...(result.taskStatusChanged ? { taskStatusChanged: true } : {}),
     ...(result.preview_qa_entries
       ? { preview_qa_entries: result.preview_qa_entries }
       : {}),

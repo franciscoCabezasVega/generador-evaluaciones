@@ -143,6 +143,8 @@ function TimingFormComponent(
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [unsavedConfirm, setUnsavedConfirm] = useState(false);
+  // Overrides the task status displayed in the modal when auto-completed by sync
+  const [localTaskStatus, setLocalTaskStatus] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [dynamicTasks, setDynamicTasks] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
@@ -689,9 +691,9 @@ function TimingFormComponent(
                   {linkedTask.month}/{linkedTask.year}
                 </span>
                 <span
-                  className={`font-medium ${linkedTask.status === "Completada" ? "text-green-600" : "text-yellow-600"}`}
+                  className={`font-medium ${(localTaskStatus ?? linkedTask.status) === "Completada" ? "text-green-600" : "text-yellow-600"}`}
                 >
-                  {linkedTask.status}
+                  {localTaskStatus ?? linkedTask.status}
                 </span>
               </div>
             </div>
@@ -808,6 +810,7 @@ function TimingFormComponent(
             )?.task_link
           }
           safeFetch={safeFetch}
+          onTaskStatusChanged={() => setLocalTaskStatus("Completada")}
           onSyncSuccess={(freshQaEntries) => {
             setFormData((prev) => ({
               ...prev,
@@ -1080,6 +1083,8 @@ interface ClickUpSyncInlineProps {
       hours_by_category: Record<string, number>;
     }>,
   ) => void;
+  /** Called when the sync auto-completes the task (ClickUp status is closed/done/etc.) */
+  onTaskStatusChanged?: () => void;
 }
 
 interface ClickUpSyncInfo {
@@ -1096,6 +1101,7 @@ function ClickUpSyncInline({
   taskLink,
   safeFetch,
   onSyncSuccess,
+  onTaskStatusChanged,
 }: ClickUpSyncInlineProps) {
   // Extraer el ID del último segmento de la URL de ClickUp
   // ej: https://app.clickup.com/t/86e0pxw4d → "86e0pxw4d"
@@ -1212,6 +1218,7 @@ function ClickUpSyncInline({
         skipped?: boolean;
         error?: string;
         clickup_qa_task_id?: string;
+        taskStatusChanged?: boolean;
         preview_qa_entries?: Array<{
           qa_name: string;
           hours_by_category: Record<string, number>;
@@ -1232,6 +1239,10 @@ function ClickUpSyncInline({
         last_clickup_status: prev?.last_clickup_status ?? null,
       }));
 
+      if (data.taskStatusChanged) {
+        onTaskStatusChanged?.();
+      }
+
       // Hidratar el form con las horas de ClickUp.
       // Siempre preview: las horas vienen en la respuesta y se cargan en el form;
       // el guardado real ocurre al hacer clic en "Crear" o "Actualizar".
@@ -1243,7 +1254,9 @@ function ClickUpSyncInline({
         type: "success",
         text: data.skipped
           ? "Sincronizado. No había registros de timing todavía — los tiempos se cargarán cuando existan entradas QA."
-          : `Vista previa cargada desde ClickUp. Revisa las horas y haz clic en ${timingId ? "Actualizar" : "Crear"} para guardar.`,
+          : data.taskStatusChanged
+            ? `Vista previa cargada desde ClickUp. La tarea fue marcada como Completada automáticamente. Haz clic en ${timingId ? "Actualizar" : "Crear"} para guardar las horas.`
+            : `Vista previa cargada desde ClickUp. Revisa las horas y haz clic en ${timingId ? "Actualizar" : "Crear"} para guardar.`,
       });
     } catch (err) {
       console.error("[ClickUp sync error]", err);
