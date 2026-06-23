@@ -294,8 +294,33 @@ export function computeDeltaWindowStart(
  * sync is needed.
  */
 export function isTerminalStatus(status: string): boolean {
-  const terminal = ["closed", "done", "complete", "completed", "cancelled"];
-  return terminal.includes(status.toLowerCase());
+  const terminal = [
+    "closed",
+    "done",
+    "complete",
+    "completed",
+    "cancelled",
+    "pending to production",
+    "pending to prod",
+  ];
+  return terminal.includes(status.toLowerCase().trim());
+}
+
+/**
+ * Whether a ClickUp status means the task's QA work is fully done and the
+ * local task should be marked "Completada". "cancelled" is intentionally
+ * excluded — a cancelled task is not the same as a completed one.
+ */
+export function shouldAutoCompleteTask(status: string): boolean {
+  const s = status.toLowerCase().trim();
+  return [
+    "closed",
+    "done",
+    "complete",
+    "completed",
+    "pending to production",
+    "pending to prod",
+  ].includes(s);
 }
 
 /**
@@ -404,6 +429,8 @@ export interface SyncResult {
   success: boolean;
   skipped?: boolean;
   error?: string;
+  /** True when the task's local status was automatically changed to "Completada". */
+  taskStatusChanged?: boolean;
   /**
    * Solo presente cuando se invoca con previewOnly=true.
    * Contiene las horas computadas desde ClickUp sin que se hayan escrito en BD.
@@ -553,6 +580,55 @@ export async function syncTaskTimings(
       )?.status ??
       previousCp.statusForDisplay ??
       null;
+
+    // Auto-complete: if ClickUp reports the task is done, update local status.
+    // Uses timeData.current_status directly (not latestStatus, which is filtered
+    // to QA-mapped statuses and would miss "closed", "pending to production", etc.)
+    // Runs regardless of previewOnly so both the sync button and cron trigger it.
+    // The .eq("status", "Pendiente") guard makes it a no-op for already-completed
+    // or deprecated tasks.
+    const rawClickUpStatus = timeData.current_status?.status ?? null;
+    let taskStatusChanged = false;
+    if (rawClickUpStatus && shouldAutoCompleteTask(rawClickUpStatus)) {
+      const { error: autoCompleteError } = await supabase
+        .from("tasks")
+        .update({ status: "Completada" })
+        .eq("id", internalTaskId)
+        .eq("status", "Pendiente");
+      if (!autoCompleteError) {
+        taskStatusChanged = true;
+        const systemUserId = process.env.SYSTEM_USER_ID ?? "system";
+        void (async () => {
+          try {
+            const { data: taskNameRow } = await supabase
+              .from("tasks")
+              .select("name")
+              .eq("id", internalTaskId)
+              .maybeSingle();
+            await supabase.from("audit_logs").insert({
+              user_id: userCtx?.userId ?? systemUserId,
+              user_email: userCtx?.userEmail ?? "system@cron.local",
+              action: "UPDATE",
+              entity_type: "TASK",
+              entity_id: internalTaskId,
+              entity_name: taskNameRow?.name ?? internalTaskId,
+              changes: {
+                status: { old: "Pendiente", new: "Completada" },
+              },
+              old_values: { status: "Pendiente" },
+              new_values: {
+                status: "Completada",
+                synced_by: userCtx ? "clickup-ui" : "clickup-cron",
+                clickup_status: rawClickUpStatus,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          } catch {
+            // Audit failure must never abort the sync
+          }
+        })();
+      }
+    }
 
     // Step 4: Write hours into the correct schema hierarchy:
     //   task_timings → timing_qa_entries → timing_qa_category_hours
@@ -983,6 +1059,7 @@ export async function syncTaskTimings(
               clickupTaskId: clickupQaTaskId,
               success: true,
               preview_qa_entries: previewQaEntries,
+              ...(taskStatusChanged ? { taskStatusChanged: true } : {}),
             };
           }
 
@@ -1136,6 +1213,7 @@ export async function syncTaskTimings(
               taskId: internalTaskId,
               clickupTaskId: clickupQaTaskId,
               success: true,
+              ...(taskStatusChanged ? { taskStatusChanged: true } : {}),
             };
           }
         }
@@ -1169,6 +1247,7 @@ export async function syncTaskTimings(
           clickupTaskId: clickupQaTaskId,
           success: true,
           skipped: true,
+          ...(taskStatusChanged ? { taskStatusChanged: true } : {}),
         };
       }
     }
@@ -1223,6 +1302,7 @@ export async function syncTaskTimings(
           clickupTaskId: clickupQaTaskId,
           success: true,
           preview_qa_entries: previewQaEntries,
+          ...(taskStatusChanged ? { taskStatusChanged: true } : {}),
         };
       }
     }
@@ -1251,6 +1331,7 @@ export async function syncTaskTimings(
       clickupTaskId: clickupQaTaskId,
       success: true,
       skipped: true,
+      ...(taskStatusChanged ? { taskStatusChanged: true } : {}),
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
